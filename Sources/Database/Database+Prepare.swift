@@ -113,7 +113,7 @@ extension Database {
   /// - Throws: ``LoomError/emptyStatement`` if the SQL string is empty or contains
   ///           only whitespace/comments, or other ``LoomError`` cases for SQL syntax
   ///           errors or database issues.
-  func prepare(sql: String) throws(LoomError) -> StatementHandle {
+  func prepare(sql: String) throws -> StatementHandle {
     let useCache = options.contains(.persistent)
 
     if useCache, let stmtPtr = statementCache[sql] {

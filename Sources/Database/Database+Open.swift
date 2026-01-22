@@ -16,7 +16,7 @@ extension Database {
   ///
   /// - Returns: A new ``Database`` instance backed by an in-memory SQLite database.
   /// - Throws: `LoomError` if the SQLite connection cannot be established.
-  public static func openInMemory() throws(LoomError) -> Database {
+  public static func openInMemory() throws -> Database {
     var ptr: OpaquePointer?
     try check(sqlite3_open(":memory:", &ptr), is: SQLITE_OK)
     return Database(db: DatabaseHandle(ptr: ptr!))
@@ -44,7 +44,7 @@ extension Database {
   /// - Returns: A new ``Database`` instance connected to the database at the given URL.
   /// - Throws: ``LoomError/notAFileURL`` if the URL doesn't use the `file:` scheme,
   ///           or other `LoomError` cases if the database cannot be opened.
-  public static func open(url: URL) throws(LoomError) -> Database {
+  public static func open(url: URL) throws -> Database {
     guard url.isFileURL else {
       throw LoomError.notAFileURL
     }

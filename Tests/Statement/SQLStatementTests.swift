@@ -1,0 +1,205 @@
+import Foundation
+import Testing
+
+@testable import LoomCore
+
+@Suite("SQLStatement Tests")
+@DatabaseActor
+struct SQLStatementTests {
+  @Test("SQLStatement from string literal")
+  func testStringLiteral() {
+    let stmt: SQLStatement = "SELECT * FROM users"
+
+    #expect(stmt.sql == "SELECT * FROM users")
+    #expect(stmt.binders.isEmpty)
+  }
+
+  @Test("SQLStatement with string interpolation")
+  func testStringInterpolation() {
+    let name = "Alice"
+    let age = 25
+    let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(name) AND age = \(age)"
+
+    #expect(stmt.sql.contains("?"))
+    #expect(stmt.binders.count == 2)
+  }
+
+  @Test("SQLStatement.raw creates statement without binders")
+  func testRawStatement() {
+    let stmt = SQLStatement.raw("CREATE TABLE users (id INTEGER PRIMARY KEY)")
+
+    #expect(stmt.sql == "CREATE TABLE users (id INTEGER PRIMARY KEY)")
+    #expect(stmt.binders.isEmpty)
+  }
+
+  @Test("SQLStatement execution with database")
+  func testStatementExecution() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+
+    let name = "Alice"
+    let age = 25
+    let stmt: SQLStatement = "INSERT INTO users (name, age) VALUES (\(name), \(age))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+      let n = try String.column(of: stmt, at: 0)
+      let a = try Int.column(of: stmt, at: 1)
+      return (n, a)
+    }
+
+    #expect(result.first?.0 == "Alice")
+    #expect(result.first?.1 == 25)
+  }
+
+  @Test("SQLStatement with optional values")
+  func testStatementWithOptionals() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE users (name TEXT, email TEXT)")
+
+    let name = "Bob"
+    let email: String? = nil
+    let stmt: SQLStatement = "INSERT INTO users (name, email) VALUES (\(name), \(email))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT name, email FROM users") { stmt, _ in
+      let n = try String.column(of: stmt, at: 0)
+      let e = try Optional<String>.column(of: stmt, at: 1)
+      return (n, e)
+    }
+
+    #expect(result.first?.0 == "Bob")
+    #expect(result.first?.1 == nil)
+  }
+
+  @Test("SQLStatement with multiple data types")
+  func testStatementWithMixedTypes() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE test (str TEXT, int INTEGER, double DOUBLE, bool BOOLEAN, data BLOB)")
+
+    let str = "test"
+    let int = 42
+    let double = 3.14
+    let bool = true
+    let data = Data([0x01, 0x02])
+
+    let stmt: SQLStatement =
+      "INSERT INTO test (str, int, double, bool, data) VALUES (\(str), \(int), \(double), \(bool), \(data))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT str, int, double, bool, data FROM test") { stmt, _ in
+      let s = try String.column(of: stmt, at: 0)
+      let i = try Int.column(of: stmt, at: 1)
+      let d = try Double.column(of: stmt, at: 2)
+      let b = try Bool.column(of: stmt, at: 3)
+      let dt = try Data.column(of: stmt, at: 4)
+      return (s, i, d, b, dt)
+    }
+
+    #expect(result.first?.0 == str)
+    #expect(result.first?.1 == int)
+    #expect(result.first?.2 == double)
+    #expect(result.first?.3 == bool)
+    #expect(result.first?.4 == data)
+  }
+
+  @Test("SQLStatement in query")
+  func testStatementInQuery() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try db.exec("INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 30)")
+
+    let minAge = 26
+    let stmt: SQLStatement = "SELECT name FROM users WHERE age >= \(minAge)"
+
+    let result = try db.query(stmt) { stmt, _ in
+      try String.column(of: stmt, at: 0)
+    }
+
+    #expect(result.count == 1)
+    #expect(result.first == "Bob")
+  }
+
+  @Test("SQLStatement with special characters in strings")
+  func testStatementWithSpecialCharacters() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE test (value TEXT)")
+
+    let specialStr = "Test with 'quotes' and \"double\" and \\ backslash"
+    let stmt: SQLStatement = "INSERT INTO test (value) VALUES (\(specialStr))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT value FROM test") { stmt, _ in
+      try String.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == specialStr)
+  }
+
+  @Test("SQLStatement reuse")
+  func testStatementReuse() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+
+    let name = "Alice"
+    let age = 25
+    let stmt: SQLStatement = "INSERT INTO users (name, age) VALUES (\(name), \(age))"
+
+    // Execute the same statement multiple times
+    try db.exec(stmt)
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT COUNT(*) FROM users") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == 2)
+  }
+
+  @Test("SQLStatement with UUID")
+  func testStatementWithUUID() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE test (id BLOB)")
+
+    let uuid = UUID()
+    let stmt: SQLStatement = "INSERT INTO test (id) VALUES (\(uuid))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT id FROM test") { stmt, _ in
+      try UUID.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == uuid)
+  }
+
+  @Test("SQLStatement with Date")
+  func testStatementWithDate() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE test (created DOUBLE)")
+
+    let date = Date(timeIntervalSince1970: 1234567890.0)
+    let stmt: SQLStatement = "INSERT INTO test (created) VALUES (\(date))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT created FROM test") { stmt, _ in
+      try Date.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == date)
+  }
+}

@@ -34,7 +34,7 @@ extension Database {
   ///            the insert doesn't generate a ROWID (e.g., `WITHOUT ROWID` tables).
   /// - Throws: ``LoomError`` if the block's database operations fail (e.g., constraint
   ///           violations, SQL syntax errors, I/O errors).
-  public func lastInsertedRowID(_ block: @DatabaseActor () throws(LoomError) -> Void) throws(LoomError) -> Int64? {
+  public func lastInsertedRowID(_ block: @DatabaseActor () throws -> Void) throws -> Int64? {
     sqlite3_set_last_insert_rowid(db.ptr, 0)
     try block()
     let id = sqlite3_last_insert_rowid(db.ptr)

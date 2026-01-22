@@ -24,7 +24,7 @@ func check(
   _ block: @autoclosure () -> Int32,
   db: OpaquePointer? = nil,
   is result: Int32
-) throws(LoomError) {
+) throws {
   let code = block()
   guard result != code else { return }
   if let db {
@@ -63,7 +63,7 @@ func check(
   _ block: @autoclosure () -> Int32,
   db: OpaquePointer? = nil,
   in results: Int32...
-) throws(LoomError) -> Int32 {
+) throws -> Int32 {
   let code = block()
   guard !results.contains(code) else { return code }
   if let db {

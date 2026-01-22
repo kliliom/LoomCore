@@ -124,6 +124,11 @@ public struct SQLBuilder: StringInterpolationProtocol {
       value.append(to: &self)
     }
   }
+
+  @inline(__always)
+  public mutating func appendInterpolation(_ value: (some Bindable)?) {
+    return appendInterpolation(value, mode: .bind)
+  }
 }
 
 // MARK: - Statement Construction

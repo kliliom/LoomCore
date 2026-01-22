@@ -274,7 +274,7 @@ extension Database {
   /// at compile time, and values are automatically converted to appropriate SQLite types.
   ///
   /// - Parameters:
-  ///   - statement: The SQL query string without parameters. 
+  ///   - statement: The SQL query string without parameters.
   ///   - firstValue: The first parameter value to bind.
   ///   - otherValues: Additional parameter values to bind, in order.
   ///   - stepper: A closure that extracts values using automatic index management.
