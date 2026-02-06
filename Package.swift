@@ -6,10 +6,12 @@ import PackageDescription
 let package = Package(
     name: "loom-core",
     platforms: [
-        .iOS(.v14),
-        .macOS(.v11),
-        .macCatalyst(.v14),
-        .tvOS(.v14),
+        .iOS(.v16),
+        .macCatalyst(.v16),
+        .macOS(.v13),
+        .tvOS(.v16),
+        .visionOS(.v1),
+        .watchOS(.v9)
     ],
     products: [
         .library(
