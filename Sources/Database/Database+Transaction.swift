@@ -103,9 +103,9 @@ extension Database {
       signalTransactionDidCommit()
       return result
     } catch {
-      signalTransactionDidRollback()
       do {
         try exec("ROLLBACK TRANSACTION")
+        signalTransactionDidRollback()
       } catch {
         warn("Failed to rollback transaction: \(error)")
         fatalError("Aborting due to failed transaction rollback.")
