@@ -134,30 +134,6 @@ public struct SQLBuilder: StringInterpolationProtocol {
 // MARK: - Statement Construction
 
 extension SQLBuilder {
-  /// Constructs the final SQL string by joining all fragments.
-  ///
-  /// All SQL fragments are joined with space separators to form the complete
-  /// SQL statement string with `?` placeholders for bound parameters.
-  ///
-  /// - Returns: The complete SQL statement string.
-  func statement() -> String {
-    sql.joined(separator: " ")
-  }
-
-  /// Creates a managed binder that executes all registered binders in sequence.
-  ///
-  /// The returned closure will bind all interpolated values to a prepared statement
-  /// in the order they were added, using automatic index management.
-  ///
-  /// - Returns: A closure that binds all values to a statement handle.
-  func binder() -> Database.ManagedBinder {
-    { [binders] handle, index in
-      for binder in binders {
-        try binder(handle, &index)
-      }
-    }
-  }
-
   /// Creates a ``SQLStatement`` from the builder's accumulated SQL and binders.
   ///
   /// This method combines the SQL fragments and binder closures into a complete

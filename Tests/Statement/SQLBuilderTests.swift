@@ -62,19 +62,6 @@ struct SQLBuilderTests {
     #expect(stmt.binders.count == 2)
   }
 
-  @Test("SQLBuilder statement joining")
-  func testStatementJoining() {
-    var builder = SQLBuilder()
-    builder.appendLiteral("SELECT")
-    builder.appendLiteral("*")
-    builder.appendLiteral("FROM")
-    builder.appendLiteral("users")
-
-    let sql = builder.statement()
-
-    #expect(sql == "SELECT * FROM users")
-  }
-
   @Test("SQLBuilder with capacity hints")
   func testBuilderWithCapacityHints() {
     let builder = SQLBuilder(literalCapacity: 10, interpolationCount: 5)
