@@ -19,7 +19,10 @@ extension Database {
   public static func openInMemory() throws -> Database {
     var ptr: OpaquePointer?
     try check(sqlite3_open(":memory:", &ptr), is: SQLITE_OK)
-    return Database(db: DatabaseHandle(ptr: ptr!))
+    guard let ptr else {
+      throw LoomError.error(message: "sqlite3_open returned a null pointer without an error.")
+    }
+    return Database(db: DatabaseHandle(ptr: ptr))
   }
 
   /// Opens a connection to a persistent on-disk database.
@@ -56,6 +59,9 @@ extension Database {
         url.path
       }
     try check(sqlite3_open(path, &ptr), is: SQLITE_OK)
-    return Database(db: DatabaseHandle(ptr: ptr!))
+    guard let ptr else {
+      throw LoomError.error(message: "sqlite3_open returned a null pointer without an error.")
+    }
+    return Database(db: DatabaseHandle(ptr: ptr))
   }
 }
