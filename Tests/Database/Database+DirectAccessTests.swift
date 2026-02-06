@@ -11,7 +11,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessProvidesPointer() async throws {
     let db = try Database.openInMemory()
 
-    db.directAccess { dbPtr in
+    try db.directAccess { dbPtr in
       // Just verify we can access the pointer without crashing
       _ = dbPtr
     }
@@ -24,7 +24,7 @@ struct DatabaseDirectAccessTests {
     try db.exec("CREATE TABLE test (value INTEGER)")
     try db.exec("INSERT INTO test (value) VALUES (42)")
 
-    let rowID = db.directAccess { dbPtr in
+    let rowID = try db.directAccess { dbPtr in
       sqlite3_last_insert_rowid(dbPtr)
     }
 
@@ -42,7 +42,7 @@ struct DatabaseDirectAccessTests {
 
     try db.exec("UPDATE test SET value = 100")
 
-    let changes = db.directAccess { dbPtr in
+    let changes = try db.directAccess { dbPtr in
       sqlite3_changes(dbPtr)
     }
 
@@ -59,7 +59,7 @@ struct DatabaseDirectAccessTests {
       try db.exec("INSERT INTO test (value) VALUES (\(i))")
     }
 
-    let totalChanges = db.directAccess { dbPtr in
+    let totalChanges = try db.directAccess { dbPtr in
       sqlite3_total_changes(dbPtr)
     }
 
@@ -70,7 +70,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessAutocommit() async throws {
     let db = try Database.openInMemory()
 
-    let autocommit = db.directAccess { dbPtr in
+    let autocommit = try db.directAccess { dbPtr in
       sqlite3_get_autocommit(dbPtr)
     }
 
@@ -85,7 +85,7 @@ struct DatabaseDirectAccessTests {
     try db.exec("CREATE TABLE test (value INTEGER)")
 
     try db.transaction {
-      let autocommit = db.directAccess { dbPtr in
+      let autocommit = try db.directAccess { dbPtr in
         sqlite3_get_autocommit(dbPtr)
       }
 
@@ -100,7 +100,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessReadonly() async throws {
     let db = try Database.openInMemory()
 
-    let isReadonly = db.directAccess { dbPtr in
+    let isReadonly = try db.directAccess { dbPtr in
       sqlite3_db_readonly(dbPtr, "main")
     }
 
@@ -163,7 +163,7 @@ struct DatabaseDirectAccessTests {
     try db.exec("CREATE TABLE test (value INTEGER)")
     try db.exec("INSERT INTO test (value) VALUES (42)")
 
-    let value = db.directAccess { dbPtr -> Int64 in
+    let value = try db.directAccess { dbPtr -> Int64 in
       sqlite3_last_insert_rowid(dbPtr)
     }
 
@@ -174,7 +174,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessDbFilename() async throws {
     let db = try Database.openInMemory()
 
-    let filename = db.directAccess { dbPtr -> String? in
+    let filename = try db.directAccess { dbPtr -> String? in
       if let cStr = sqlite3_db_filename(dbPtr, "main") {
         return String(cString: cStr)
       }

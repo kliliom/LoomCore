@@ -29,10 +29,10 @@ struct DatabaseLastInsertedRowIDTests {
 
     let rowID = try db.lastInsertedRowID {
       try db.exec("INSERT INTO test (value) VALUES (1)")
-      let firstID = db.directAccess { sqlite3_last_insert_rowid($0) }
+      let firstID = try db.directAccess { sqlite3_last_insert_rowid($0) }
 
       try db.exec("INSERT INTO test (value) VALUES (2)")
-      let secondID = db.directAccess { sqlite3_last_insert_rowid($0) }
+      let secondID = try db.directAccess { sqlite3_last_insert_rowid($0) }
 
       // Verify IDs are incrementing
       #expect(secondID > firstID)

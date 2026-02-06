@@ -35,9 +35,10 @@ extension Database {
   /// - Throws: ``LoomError`` if the block's database operations fail (e.g., constraint
   ///           violations, SQL syntax errors, I/O errors).
   public func lastInsertedRowID(_ block: @DatabaseActor () throws -> Void) throws -> Int64? {
-    sqlite3_set_last_insert_rowid(db.ptr, 0)
+    let dbPtr = try db.ptr
+    sqlite3_set_last_insert_rowid(dbPtr, 0)
     try block()
-    let id = sqlite3_last_insert_rowid(db.ptr)
+    let id = sqlite3_last_insert_rowid(dbPtr)
     guard id != 0 else { return nil }
     return id
   }

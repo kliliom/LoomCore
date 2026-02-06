@@ -111,9 +111,10 @@ extension Database {
   func prepare(sql: String) throws -> StatementHandle {
     let useCache = options.contains(.persistent)
 
+    let dbPtr = try db.ptr
     if useCache, let stmtPtr = db.resourceStore.statementCache[sql] {
       return StatementHandle(
-        dbPtr: db.ptr,
+        dbPtr: dbPtr,
         stmtPtr: stmtPtr,
         freeOnDeinit: false
       )
@@ -126,7 +127,7 @@ extension Database {
       } else {
         0
       }
-    try check(sqlite3_prepare_v3(db.ptr, sql, -1, flags, &ptr, nil), db: db.ptr, is: SQLITE_OK)
+    try check(sqlite3_prepare_v3(dbPtr, sql, -1, flags, &ptr, nil), db: db.ptr, is: SQLITE_OK)
     guard let ptr else {
       throw LoomError.emptyStatement
     }
@@ -135,6 +136,6 @@ extension Database {
       db.resourceStore.statementCache[sql] = ptr
     }
 
-    return StatementHandle(dbPtr: db.ptr, stmtPtr: ptr, freeOnDeinit: !useCache)
+    return StatementHandle(dbPtr: dbPtr, stmtPtr: ptr, freeOnDeinit: !useCache)
   }
 }

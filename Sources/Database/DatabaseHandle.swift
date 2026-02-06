@@ -16,7 +16,20 @@ import SQLite3
 @DatabaseActor
 public struct DatabaseHandle: ~Copyable, Sendable {
   /// Raw SQLite database connection pointer.
-  let ptr: OpaquePointer
+  private var ptrRaw: OpaquePointer?
+
+  /// Returns the raw SQLite database connection pointer.
+  ///
+  /// - Throws: ``LoomError/error(message:)`` if the connection has already been
+  ///           closed via ``kill()``.
+  var ptr: OpaquePointer {
+    get throws {
+      guard let ptrRaw else {
+        throw LoomError.error(message: "database closed")
+      }
+      return ptrRaw
+    }
+  }
 
   /// Shared resource store that owns cached prepared statements.
   ///
@@ -28,7 +41,7 @@ public struct DatabaseHandle: ~Copyable, Sendable {
   ///
   /// - Parameter ptr: Raw SQLite database connection pointer from `sqlite3_open()`.
   init(ptr: OpaquePointer) {
-    self.ptr = ptr
+    self.ptrRaw = ptr
   }
 
   /// Schedules cleanup of all database resources when the handle is destroyed.
@@ -38,9 +51,19 @@ public struct DatabaseHandle: ~Copyable, Sendable {
   /// to ``DatabaseActor`` via a ``Task``. Both the raw pointer and the resource
   /// store are captured by value to ensure they remain valid.
   deinit {
-    Task { @DatabaseActor [ptr, resourceStore] in
-      resourceStore.close(dbPtr: ptr)
+    Task { @DatabaseActor [ptrRaw, resourceStore] in
+      resourceStore.close(dbPtr: ptrRaw)
     }
+  }
+
+  /// Explicitly closes the database connection and finalizes all cached statements.
+  ///
+  /// After calling this method, any subsequent attempt to access ``ptr`` will throw.
+  /// This allows eager resource release without waiting for `deinit`. The `deinit`
+  /// cleanup becomes a no-op because ``ptrRaw`` is set to `nil`.
+  mutating func kill() {
+    resourceStore.close(dbPtr: ptrRaw)
+    ptrRaw = nil
   }
 }
 
@@ -65,13 +88,13 @@ extension DatabaseHandle {
     /// a warning is logged.
     ///
     /// - Parameter dbPtr: The raw SQLite database connection pointer to close.
-    consuming func close(dbPtr: OpaquePointer) {
+    consuming func close(dbPtr: OpaquePointer?) {
       for (_, stmtPtr) in statementCache {
         sqlite3_finalize(stmtPtr)
       }
       statementCache = [:]
 
-      if sqlite3_close(dbPtr) != SQLITE_OK {
+      if let dbPtr, sqlite3_close(dbPtr) != SQLITE_OK {
         let message = String(cString: sqlite3_errmsg(dbPtr))
         warn("Failed to close database: \(message)")
       }
