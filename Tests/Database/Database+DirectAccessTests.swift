@@ -1,8 +1,7 @@
 import Foundation
+import LoomCore
 import SQLite3
 import Testing
-
-@testable import LoomCore
 
 @Suite("Database Direct Access Tests")
 @DatabaseActor

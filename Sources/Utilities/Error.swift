@@ -137,7 +137,7 @@ public enum LoomError: Error, Equatable {
   /// - Parameters:
   ///   - code: SQLite error code.
   ///   - message: Error message.
-  init(sqlite code: Int32, message: String) {
+  public init(sqlite code: Int32, message: String) {
     // swiftlint:disable:previous cyclomatic_complexity function_body_length
     switch code {
     case SQLITE_ERROR:

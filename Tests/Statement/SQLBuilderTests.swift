@@ -1,7 +1,6 @@
 import Foundation
+import LoomCore
 import Testing
-
-@testable import LoomCore
 
 @Suite("SQLBuilder Tests")
 struct SQLBuilderTests {

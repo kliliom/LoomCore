@@ -1,4 +1,4 @@
-@testable import LoomCore
+import LoomCore
 
 // Helper struct to create column reference expressions for testing
 struct ColumnExpression<T>: LoomCore.Expression {

@@ -1,7 +1,6 @@
 import Foundation
+import LoomCore
 import Testing
-
-@testable import LoomCore
 
 @Suite("Optional Bindable Tests")
 @DatabaseActor
