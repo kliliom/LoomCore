@@ -55,7 +55,7 @@ extension Bool: Bindable {
   }
 
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    try Int.column(of: stmt, at: index) > 0
+    try Int.column(of: stmt, at: index) != 0
   }
 
   public func asSQLLiteral() throws -> String {
