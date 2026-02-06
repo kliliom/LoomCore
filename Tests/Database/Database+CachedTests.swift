@@ -9,7 +9,7 @@ struct DatabaseCachedTests {
   @Test("Cached block enables statement caching")
   func testCachedBlockEnablesCaching() async throws {
     let db = try Database.openInMemory()
-    #expect(db.statementCache.count == 0)
+    #expect(db.db.resourceStore.statementCache.count == 0)
 
     try db.exec("CREATE TABLE test (value INTEGER)")
 
@@ -19,7 +19,7 @@ struct DatabaseCachedTests {
         try db.exec("INSERT INTO test (value) VALUES (\(i))")
       }
     }
-    #expect(db.statementCache.count == 1)
+    #expect(db.db.resourceStore.statementCache.count == 1)
 
     let result = try db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
@@ -31,7 +31,7 @@ struct DatabaseCachedTests {
   @Test("Cached block reuses prepared statements")
   func testCachedBlockReusesStatements() async throws {
     let db = try Database.openInMemory()
-    #expect(db.statementCache.count == 0)
+    #expect(db.db.resourceStore.statementCache.count == 0)
 
     try db.exec("CREATE TABLE test (value TEXT)")
 
@@ -41,7 +41,7 @@ struct DatabaseCachedTests {
       try db.exec("INSERT INTO test (value) VALUES (\("second"))")
       try db.exec("INSERT INTO test (value) VALUES (\("third"))")
     }
-    #expect(db.statementCache.count == 1)
+    #expect(db.db.resourceStore.statementCache.count == 1)
 
     let result = try db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
       try String.column(of: stmt, at: 0)
@@ -54,7 +54,7 @@ struct DatabaseCachedTests {
   @Test("Nested cached blocks share same cache")
   func testNestedCachedBlocks() async throws {
     let db = try Database.openInMemory()
-    #expect(db.statementCache.count == 0)
+    #expect(db.db.resourceStore.statementCache.count == 0)
 
     try db.exec("CREATE TABLE test (value INTEGER)")
 
@@ -68,7 +68,7 @@ struct DatabaseCachedTests {
 
       try db.exec("INSERT INTO test (value) VALUES (\(3))")
     }
-    #expect(db.statementCache.count == 1)
+    #expect(db.db.resourceStore.statementCache.count == 1)
 
     let result = try db.query("SELECT value FROM test ORDER BY value") { stmt, _ in
       try Int.column(of: stmt, at: 0)
@@ -80,7 +80,7 @@ struct DatabaseCachedTests {
   @Test("Cached block with query operations")
   func testCachedBlockWithQueries() async throws {
     let db = try Database.openInMemory()
-    #expect(db.statementCache.count == 0)
+    #expect(db.db.resourceStore.statementCache.count == 0)
 
     try db.exec("CREATE TABLE test (id INTEGER, value TEXT)")
     try db.exec("INSERT INTO test (id, value) VALUES (1, 'one')")
@@ -101,7 +101,7 @@ struct DatabaseCachedTests {
 
       return output
     }
-    #expect(db.statementCache.count == 1)
+    #expect(db.db.resourceStore.statementCache.count == 1)
 
     #expect(results.count == 3)
     #expect(results == ["one", "two", "three"])
@@ -188,7 +188,7 @@ struct DatabaseCachedTests {
   @Test("Multiple cached blocks use same scopes")
   func testMultipleCachedBlocksSameScopes() async throws {
     let db = try Database.openInMemory()
-    #expect(db.statementCache.count == 0)
+    #expect(db.db.resourceStore.statementCache.count == 0)
 
     try db.exec("CREATE TABLE test (value INTEGER)")
 
@@ -204,7 +204,7 @@ struct DatabaseCachedTests {
       try db.exec("INSERT INTO test (value) VALUES (\(4))")
     }
 
-    #expect(db.statementCache.count == 1)
+    #expect(db.db.resourceStore.statementCache.count == 1)
     let result = try db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }

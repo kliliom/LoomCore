@@ -111,10 +111,10 @@ extension Database {
   func prepare(sql: String) throws -> StatementHandle {
     let useCache = options.contains(.persistent)
 
-    if useCache, let stmtPtr = statementCache[sql] {
+    if useCache, let stmtPtr = db.resourceStore.statementCache[sql] {
       return StatementHandle(
         dbPtr: db.ptr,
-        stmtPtr: OpaquePointer(bitPattern: stmtPtr)!,
+        stmtPtr: stmtPtr,
         freeOnDeinit: false
       )
     }
@@ -132,7 +132,7 @@ extension Database {
     }
 
     if useCache {
-      statementCache[sql] = UInt(bitPattern: ptr)
+      db.resourceStore.statementCache[sql] = ptr
     }
 
     return StatementHandle(dbPtr: db.ptr, stmtPtr: ptr, freeOnDeinit: !useCache)
