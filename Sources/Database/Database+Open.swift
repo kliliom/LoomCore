@@ -52,12 +52,7 @@ extension Database {
       throw LoomError.notAFileURL
     }
     var ptr: OpaquePointer?
-    let path: String =
-      if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
-        url.path(percentEncoded: false)
-      } else {
-        url.path
-      }
+    let path: String = url.path(percentEncoded: false)
     try check(sqlite3_open(path, &ptr), is: SQLITE_OK)
     guard let ptr else {
       throw LoomError.error(message: "sqlite3_open returned a null pointer without an error.")
