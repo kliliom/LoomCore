@@ -1,3 +1,5 @@
+import os
+
 /// Symbolic breakpoint target for debugging warnings.
 ///
 /// This function serves as a breakpoint target for catching warnings during debugging.
@@ -13,7 +15,7 @@
 public func breakOnWarning() {}
 
 /// Tracks whether the debugger breakpoint hint has been displayed to avoid repetition.
-private nonisolated(unsafe) var breakOnWarningInfoShown: Bool = false
+private let breakOnWarningLock = OSAllocatedUnfairLock(initialState: false)
 
 /// Logs a warning message and triggers a debugger breakpoint opportunity.
 ///
@@ -30,8 +32,14 @@ private nonisolated(unsafe) var breakOnWarningInfoShown: Bool = false
 /// - Parameter message: The warning message to log.
 func warn(_ message: String) {
   print("[LoomCore] WARNING: \(message)")
-  if !breakOnWarningInfoShown {
-    breakOnWarningInfoShown = true
+  let shouldShow = breakOnWarningLock.withLock { shown in
+    if !shown {
+      shown = true
+      return true
+    }
+    return false
+  }
+  if shouldShow {
     print("[LoomCore] Set a symbolic breakpoint on `breakOnWarning` to see warnings in the debugger")
   }
   breakOnWarning()
