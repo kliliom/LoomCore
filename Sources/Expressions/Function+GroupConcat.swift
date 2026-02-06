@@ -15,7 +15,7 @@ public struct GroupConcat: Function {
   let distinct: Bool
 
   /// The separator to use between values. Defaults to comma.
-  let separator: String
+  let separator: String?
 
   /// Creates a new group concatenation aggregate function.
   ///
@@ -23,7 +23,7 @@ public struct GroupConcat: Function {
   ///   - expression: The expression to concatenate across rows.
   ///   - distinct: Whether to concatenate only distinct values. Defaults to `false`.
   ///   - separator: The separator to use between values. Defaults to `","`.
-  public init(_ expression: any Expression, distinct: Bool = false, separator: String = ",") {
+  public init(_ expression: any Expression, distinct: Bool = false, separator: String? = nil) {
     self.expression = expression
     self.distinct = distinct
     self.separator = separator
@@ -35,9 +35,9 @@ public struct GroupConcat: Function {
       builder.sql.append("DISTINCT ")
     }
     expression.append(to: &builder)
-    if separator != "," {
+    if let separator {
       builder.sql.append(", ")
-      builder.sql.append("'\(separator)'")
+      separator.append(to: &builder)
     }
     builder.sql.append(")")
   }
@@ -50,7 +50,7 @@ extension Expression {
   ///   - distinct: Whether to concatenate only distinct values. Defaults to `false`.
   ///   - separator: The separator to use between values. Defaults to `","`.
   /// - Returns: A `GroupConcat` aggregate function.
-  public func groupConcat(distinct: Bool = false, separator: String = ",") -> GroupConcat {
+  public func groupConcat(distinct: Bool = false, separator: String? = nil) -> GroupConcat {
     GroupConcat(self, distinct: distinct, separator: separator)
   }
 }
