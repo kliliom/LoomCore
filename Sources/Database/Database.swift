@@ -25,12 +25,10 @@ import SQLite3
 ///
 /// - Important: This type is not copyable to maintain exclusive ownership of the
 ///              database connection. Pass it using `consuming` or `borrowing` semantics.
+@DatabaseActor
 public struct DatabaseHandle: ~Copyable, Sendable {
   /// Raw SQLite database connection pointer.
-  ///
-  /// Marked `nonisolated(unsafe)` to allow access outside the actor context.
-  /// Callers must ensure proper synchronization through ``DatabaseActor``.
-  nonisolated(unsafe) let ptr: OpaquePointer
+  let ptr: OpaquePointer
 
   /// Creates a new database handle wrapping an SQLite connection.
   ///

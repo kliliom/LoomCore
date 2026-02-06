@@ -16,18 +16,13 @@ import SQLite3
 ///
 /// - Important: This type is not copyable to maintain exclusive ownership of the
 ///              prepared statement. Pass it using `consuming` or `borrowing` semantics.
+@DatabaseActor
 public struct StatementHandle: ~Copyable, Sendable {
   /// Raw SQLite database connection pointer.
-  ///
-  /// Needed for error reporting during cleanup operations.
-  /// Marked `nonisolated(unsafe)` to allow access outside the actor context.
-  nonisolated(unsafe) let dbPtr: OpaquePointer
+  let dbPtr: OpaquePointer
 
   /// Raw SQLite prepared statement pointer.
-  ///
-  /// This is the compiled SQL statement ready for parameter binding and execution.
-  /// Marked `nonisolated(unsafe)` to allow access outside the actor context.
-  nonisolated(unsafe) let stmtPtr: OpaquePointer
+  let stmtPtr: OpaquePointer
 
   /// Determines cleanup behavior when the handle is destroyed.
   ///
