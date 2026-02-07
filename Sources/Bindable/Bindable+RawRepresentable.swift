@@ -13,9 +13,9 @@ extension Bindable where Self: RawRepresentable, RawValue: Bindable {
     if let value = Self(rawValue: rawValue) {
       return value
     } else {
-      throw LoomError.typeMappingFailed(
-        value: String(describing: rawValue),
-        type: String(describing: Self.self)
+      throw LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index \(index) could not be mapped to \(Self.self) from raw value \(rawValue)."
       )
     }
   }

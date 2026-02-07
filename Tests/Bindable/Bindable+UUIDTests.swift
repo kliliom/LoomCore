@@ -105,7 +105,9 @@ struct BindableUUIDTests {
     try db.exec("CREATE TABLE test (id BLOB)")
     try db.exec(raw: "INSERT INTO test (id) VALUES (NULL)")
 
-    #expect(throws: LoomError.unexpectedNullValue) {
+    #expect(
+      throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL or not 16 bytes, cannot return UUID.")
+    ) {
       try db.query("SELECT id FROM test") { stmt, _ in
         try UUID.column(of: stmt, at: 0)
       }

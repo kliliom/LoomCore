@@ -28,9 +28,9 @@ func check(
   let code = block()
   guard result != code else { return }
   if let db {
-    throw LoomError(sqlite: code, message: String(cString: sqlite3_errmsg(db)))
+    throw LoomError.sqlite(code, message: String(cString: sqlite3_errmsg(db)))
   } else {
-    throw LoomError(sqlite: code, message: String(cString: sqlite3_errstr(code)))
+    throw LoomError.sqlite(code, message: String(cString: sqlite3_errstr(code)))
   }
 }
 
@@ -67,8 +67,8 @@ func check(
   let code = block()
   guard !results.contains(code) else { return code }
   if let db {
-    throw LoomError(sqlite: code, message: String(cString: sqlite3_errmsg(db)))
+    throw LoomError.sqlite(code, message: String(cString: sqlite3_errmsg(db)))
   } else {
-    throw LoomError(sqlite: code, message: String(cString: sqlite3_errstr(code)))
+    throw LoomError.sqlite(code, message: String(cString: sqlite3_errstr(code)))
   }
 }

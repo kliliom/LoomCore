@@ -32,7 +32,7 @@ struct DatabaseTransactionTests {
     do {
       try db.transaction {
         try db.exec("INSERT INTO test (value) VALUES (1)")
-        throw LoomError.unsupportedOperation
+        throw LoomError.core(.unexpectedState, message: "test error")
       }
     } catch {
       // Expected error
@@ -183,7 +183,7 @@ struct DatabaseTransactionTests {
       try db.transaction {
         try db.exec("UPDATE test SET value = 2")
         try db.exec("INSERT INTO test (value) VALUES (3)")
-        throw LoomError.unsupportedOperation
+        throw LoomError.core(.unexpectedState, message: "test error")
       }
     } catch {
       // Expected error

@@ -20,7 +20,7 @@ extension Database {
     var ptr: OpaquePointer?
     try check(sqlite3_open(":memory:", &ptr), is: SQLITE_OK)
     guard let ptr else {
-      throw LoomError.error(message: "sqlite3_open returned a null pointer without an error.")
+      throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
     return Database(db: DatabaseHandle(ptr: ptr))
   }
@@ -45,17 +45,16 @@ extension Database {
   ///
   /// - Parameter url: File URL of the database to open. Must use the `file:` scheme.
   /// - Returns: A new ``Database`` instance connected to the database at the given URL.
-  /// - Throws: ``LoomError/notAFileURL`` if the URL doesn't use the `file:` scheme,
-  ///           or other `LoomError` cases if the database cannot be opened.
+  /// - Throws: `LoomError` if the URL is invalid or if the SQLite connection cannot be established.
   public static func open(url: URL) throws -> Database {
     guard url.isFileURL else {
-      throw LoomError.notAFileURL
+      throw LoomError.core(.invalidDatabasePath, message: "Database URL must use the file: scheme.")
     }
     var ptr: OpaquePointer?
     let path: String = url.path(percentEncoded: false)
     try check(sqlite3_open(path, &ptr), is: SQLITE_OK)
     guard let ptr else {
-      throw LoomError.error(message: "sqlite3_open returned a null pointer without an error.")
+      throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
     return Database(db: DatabaseHandle(ptr: ptr))
   }

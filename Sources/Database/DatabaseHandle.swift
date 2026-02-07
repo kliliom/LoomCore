@@ -20,12 +20,11 @@ public struct DatabaseHandle: ~Copyable, Sendable {
 
   /// Returns the raw SQLite database connection pointer.
   ///
-  /// - Throws: ``LoomError/error(message:)`` if the connection has already been
-  ///           closed via ``kill()``.
+  /// - Throws: `LoomError` with code `.databaseClosed` if the connection has already been closed.
   var ptr: OpaquePointer {
     get throws {
       guard let ptrRaw else {
-        throw LoomError.error(message: "database closed")
+        throw LoomError.core(.databaseClosed, message: "Database connection closed.")
       }
       return ptrRaw
     }

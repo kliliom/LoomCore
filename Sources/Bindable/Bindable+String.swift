@@ -27,7 +27,7 @@ extension String: Bindable {
     if let cString = sqlite3_column_text(stmt.stmtPtr, index) {
       return String(cString: cString)
     } else {
-      throw LoomError.unexpectedNullValue
+      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL, cannot return String.")
     }
   }
 

@@ -125,7 +125,7 @@ struct BindableDataTests {
     try db.exec("CREATE TABLE test (data BLOB)")
     try db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
 
-    #expect(throws: LoomError.unexpectedNullValue) {
+    #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot return Data.")) {
       try db.query("SELECT data FROM test") { stmt, _ in
         try Data.column(of: stmt, at: 0)
       }

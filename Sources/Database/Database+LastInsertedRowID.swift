@@ -32,8 +32,7 @@ extension Database {
   /// - Parameter block: A closure containing INSERT operations. Must be isolated to ``DatabaseActor``.
   /// - Returns: The ROWID of the last inserted row, or `nil` if no row was inserted or
   ///            the insert doesn't generate a ROWID (e.g., `WITHOUT ROWID` tables).
-  /// - Throws: ``LoomError`` if the block's database operations fail (e.g., constraint
-  ///           violations, SQL syntax errors, I/O errors).
+  /// - Throws: `LoomError` if an error occurs while executing the block or interacting with the database.
   public func lastInsertedRowID(_ block: @DatabaseActor () throws -> Void) throws -> Int64? {
     let dbPtr = try db.ptr
     sqlite3_set_last_insert_rowid(dbPtr, 0)

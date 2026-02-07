@@ -13,7 +13,7 @@ extension UUID: Bindable {
       let mem = blob.bindMemory(to: uuid_t.self, capacity: 1)
       return UUID(uuid: mem.pointee)
     } else {
-      throw LoomError.unexpectedNullValue
+      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL or not 16 bytes, cannot return UUID.")
     }
   }
 

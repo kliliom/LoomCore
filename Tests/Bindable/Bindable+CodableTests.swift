@@ -147,7 +147,7 @@ struct BindableCodableTests {
     try db.exec("CREATE TABLE test (data BLOB)")
     try db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
 
-    #expect(throws: LoomError.unexpectedNullValue) {
+    #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot decode to Person.")) {
       try db.query("SELECT data FROM test") { stmt, _ in
         try Person.column(of: stmt, at: 0)
       }

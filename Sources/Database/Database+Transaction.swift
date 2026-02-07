@@ -69,9 +69,8 @@ extension Database {
   ///
   /// - Returns: The value returned by the block closure.
   ///
-  /// - Throws: Any error thrown by the block, or ``LoomError`` if the transaction cannot
-  ///           be committed. If rollback fails after an error, the process terminates with
-  ///           a fatal error to prevent data corruption.
+  /// - Throws: `LoomError` if an error occurs while executing the block or interacting with the database.
+  ///           If the block throws an error, the transaction is rolled back and the error is rethrown.
   public func transaction<T>(
     kind: TransactionKind = .deferred,
     _ block: @DatabaseActor () throws -> T

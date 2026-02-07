@@ -22,7 +22,7 @@ extension Bindable where Self: Codable {
       let decoder = JSONDecoder()
       return try decoder.decode(Self.self, from: data)
     } else {
-      throw LoomError.unexpectedNullValue
+      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL, cannot decode to \(Self.self).")
     }
   }
 

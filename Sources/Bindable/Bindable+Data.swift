@@ -16,7 +16,7 @@ extension Data: Bindable {
       let count = sqlite3_column_bytes(stmt.stmtPtr, index)
       return Data(bytes: blob, count: Int(count))
     } else if sqlite3_column_type(stmt.stmtPtr, index) == SQLITE_NULL {
-      throw LoomError.unexpectedNullValue
+      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL, cannot return Data.")
     } else {
       return Data()
     }

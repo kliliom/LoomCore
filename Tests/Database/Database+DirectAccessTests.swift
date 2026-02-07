@@ -120,9 +120,9 @@ struct DatabaseDirectAccessTests {
         if let errorMsg {
           let message = String(cString: errorMsg)
           sqlite3_free(errorMsg)
-          throw LoomError(sqlite: result, message: message)
+          throw LoomError.sqlite(result, message: message)
         }
-        throw LoomError(sqlite: result, message: "Unknown error")
+        throw LoomError.sqlite(result, message: "Unknown error")
       }
     }
 
@@ -147,9 +147,9 @@ struct DatabaseDirectAccessTests {
           if let errorMsg {
             let message = String(cString: errorMsg)
             sqlite3_free(errorMsg)
-            throw LoomError(sqlite: result, message: message)
+            throw LoomError.sqlite(result, message: message)
           }
-          throw LoomError(sqlite: result, message: "Unknown error")
+          throw LoomError.sqlite(result, message: "Unknown error")
         }
       }
     }

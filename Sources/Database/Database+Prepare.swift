@@ -105,9 +105,7 @@ extension Database {
   ///
   /// - Returns: A ``StatementHandle`` wrapping the compiled statement.
   ///
-  /// - Throws: ``LoomError/emptyStatement`` if the SQL string is empty or contains
-  ///           only whitespace/comments, or other ``LoomError`` cases for SQL syntax
-  ///           errors or database issues.
+  /// - Throws: `LoomError` if the SQL is invalid or if SQLite fails to prepare the statement.
   func prepare(sql: String) throws -> StatementHandle {
     let useCache = options.contains(.persistent)
 
@@ -129,7 +127,7 @@ extension Database {
       }
     try check(sqlite3_prepare_v3(dbPtr, sql, -1, flags, &ptr, nil), db: db.ptr, is: SQLITE_OK)
     guard let ptr else {
-      throw LoomError.emptyStatement
+      throw LoomError.core(.unexpectedState, message: "sqlite3_prepare_v3() did not return a statement pointer.")
     }
 
     if useCache {
