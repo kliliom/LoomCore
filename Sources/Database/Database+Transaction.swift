@@ -107,7 +107,7 @@ extension Database {
         signalTransactionDidRollback()
       } catch {
         warn("Failed to rollback transaction: \(error)")
-        handle.kill()
+        handle.close()
       }
       throw error
     }

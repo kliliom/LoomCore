@@ -60,7 +60,7 @@ public struct DatabaseHandle: ~Copyable, Sendable {
   /// After calling this method, any subsequent attempt to access ``ptr`` will throw.
   /// This allows eager resource release without waiting for `deinit`. The `deinit`
   /// cleanup becomes a no-op because ``ptrRaw`` is set to `nil`.
-  mutating func kill() {
+  mutating func close() {
     resourceStore.close(dbPtr: ptrRaw)
     ptrRaw = nil
   }

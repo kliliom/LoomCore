@@ -13,7 +13,7 @@ struct DatabaseKillTests {
     try db.exec("CREATE TABLE test (id INTEGER)")
     try db.exec("INSERT INTO test (id) VALUES (1)")
 
-    db.kill()
+    db.close()
 
     // Verify database is closed
     #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
@@ -32,7 +32,7 @@ struct DatabaseKillTests {
     try db2.exec("CREATE TABLE test (value TEXT)")
     try db2.exec("INSERT INTO test (value) VALUES ('db2')")
 
-    db1.kill()
+    db1.close()
 
     #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
       try db1.exec("SELECT * FROM test")
@@ -59,7 +59,7 @@ struct DatabaseKillTests {
     try db.exec("CREATE TABLE test (id INTEGER)")
     try db.exec("INSERT INTO test (id) VALUES (42)")
 
-    db.kill()
+    db.close()
 
     #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
       try db.exec("SELECT * FROM test")
