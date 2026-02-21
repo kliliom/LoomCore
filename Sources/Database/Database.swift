@@ -64,7 +64,7 @@ public final class Database: Sendable {
   /// The handle owns the raw `sqlite3*` pointer and the prepared statement cache.
   /// When this `Database` instance is deallocated, the handle's `deinit` schedules
   /// cleanup of all resources on ``DatabaseActor``.
-  var db: DatabaseHandle
+  var handle: DatabaseHandle
 
   /// Runtime configuration flags controlling caching and transaction state.
   var options: DatabaseOptions = []
@@ -77,10 +77,10 @@ public final class Database: Sendable {
 
   /// Creates a new database instance wrapping an existing connection.
   ///
-  /// - Parameter db: The database handle to manage. Ownership is transferred
-  ///                 to this instance via `consuming` semantics.
-  init(db: consuming DatabaseHandle) {
-    self.db = db
+  /// - Parameter handle: The database handle to manage. Ownership is transferred to
+  ///   this instance via `consuming` semantics.
+  init(handle: consuming DatabaseHandle) {
+    self.handle = handle
   }
 
   /// Explicitly closes the database connection and releases all resources.
@@ -92,6 +92,6 @@ public final class Database: Sendable {
   /// Use this when you need deterministic resource release rather than relying
   /// on deallocation timing.
   public func kill() {
-    db.kill()
+    handle.kill()
   }
 }

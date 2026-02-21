@@ -88,6 +88,6 @@ extension Database {
   /// - Returns: The result of the `block` closure.
   /// - Throws: Any error thrown by the `block` closure.
   public func directAccess<T>(_ block: @DatabaseActor (_ ptr: OpaquePointer) throws -> T) throws -> T {
-    try block(db.ptr)
+    try block(handle.ptr)
   }
 }

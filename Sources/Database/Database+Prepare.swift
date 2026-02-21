@@ -109,8 +109,8 @@ extension Database {
   func prepare(sql: String) throws -> StatementHandle {
     let useCache = options.contains(.persistent)
 
-    let dbPtr = try db.ptr
-    if useCache, let stmtPtr = db.resourceStore.statementCache[sql] {
+    let dbPtr = try handle.ptr
+    if useCache, let stmtPtr = handle.resourceStore.statementCache[sql] {
       return StatementHandle(
         dbPtr: dbPtr,
         stmtPtr: stmtPtr,
@@ -125,13 +125,13 @@ extension Database {
       } else {
         0
       }
-    try check(sqlite3_prepare_v3(dbPtr, sql, -1, flags, &ptr, nil), db: db.ptr, is: SQLITE_OK)
+    try check(sqlite3_prepare_v3(dbPtr, sql, -1, flags, &ptr, nil), db: dbPtr, is: SQLITE_OK)
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_prepare_v3() did not return a statement pointer.")
     }
 
     if useCache {
-      db.resourceStore.statementCache[sql] = ptr
+      handle.resourceStore.statementCache[sql] = ptr
     }
 
     return StatementHandle(dbPtr: dbPtr, stmtPtr: ptr, freeOnDeinit: !useCache)

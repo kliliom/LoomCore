@@ -22,7 +22,7 @@ extension Database {
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
-    return Database(db: DatabaseHandle(ptr: ptr))
+    return Database(handle: DatabaseHandle(ptr: ptr))
   }
 
   /// Opens a connection to a persistent on-disk database.
@@ -56,6 +56,6 @@ extension Database {
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
-    return Database(db: DatabaseHandle(ptr: ptr))
+    return Database(handle: DatabaseHandle(ptr: ptr))
   }
 }
