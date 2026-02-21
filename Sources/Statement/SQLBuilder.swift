@@ -96,6 +96,25 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// Appends an interpolated value to the SQL statement.
   ///
   /// This method is called automatically by the Swift compiler for each interpolated
+  /// value in a string literal.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let name = "Alice"
+  /// let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(name)"
+  /// // Produces: "SELECT * FROM users WHERE name = ?"
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - value: The expression value to interpolate.
+  public mutating func appendInterpolation(_ value: some Expression) {
+    value.append(to: &self)
+  }
+
+  /// Appends an interpolated value to the SQL statement.
+  ///
+  /// This method is called automatically by the Swift compiler for each interpolated
   /// value in a string literal. By default, values are bound as parameters (`.bind` mode)
   /// for safety. Use `.raw` mode only for SQL identifiers from trusted sources.
   ///
@@ -111,7 +130,7 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// - Parameters:
   ///   - value: The expression value to interpolate.
   ///   - mode: How to append the value (`.bind` for parameters, `.raw` for identifiers).
-  public mutating func appendInterpolation(_ value: some Expression, mode: AppendMode = .bind) {
+  public mutating func appendInterpolation(_ value: some Expression, mode: AppendMode) {
     switch mode {
     case .raw:
       switch value {
