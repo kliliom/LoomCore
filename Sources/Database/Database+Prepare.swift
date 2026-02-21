@@ -58,19 +58,10 @@ public struct StatementHandle: ~Copyable, Sendable {
   /// If cleanup fails, a warning is logged but the process continues.
   deinit {
     if freeOnDeinit {
-      if sqlite3_finalize(stmtPtr) != SQLITE_OK {
-        let message = String(cString: sqlite3_errmsg(dbPtr))
-        warn("Failed to finalize statement: \(message)")
-      }
+      sqlite3_finalize(stmtPtr)
     } else {
-      if sqlite3_reset(stmtPtr) != SQLITE_OK {
-        let message = String(cString: sqlite3_errmsg(dbPtr))
-        warn("Failed to reset statement: \(message)")
-      }
-      if sqlite3_clear_bindings(stmtPtr) != SQLITE_OK {
-        let message = String(cString: sqlite3_errmsg(dbPtr))
-        warn("Failed to clear bindings: \(message)")
-      }
+      sqlite3_reset(stmtPtr)
+      sqlite3_clear_bindings(stmtPtr)
     }
   }
 }
