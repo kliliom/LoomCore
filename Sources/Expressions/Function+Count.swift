@@ -25,12 +25,12 @@ public struct Count: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("COUNT(")
+    builder.appendLiteral("COUNT(")
     if distinct {
-      builder.sql.append("DISTINCT ")
+      builder.appendLiteral("DISTINCT ")
     }
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

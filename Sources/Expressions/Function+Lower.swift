@@ -19,9 +19,9 @@ public struct Lower: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("LOWER(")
+    builder.appendLiteral("LOWER(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

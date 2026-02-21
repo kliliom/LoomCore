@@ -18,14 +18,14 @@ public struct Concat: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("(")
+    builder.appendLiteral("(")
     for (index, expression) in expressions.enumerated() {
       if index > 0 {
-        builder.sql.append(" || ")
+        builder.appendLiteral(" || ")
       }
       expression.append(to: &builder)
     }
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

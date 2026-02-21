@@ -120,8 +120,8 @@ extension Bindable {
   ///
   /// - Parameter builder: The SQL builder to append to.
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("?")
-    builder.binders.append(managedBinder)
+    builder.appendLiteral("?")
+    builder.appendBinder(managedBinder)
   }
 }
 

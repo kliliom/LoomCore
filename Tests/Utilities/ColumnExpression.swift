@@ -11,6 +11,6 @@ struct ColumnExpression<T>: LoomCore.Expression {
   }
 
   func append(to builder: inout SQLBuilder) {
-    builder.sql.append(columnName)
+    builder.appendLiteral(columnName)
   }
 }

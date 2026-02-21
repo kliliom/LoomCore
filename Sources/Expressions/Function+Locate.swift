@@ -25,11 +25,11 @@ public struct Locate: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("INSTR(")
+    builder.appendLiteral("INSTR(")
     haystack.append(to: &builder)
-    builder.sql.append(", ")
+    builder.appendLiteral(", ")
     needle.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

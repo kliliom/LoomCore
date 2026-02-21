@@ -19,9 +19,9 @@ public struct Sum<T: Bindable>: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("SUM(")
+    builder.appendLiteral("SUM(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

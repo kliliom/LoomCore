@@ -19,9 +19,9 @@ public struct Upper: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("UPPER(")
+    builder.appendLiteral("UPPER(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

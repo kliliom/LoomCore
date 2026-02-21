@@ -20,11 +20,11 @@ public struct IfNullExpression<Operand: Expression, Fallback: Expression, Result
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("IFNULL(")
+    builder.appendLiteral("IFNULL(")
     operand.append(to: &builder)
-    builder.sql.append(",")
+    builder.appendLiteral(",")
     fallback.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

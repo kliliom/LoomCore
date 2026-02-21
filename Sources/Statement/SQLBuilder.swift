@@ -38,13 +38,13 @@ public struct SQLBuilder: StringInterpolationProtocol {
   ///
   /// Each literal part of the SQL is stored as a separate string. These will be
   /// joined with spaces when the final statement is created.
-  public var sql: [String] = []
+  private(set) var sql: [String] = []
 
   /// The binder closures for parameter values.
   ///
   /// Each interpolated value in the SQL statement has a corresponding binder closure
   /// that will bind the actual value to the prepared statement at execution time.
-  public var binders: [Database.ManagedBinder] = []
+  private(set) var binders: [Database.ManagedBinder] = []
 
   /// Creates a builder with reserved capacity for interpolation.
   ///
@@ -55,7 +55,7 @@ public struct SQLBuilder: StringInterpolationProtocol {
   ///   - literalCapacity: Unused capacity hint for literal content.
   ///   - interpolationCount: The number of interpolated values, used to reserve capacity.
   public init(literalCapacity: Int, interpolationCount: Int) {
-    sql.reserveCapacity(interpolationCount + 1)
+    sql.reserveCapacity(interpolationCount * 2 + 1)
     binders.reserveCapacity(interpolationCount)
   }
 
@@ -76,6 +76,17 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// - Parameter literal: The SQL text to append.
   public mutating func appendLiteral(_ literal: StringLiteralType) {
     sql.append(literal)
+  }
+
+  /// Appends a binder closure to the builder.
+  ///
+  /// This method is used internally to register a binder for each interpolated value
+  /// that should be bound as a parameter. The binder will be called with the prepared
+  /// statement and parameter index when the statement is executed.
+  ///
+  /// - Parameter binder: A closure that binds a value to a prepared statement parameter.
+  public mutating func appendBinder(_ binder: @escaping Database.ManagedBinder) {
+    binders.append(binder)
   }
 
   /// Specifies how an interpolated value should be appended to the SQL statement.

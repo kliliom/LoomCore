@@ -30,15 +30,15 @@ public struct Substring: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("SUBSTR(")
+    builder.appendLiteral("SUBSTR(")
     expression.append(to: &builder)
-    builder.sql.append(", ")
+    builder.appendLiteral(", ")
     start.append(to: &builder)
     if let length = length {
-      builder.sql.append(", ")
+      builder.appendLiteral(", ")
       length.append(to: &builder)
     }
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

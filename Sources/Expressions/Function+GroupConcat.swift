@@ -30,16 +30,16 @@ public struct GroupConcat: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("GROUP_CONCAT(")
+    builder.appendLiteral("GROUP_CONCAT(")
     if distinct {
-      builder.sql.append("DISTINCT ")
+      builder.appendLiteral("DISTINCT ")
     }
     expression.append(to: &builder)
     if let separator {
-      builder.sql.append(", ")
+      builder.appendLiteral(", ")
       separator.append(to: &builder)
     }
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

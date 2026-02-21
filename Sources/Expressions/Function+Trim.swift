@@ -19,9 +19,9 @@ public struct Trim: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("TRIM(")
+    builder.appendLiteral("TRIM(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

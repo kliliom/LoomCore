@@ -19,9 +19,9 @@ public struct Length: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("LENGTH(")
+    builder.appendLiteral("LENGTH(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

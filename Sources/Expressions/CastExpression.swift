@@ -23,9 +23,9 @@ public struct CastExpression<Operand: Expression, Result>: Expression {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("CAST(")
+    builder.appendLiteral("CAST(")
     operand.append(to: &builder)
-    builder.sql.append("AS \(targetType))")
+    builder.appendLiteral("AS \(targetType))")
   }
 }
 

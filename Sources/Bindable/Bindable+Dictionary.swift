@@ -5,8 +5,8 @@ extension Dictionary: Expression where Self: Codable, Key: Bindable, Value: Bind
   public typealias ExpressionValue = Self
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("?")
-    builder.binders.append(managedBinder)
+    builder.appendLiteral("?")
+    builder.appendBinder(managedBinder)
   }
 }
 

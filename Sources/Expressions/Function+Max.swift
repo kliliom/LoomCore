@@ -19,9 +19,9 @@ public struct Max<T: Bindable>: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("MAX(")
+    builder.appendLiteral("MAX(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

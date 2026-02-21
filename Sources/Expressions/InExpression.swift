@@ -39,12 +39,12 @@ public struct InExpression<T: Bindable>: Expression {
   public func append(to builder: inout SQLBuilder) {
     needleExpression.append(to: &builder)
     if isNegated {
-      builder.sql.append("NOT IN (")
+      builder.appendLiteral("NOT IN (")
     } else {
-      builder.sql.append("IN (")
+      builder.appendLiteral("IN (")
     }
     haystackExpression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 
   /// An internal expression type that represents a list of values for the IN clause.
@@ -60,7 +60,7 @@ public struct InExpression<T: Bindable>: Expression {
     func append(to builder: inout SQLBuilder) {
       for (index, value) in values.enumerated() {
         if index > 0 {
-          builder.sql.append(", ")
+          builder.appendLiteral(", ")
         }
         value.append(to: &builder)
       }

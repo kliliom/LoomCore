@@ -19,9 +19,9 @@ public struct Min<T: Bindable>: Function {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("MIN(")
+    builder.appendLiteral("MIN(")
     expression.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 

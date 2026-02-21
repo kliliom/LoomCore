@@ -28,10 +28,10 @@ public struct BinaryOperation<Left: Expression, Right: Expression, Result>: Expr
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("(")
+    builder.appendLiteral("(")
     left.append(to: &builder)
-    builder.sql.append(sqlOperator)
+    builder.appendLiteral(sqlOperator)
     right.append(to: &builder)
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }

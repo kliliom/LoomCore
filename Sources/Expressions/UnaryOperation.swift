@@ -26,14 +26,14 @@ public struct UnaryOperation<Operand: Expression, Result>: Expression {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("(")
+    builder.appendLiteral("(")
     if isPrefix {
-      builder.sql.append(sqlOperator)
+      builder.appendLiteral(sqlOperator)
     }
     operand.append(to: &builder)
     if !isPrefix {
-      builder.sql.append(sqlOperator)
+      builder.appendLiteral(sqlOperator)
     }
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }

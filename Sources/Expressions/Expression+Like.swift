@@ -39,19 +39,19 @@ where Left.ExpressionValue == String, Right.ExpressionValue == String {
   }
 
   public func append(to builder: inout SQLBuilder) {
-    builder.sql.append("(")
+    builder.appendLiteral("(")
     left.append(to: &builder)
     switch likeType {
     case .like:
-      builder.sql.append("LIKE")
+      builder.appendLiteral("LIKE")
     case .notLike:
-      builder.sql.append("NOT LIKE")
+      builder.appendLiteral("NOT LIKE")
     }
     right.append(to: &builder)
     if let escape = escape {
-      builder.sql.append("ESCAPE '\(escape)'")
+      builder.appendLiteral("ESCAPE '\(escape)'")
     }
-    builder.sql.append(")")
+    builder.appendLiteral(")")
   }
 }
 
