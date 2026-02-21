@@ -115,9 +115,12 @@ public struct SQLBuilder: StringInterpolationProtocol {
     switch mode {
     case .raw:
       switch value {
-      case let value as String:
-        sql.append(value)
+      case let value as CustomStringConvertible:
+        sql.append(value.description)
       default:
+        warn(
+          "Value of type \(type(of: value)) does not conform to CustomStringConvertible. Falling back to `.bind` mode."
+        )
         value.append(to: &self)
       }
     case .bind:
