@@ -47,14 +47,13 @@ struct DatabaseKillTests {
 
   @Test("Kill file-based database")
   func testKillFileDatabase() async throws {
-    let tempDir = FileManager.default.temporaryDirectory
-    let dbPath = tempDir.appendingPathComponent("test-\(UUID().uuidString).db")
+    let url = tmpDatabaseURL()
+    let db = try Database.open(url: url)
 
     defer {
-      try? FileManager.default.removeItem(at: dbPath)
+      db.close()
+      url.remove()
     }
-
-    let db = try Database.open(url: dbPath)
 
     try db.exec("CREATE TABLE test (id INTEGER)")
     try db.exec("INSERT INTO test (id) VALUES (42)")
