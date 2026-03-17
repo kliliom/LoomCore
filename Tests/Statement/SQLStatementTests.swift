@@ -201,4 +201,59 @@ struct SQLStatementTests {
 
     #expect(result.first == date)
   }
+
+  // MARK: - Operator Tests
+
+  @Test("SQLStatement += operator execution with database")
+  func testPlusEqualsOperatorExecution() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try db.exec("INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 30)")
+
+    var stmt: SQLStatement = "INSERT INTO users (name, age)"
+    stmt += "VALUES"
+
+    let name = "Charlie"
+    let age = 35
+    stmt += "(\(name), \(age))"
+
+    try db.exec(stmt)
+
+    let result = try db.query("SELECT name, age FROM users WHERE name = 'Charlie'") { stmt, _ in
+      let n = try String.column(of: stmt, at: 0)
+      let a = try Int.column(of: stmt, at: 1)
+      return (n, a)
+    }
+
+    #expect(result.first?.0 == "Charlie")
+    #expect(result.first?.1 == 35)
+  }
+
+  @Test("SQLStatement + operator with multiple binders")
+  func testPlusOperatorMultipleBinders() async throws {
+    let db = try Database.openInMemory()
+
+    try db.exec("CREATE TABLE users (name TEXT, age INTEGER, active INTEGER)")
+    try db.exec("INSERT INTO users (name, age, active) VALUES ('Alice', 25, 1)")
+    try db.exec("INSERT INTO users (name, age, active) VALUES ('Bob', 30, 0)")
+    try db.exec("INSERT INTO users (name, age, active) VALUES ('Charlie', 35, 1)")
+
+    let minAge = 26
+    let active = true
+
+    let stmt1: SQLStatement = "SELECT name FROM users WHERE age > \(minAge)"
+    let stmt2: SQLStatement = "AND active = \(active)"
+    let combined = stmt1 + stmt2
+
+    #expect(combined.binders.count == 2)
+
+    let result = try db.query(combined) { stmt, _ in
+      try String.column(of: stmt, at: 0)
+    }
+
+    #expect(result.count == 1)
+    #expect(result.first == "Charlie")
+  }
 }

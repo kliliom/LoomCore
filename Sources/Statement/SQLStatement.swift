@@ -175,3 +175,56 @@ extension SQLStatement: ExpressibleByStringInterpolation {
     binders = stringInterpolation.binders
   }
 }
+
+// MARK: - Operators
+
+extension SQLStatement {
+  /// Combines two SQL statements into one by concatenating their SQL strings and binders.
+  ///
+  /// This operator creates a new statement by joining the SQL strings with a space
+  /// and merging the binder arrays in sequence.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let select: SQLStatement = "SELECT * FROM users"
+  /// let name = "Alice"
+  /// let whereClause: SQLStatement = "WHERE name = \(name)"
+  /// let stmt = select + whereClause
+  /// // sql: "SELECT * FROM users WHERE name = ?"
+  /// // binders: [closure that binds "Alice"]
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - lhs: The first SQL statement.
+  ///   - rhs: The second SQL statement to append.
+  /// - Returns: A new SQL statement combining both inputs.
+  public static func + (lhs: SQLStatement, rhs: SQLStatement) -> SQLStatement {
+    SQLStatement(
+      sql: lhs.sql + " " + rhs.sql,
+      binders: lhs.binders + rhs.binders
+    )
+  }
+
+  /// Appends a SQL statement to another by concatenating their SQL strings and binders.
+  ///
+  /// This operator mutates the left-hand statement by appending the right-hand statement's
+  /// SQL and binders.
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// var stmt: SQLStatement = "SELECT * FROM users"
+  /// let name = "Alice"
+  /// stmt += "WHERE name = \(name)"
+  /// // sql: "SELECT * FROM users WHERE name = ?"
+  /// // binders: [closure that binds "Alice"]
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - lhs: The SQL statement to modify.
+  ///   - rhs: The SQL statement to append.
+  public static func += (lhs: inout SQLStatement, rhs: SQLStatement) {
+    lhs = lhs + rhs
+  }
+}
