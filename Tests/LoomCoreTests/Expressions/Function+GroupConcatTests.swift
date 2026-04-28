@@ -108,4 +108,9 @@ struct FunctionGroupConcatTests {
     #expect(result.count == 1)
     #expect(result[0] == nil)
   }
+
+  @Test("GroupConcat ExpressionValue is optional String")
+  func testGroupConcatExpressionValueIsOptional() {
+    #expect(GroupConcat.ExpressionValue.self == String?.self)
+  }
 }

@@ -48,7 +48,7 @@ extension Database {
   ///
   /// The following example demonstrates executing multiple SQL statements in a transaction:
   ///
-  ///     try await db.transaction {
+  ///     try db.transaction {
   ///       try db.exec("INSERT INTO users (name, age) VALUES ('Foo', 42)")
   ///       try db.exec("INSERT INTO users (name, age) VALUES ('Bar', 24)")
   ///     }

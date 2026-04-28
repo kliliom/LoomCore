@@ -131,4 +131,21 @@ struct BindableDataTests {
       }
     }
   }
+
+  @Test("Data bind throws with connection error message on out-of-range index")
+  func testDataBindOutOfRangeIndex() throws {
+    let db = try Database.openInMemory()
+    try db.exec("CREATE TABLE test (data BLOB)")
+
+    let error = #expect(throws: LoomError.self) {
+      try db.exec(
+        raw: "INSERT INTO test (data) VALUES (?)",
+        binder: { stmt in
+          try Data([0x01, 0x02]).bind(to: stmt, at: 99)
+        }
+      )
+    }
+    let message = try #require(error?.message)
+    #expect(!message.isEmpty)
+  }
 }

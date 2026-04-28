@@ -37,6 +37,20 @@ public struct InExpression<T: Bindable>: Expression {
   }
 
   public func append(to builder: inout SQLBuilder) {
+    // An empty IN list is invalid SQL in SQLite. Render an always-false (or always-true
+    // for NOT IN) expression instead, preserving SQL semantics for an empty haystack.
+    if let listExpr = haystackExpression as? InExpression.HaystackListExpression, listExpr.values.isEmpty {
+      builder.appendLiteral("(")
+      needleExpression.append(to: &builder)
+      if isNegated {
+        builder.appendLiteral("NOT IN (NULL) OR 1")
+      } else {
+        builder.appendLiteral("IN (NULL) AND 0")
+      }
+      builder.appendLiteral(")")
+      return
+    }
+
     needleExpression.append(to: &builder)
     if isNegated {
       builder.appendLiteral("NOT IN (")

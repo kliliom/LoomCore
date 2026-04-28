@@ -93,9 +93,12 @@ extension DatabaseHandle {
       }
       statementCache = [:]
 
-      if let dbPtr, sqlite3_close(dbPtr) != SQLITE_OK {
-        let message = String(cString: sqlite3_errmsg(dbPtr))
-        warn("Failed to close database: \(message)")
+      if let dbPtr {
+        let rc = sqlite3_close(dbPtr)
+        if rc != SQLITE_OK {
+          let message = String(cString: sqlite3_errstr(rc))
+          warn("Failed to close database: \(message)")
+        }
       }
     }
   }

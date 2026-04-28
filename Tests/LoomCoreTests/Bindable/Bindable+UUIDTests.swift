@@ -113,4 +113,21 @@ struct BindableUUIDTests {
       }
     }
   }
+
+  @Test("UUID bind throws with connection error message on out-of-range index")
+  func testUUIDBindOutOfRangeIndex() throws {
+    let db = try Database.openInMemory()
+    try db.exec("CREATE TABLE test (id BLOB)")
+
+    let error = #expect(throws: LoomError.self) {
+      try db.exec(
+        raw: "INSERT INTO test (id) VALUES (?)",
+        binder: { stmt in
+          try UUID().bind(to: stmt, at: 99)
+        }
+      )
+    }
+    let message = try #require(error?.message)
+    #expect(!message.isEmpty)
+  }
 }

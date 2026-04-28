@@ -98,4 +98,38 @@ struct InExpressionTests {
     #expect(result[0] == 2)
     #expect(result[1] == 4)
   }
+
+  @Test("IN expression with empty array matches no rows")
+  func testInExpressionFromEmptyArray() throws {
+    let expr = ColumnExpression<Int>("category_id").in(array: [Int]())
+
+    var builder = SQLBuilder()
+    expr.append(to: &builder)
+    #expect(builder.makeStatement().sql == "( category_id IN (NULL) AND 0 )")
+
+    let result = try db.query(
+      "SELECT category_id FROM products WHERE \(expr)",
+      stepper: { stmt, _ in
+        try Int.column(of: stmt, at: 0)
+      }
+    )
+    #expect(result.isEmpty)
+  }
+
+  @Test("NOT IN expression with empty array matches all rows")
+  func testNotInExpressionFromEmptyArray() throws {
+    let expr = ColumnExpression<Int>("category_id").notIn(array: [Int]())
+
+    var builder = SQLBuilder()
+    expr.append(to: &builder)
+    #expect(builder.makeStatement().sql == "( category_id NOT IN (NULL) OR 1 )")
+
+    let result = try db.query(
+      "SELECT category_id FROM products ORDER BY category_id",
+      stepper: { stmt, _ in
+        try Int.column(of: stmt, at: 0)
+      }
+    )
+    #expect(result.count == 5)
+  }
 }

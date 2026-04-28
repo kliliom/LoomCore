@@ -6,6 +6,7 @@ extension Data: Bindable {
     try value.withUnsafeBytes {
       try check(
         sqlite3_bind_blob(stmt.stmtPtr, index, $0.baseAddress, Int32($0.count), sqliteTransient),
+        db: stmt.dbPtr,
         is: SQLITE_OK
       )
     }

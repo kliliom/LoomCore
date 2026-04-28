@@ -137,4 +137,21 @@ struct BindableStringTests {
 
     #expect(result.first == unicodeString)
   }
+
+  @Test("String bind throws with connection error message on out-of-range index")
+  func testStringBindOutOfRangeIndex() throws {
+    let db = try Database.openInMemory()
+    try db.exec("CREATE TABLE test (value TEXT)")
+
+    let error = #expect(throws: LoomError.self) {
+      try db.exec(
+        raw: "INSERT INTO test (value) VALUES (?)",
+        binder: { stmt in
+          try String.bind(to: stmt, value: "hello", at: 99)
+        }
+      )
+    }
+    let message = try #require(error?.message)
+    #expect(!message.isEmpty)
+  }
 }

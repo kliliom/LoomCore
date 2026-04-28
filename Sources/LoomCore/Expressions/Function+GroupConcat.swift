@@ -2,11 +2,12 @@
 ///
 /// This function generates SQL's `GROUP_CONCAT()` aggregate function, which combines
 /// values from multiple rows into a single comma-separated (or custom-separated) string.
-/// Can optionally concatenate only distinct values.
+/// Can optionally concatenate only distinct values. Returns `nil` when applied to an
+/// empty group or when all input values are NULL.
 ///
 /// Example SQL output: `GROUP_CONCAT(column_name)` or `GROUP_CONCAT(DISTINCT column_name, '-')`
 public struct GroupConcat: Function {
-  public typealias ExpressionValue = String
+  public typealias ExpressionValue = String?
 
   /// The expression to concatenate across rows.
   let expression: any Expression

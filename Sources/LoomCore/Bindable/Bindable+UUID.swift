@@ -4,7 +4,7 @@ import SQLite3
 extension UUID: Bindable {
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {
     try withUnsafePointer(to: value.uuid) {
-      try check(sqlite3_bind_blob(stmt.stmtPtr, index, $0, 16, sqliteTransient), is: SQLITE_OK)
+      try check(sqlite3_bind_blob(stmt.stmtPtr, index, $0, 16, sqliteTransient), db: stmt.dbPtr, is: SQLITE_OK)
     }
   }
 

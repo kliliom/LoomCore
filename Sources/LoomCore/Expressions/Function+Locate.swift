@@ -33,12 +33,12 @@ public struct Locate: Function {
   }
 }
 
-extension Expression {
+extension Expression where ExpressionValue == String {
   /// Finds the position of a substring within this expression.
   ///
   /// - Parameter needle: The substring to search for.
   /// - Returns: A `Locate` function that returns the 1-based position, 0 if not found, or `nil` if either value is NULL.
-  public func locate(_ needle: any Expression<ExpressionValue>) -> Locate {
+  public func locate(_ needle: any Expression<String>) -> Locate {
     Locate(needle: needle, in: self)
   }
 }

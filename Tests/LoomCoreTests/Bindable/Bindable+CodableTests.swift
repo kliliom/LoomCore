@@ -153,4 +153,21 @@ struct BindableCodableTests {
       }
     }
   }
+
+  @Test("Codable bind throws with connection error message on out-of-range index")
+  func testCodableBindOutOfRangeIndex() throws {
+    let db = try Database.openInMemory()
+    try db.exec("CREATE TABLE test (data BLOB)")
+
+    let error = #expect(throws: LoomError.self) {
+      try db.exec(
+        raw: "INSERT INTO test (data) VALUES (?)",
+        binder: { stmt in
+          try Person(name: "Alice", age: 25).bind(to: stmt, at: 99)
+        }
+      )
+    }
+    let message = try #require(error?.message)
+    #expect(!message.isEmpty)
+  }
 }

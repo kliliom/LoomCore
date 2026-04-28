@@ -6,6 +6,7 @@ extension String: Bindable {
     let success = try value.utf8.withContiguousStorageIfAvailable { ptr in
       try check(
         sqlite3_bind_text(stmt.stmtPtr, index, ptr.baseAddress, Int32(ptr.count), sqliteTransient),
+        db: stmt.dbPtr,
         is: SQLITE_OK
       )
       return SQLITE_OK
@@ -18,6 +19,7 @@ extension String: Bindable {
     try copy.withUTF8 { ptr in
       try check(
         sqlite3_bind_text(stmt.stmtPtr, index, ptr.baseAddress, Int32(ptr.count), sqliteTransient),
+        db: stmt.dbPtr,
         is: SQLITE_OK
       )
     }

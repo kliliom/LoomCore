@@ -29,9 +29,9 @@ where Left.ExpressionValue == String, Right.ExpressionValue == String {
   let likeType: LikeType
 
   /// Escape character for treating `%` and `_` as literals (optional).
-  let escape: String?
+  let escape: Character?
 
-  public init(left: Left, right: Right, likeType: LikeType = .like, escape: String? = nil) {
+  public init(left: Left, right: Right, likeType: LikeType = .like, escape: Character? = nil) {
     self.left = left
     self.right = right
     self.likeType = likeType
@@ -75,7 +75,7 @@ extension Expression where ExpressionValue == String {
   ///   - pattern: The pattern to match, using `%` and `_` wildcards.
   ///   - escape: An optional escape character to treat `%` and `_` as literals.
   /// - Returns: A binary operation expression representing the SQL LIKE operation.
-  public func like<R: Expression>(_ pattern: R, escape: String? = nil) -> LikeExpression<Self, R>
+  public func like<R: Expression>(_ pattern: R, escape: Character? = nil) -> LikeExpression<Self, R>
   where R.ExpressionValue == String {
     LikeExpression(left: self, right: pattern, likeType: .like, escape: escape)
   }
@@ -99,7 +99,7 @@ extension Expression where ExpressionValue == String {
   ///   - pattern: The pattern to match, using `%` and `_` wildcards.
   ///   - escape: An optional escape character to treat `%` and `_` as literals.
   /// - Returns: A binary operation expression representing the SQL NOT LIKE operation.
-  public func notLike<R: Expression>(_ pattern: R, escape: String? = nil) -> LikeExpression<Self, R>
+  public func notLike<R: Expression>(_ pattern: R, escape: Character? = nil) -> LikeExpression<Self, R>
   where R.ExpressionValue == String {
     LikeExpression(left: self, right: pattern, likeType: .notLike, escape: escape)
   }
