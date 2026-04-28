@@ -1,0 +1,319 @@
+# LoomCore
+
+> A type-safe SQLite wrapper for Swift 6+ using actor isolation for thread safety. All database operations are automatically serialized through `DatabaseActor`. Critical: SQLite parameter indices are 1-based, column indices are 0-based. This is NOT an ORM—it's a low-level wrapper that provides type-safe bindings and SQL string interpolation with automatic parameter sanitization.
+
+LoomCore emphasizes safety through Swift's type system and concurrency model. The library prevents SQL injection via automatic parameter binding in string interpolation, prevents race conditions via actor isolation, and prevents type errors via the `Bindable` protocol. All `Database` methods and `Bindable` operations are isolated to `DatabaseActor`, which means you cannot accidentally perform unsynchronized access to SQLite.
+
+**Important constraints:**
+- Nested transactions are not supported. Calling `transaction()` within an active transaction logs a warning and executes in the existing transaction context.
+- The `Database` class is `@DatabaseActor` isolated. You cannot call its methods from arbitrary async contexts without hopping to the actor.
+- String interpolation defaults to safe `.bind` mode. Use `.raw` mode only for trusted SQL identifiers (table/column names), never for user input.
+- When using managed indices (`ManagedIndex`), the index auto-increments *after* bind/column operations. Parameters start at 0 (becomes 1 after first bind), columns start at 0.
+
+**Platform support:** Swift 6.0+, iOS 16+, macOS 13+, tvOS 16+, visionOS 1+, watchOS 9+
+
+## Getting Started
+
+### Installation
+
+Add to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/kliliom/loom-core.git", from: "1.0.0")
+]
+```
+
+### Opening a database
+
+```swift
+// In-memory database (testing/scratch work)
+let db = try await Database.openInMemory()
+
+// File-based database
+let fileURL = URL(fileURLWithPath: "/path/to/database.sqlite")
+let db = try await Database.open(url: fileURL)
+```
+
+### Basic operations
+
+```swift
+// Execute DDL or write operations
+try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+
+// Insert with string interpolation (automatic parameter binding)
+let name = "Alice"
+let age = 30
+try db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
+
+// Query with type-safe result extraction
+let users = try db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
+    let name = try String.column(of: stmt, at: 0)  // Column 0 (leftmost)
+    let age = try Int.column(of: stmt, at: 1)      // Column 1
+    return (name, age)
+}
+```
+
+### Transactions
+
+```swift
+try db.transaction {
+    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 25)")
+    try db.exec("INSERT INTO users (name, age) VALUES ('Carol', 28)")
+    // Commits on success, rolls back on error
+}
+
+// Transaction with lock mode
+try db.transaction(kind: .immediate) {
+    // Operations...
+}
+```
+
+## API Reference
+
+### Core types
+
+- **`Database`** — Main interface for all database operations. Actor-isolated, methods include `query()`, `exec()`, `transaction()`.
+- **`SQLStatement`** — SQL string with bound parameters. Created via string interpolation or `SQLStatement.raw()` for static SQL.
+- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date) and supports JSON encoding via `Codable` conformance.
+- **`Expression`** — Protocol for SQL expressions. Bindable types automatically conform. Used for building complex SQL expressions with operators.
+- **`DatabaseActor`** — Global actor that serializes all database access. Applied automatically to `Database` and binding operations.
+
+### Database operations
+
+**Query methods:**
+```swift
+// String interpolation (recommended)
+db.query(_:stepper:) -> [R]
+db.query(_:stepper:) -> [R]  // With ManagedStepper
+
+// Raw SQL with manual binding
+db.query(raw:binder:stepper:) -> [R]
+db.query(raw:stepper:) -> [R]  // No parameters
+
+// Variadic binding
+db.query(raw:binding:_:stepper:) -> [R]
+```
+
+**Exec methods:**
+```swift
+db.exec(_:)                    // SQLStatement
+db.exec(raw:binder:)           // Manual binding
+db.exec(raw:)                  // No parameters
+```
+
+**Other methods:**
+```swift
+db.transaction(kind:_:) -> T   // Execute atomic operations
+db.close()                     // Explicit cleanup
+db.lastInsertedRowID           // Get last INSERT rowid
+```
+
+### Binding and extraction
+
+**Parameter binding (1-based index):**
+```swift
+try String.bind(to: stmt, value: "text", at: 1)  // Leftmost parameter
+try value.bind(to: stmt, at: 1)                   // Instance method
+try value.bind(to: stmt, at: &index)              // Managed index
+```
+
+**Column extraction (0-based index):**
+```swift
+let value = try String.column(of: stmt, at: 0)    // Leftmost column
+try variable.column(of: stmt, at: 0)              // Mutating instance method
+let value = try String.column(of: stmt, at: &index)  // Managed index
+```
+
+### SQL building
+
+**String interpolation:**
+```swift
+let stmt: SQLStatement = "SELECT * FROM \(table, mode: .raw) WHERE age > \(minAge)"
+// Produces: "SELECT * FROM users WHERE age > ?"
+```
+
+**Combining statements:**
+```swift
+var stmt: SQLStatement = "SELECT * FROM users"
+stmt += "WHERE age > \(25)"
+let combined = stmt1 + stmt2
+```
+
+### Expression operators
+
+Bindable types support SQL operators:
+```swift
+let expr = age > 21 && status == "active"  // Expression<Bool>
+let calc = (price * quantity) + tax        // Expression<Double>
+```
+
+## Examples
+
+### Managed indices (recommended for multi-column operations)
+
+```swift
+let users = try db.query(
+    raw: "SELECT id, name, email, age FROM users WHERE status = ?",
+    binder: { stmt, index in
+        try "active".bind(to: stmt, at: &index)  // Auto-increments to 1
+    },
+    stepper: { stmt, index, stop in
+        let id = try Int.column(of: stmt, at: &index)       // Reads column 0
+        let name = try String.column(of: stmt, at: &index)   // Reads column 1
+        let email = try String.column(of: stmt, at: &index)  // Reads column 2
+        let age = try Int.column(of: stmt, at: &index)       // Reads column 3
+        return User(id: id, name: name, email: email, age: age)
+    }
+)
+```
+
+### Early query termination
+
+```swift
+let firstMatch = try db.query("SELECT name FROM users WHERE age > \(21)") { stmt, stop in
+    let name = try String.column(of: stmt, at: 0)
+    if name == "TargetName" {
+        stop = true  // Stop iterating
+    }
+    return name
+}
+```
+
+### Optional values and NULL
+
+```swift
+let email: String? = nil
+try db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
+
+let result = try db.query("SELECT email FROM users") { stmt, _ in
+    try Optional<String>.column(of: stmt, at: 0)  // Returns nil for NULL
+}
+```
+
+### Codable types (automatic JSON encoding)
+
+```swift
+struct Metadata: Codable {
+    let createdAt: Date
+    let tags: [String]
+}
+
+let meta = Metadata(createdAt: Date(), tags: ["swift", "database"])
+try db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
+// Automatically encoded as JSON and stored as TEXT
+
+let retrieved = try db.query("SELECT metadata FROM items") { stmt, _ in
+    try Metadata.column(of: stmt, at: 0)  // Automatically decoded from JSON
+}
+```
+
+### Raw mode for identifiers
+
+```swift
+let tableName = "users"  // From trusted configuration, not user input
+let columnName = "email"
+
+// CORRECT: Use .raw mode for SQL identifiers from trusted sources
+let stmt: SQLStatement = "SELECT \(columnName, mode: .raw) FROM \(tableName, mode: .raw)"
+
+// WRONG: Never use .raw with user input (SQL injection risk)
+let userInput = "'; DROP TABLE users; --"
+let bad: SQLStatement = "SELECT * FROM \(userInput, mode: .raw)"  // DANGEROUS
+```
+
+### Services (transaction lifecycle hooks)
+
+```swift
+class CacheInvalidationService: Database.Service {
+    override func transactionDidCommit() {
+        // Clear caches after successful commit
+        cache.clear()
+    }
+
+    override func transactionDidRollback() {
+        // Handle rollback
+    }
+}
+
+// Register and use service
+let service = db.getService(CacheInvalidationService.self)
+// Service receives lifecycle callbacks automatically
+```
+
+## File Reference
+
+### Essential API documentation
+
+- `Sources/Database/Database.swift` — Core `Database` class definition, opening databases, resource management, actor isolation
+- `Sources/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
+- `Sources/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL)
+- `Sources/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), nested transaction behavior
+- `Sources/Bindable/Bindable.swift` — Core `Bindable` protocol, bind/column methods, index conventions (1-based vs 0-based), managed indices
+- `Sources/Statement/SQLStatement.swift` — SQL statement construction, string interpolation, raw mode, statement composition
+- `Sources/Statement/SQLBuilder.swift` — String interpolation internals, append modes (bind vs raw), how parameter binding works
+- `Sources/Expressions/Expression.swift` — Expression protocol for SQL building, operator overloading foundation
+- `Sources/Database/DatabaseActor.swift` — Global actor definition, thread safety guarantees, what gets serialized
+
+### Type-specific bindings (examples)
+
+- `Sources/Bindable/Bindable+String.swift` — String binding, TEXT storage, SQL escaping
+- `Sources/Bindable/Bindable+Numbers.swift` — Int, Double, Float, Bool bindings, INTEGER/REAL storage
+- `Sources/Bindable/Bindable+Optional.swift` — NULL handling, optional value binding/extraction
+- `Sources/Bindable/Bindable+Codable.swift` — JSON encoding/decoding for Codable types stored as TEXT
+- `Sources/Bindable/Bindable+Date.swift` — Date storage (Unix timestamp as REAL), time zone handling
+- `Sources/Bindable/Bindable+UUID.swift` — UUID storage (as TEXT), string conversion
+- `Sources/Bindable/Bindable+Data.swift` — Binary data (BLOB) binding and extraction
+
+### Expression building
+
+- `Sources/Expressions/Expression+Comparison.swift` — Comparison operators (==, !=, <, >, <=, >=)
+- `Sources/Expressions/Expression+Logical.swift` — Logical operators (&&, ||, !)
+- `Sources/Expressions/Expression+Arithmetic.swift` — Arithmetic operators (+, -, *, /)
+- `Sources/Expressions/Function+Count.swift` — COUNT() aggregate function
+- `Sources/Expressions/Function+Sum.swift` — SUM() aggregate function
+- `Sources/Expressions/CastExpression.swift` — Type casting in SQL (CAST expression)
+
+### Error handling
+
+- `Sources/Utilities/LoomError.swift` — Unified error type, SQLite error code wrapping
+- `Sources/Utilities/SQLiteResultCode.swift` — SQLite result codes (SQLITE_OK, SQLITE_ROW, SQLITE_DONE, etc.)
+- `Sources/Utilities/LoomCoreErrorCode.swift` — Library-specific error codes
+
+### Advanced features
+
+- `Sources/Database/Database+Service.swift` — Service base class, transaction lifecycle hooks, singleton-per-type pattern
+- `Sources/Database/Database+Cached.swift` — Statement caching mechanism (persistent mode)
+- `Sources/Database/Database+Pragmas.swift` — PRAGMA helpers for common SQLite configuration
+
+## Test Examples
+
+- `Tests/Database/Database+QueryTests.swift` — Query patterns, stepper usage, early termination examples
+- `Tests/Database/Database+TransactionTests.swift` — Transaction usage, rollback behavior, nested transaction warnings
+- `Tests/Statement/SQLStatementTests.swift` — String interpolation examples, raw mode usage, statement composition
+- `Tests/Bindable/BindableTests.swift` — Type binding examples, index management patterns
+- `Tests/Bindable/Bindable+OptionalTests.swift` — NULL handling patterns, optional value workflows
+
+## Optional Resources
+
+### Advanced topics
+
+- `Sources/Database/DatabaseHandle.swift` — Raw SQLite handle management, statement cache internals, resource cleanup timing
+- `Sources/Database/Database+Prepare.swift` — Statement preparation, cache hits/misses
+- `Sources/Utilities/Check.swift` — SQLite error checking helpers, result code validation
+
+### Specialized bindings
+
+- `Sources/Bindable/Bindable+Array.swift` — Array storage (JSON-encoded)
+- `Sources/Bindable/Bindable+Dictionary.swift` — Dictionary storage (JSON-encoded)
+- `Sources/Bindable/Bindable+RawRepresentable.swift` — Enum storage (via rawValue)
+
+### Additional SQL functions
+
+- `Sources/Expressions/Function+Concat.swift` — String concatenation
+- `Sources/Expressions/Function+Substring.swift` — Substring extraction
+- `Sources/Expressions/Function+Trim.swift` — Whitespace trimming
+- `Sources/Expressions/Function+Upper.swift`, `Function+Lower.swift` — Case conversion
+- `Sources/Expressions/Function+Length.swift` — String length
+- `Sources/Expressions/Function+GroupConcat.swift` — GROUP_CONCAT aggregate
+- `Sources/Expressions/IfNullExpression.swift` — IFNULL/COALESCE handling
