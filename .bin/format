@@ -7,3 +7,4 @@ cd "${0%/*}/.."
 
 # Run linting tool
 swift format format -i --parallel --recursive Sources Tests
+swift format format -i --parallel --recursive --configuration .swift-format-docs Sources/LoomCore/Documentation.docc
