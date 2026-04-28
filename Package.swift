@@ -22,12 +22,10 @@ let package = Package(
     targets: [
         .target(
             name: "LoomCore",
-            path: "Sources"
         ),
         .testTarget(
             name: "LoomCoreTests",
             dependencies: ["LoomCore"],
-            path: "Tests"
         ),
     ]
 )
