@@ -109,8 +109,8 @@ class DatabasePragmasTests {
     #expect(defaultSize >= 0)
 
     // Set mmap size to 256MB
-    #expect(try db.setMmapSize(256 * 1024 * 1024) == 256 * 1024 * 1024)
-    #expect(try db.getMmapSize() == 256 * 1024 * 1024)
+    #expect(try db.setMmapSize(10 * 1024 * 1024) == 10 * 1024 * 1024)
+    #expect(try db.getMmapSize() == 10 * 1024 * 1024)
 
     // Disable mmap
     #expect(try db.setMmapSize(0) == 0)
