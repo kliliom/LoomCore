@@ -1,19 +1,24 @@
 // MARK: - String Operators
 
-/// String operators for text expressions.
+/// Pattern-match expression rendering SQL `LIKE` or `NOT LIKE`.
 ///
-/// These operators enable SQL pattern matching operations on string expressions.
+/// Build instances through the `like(_:escape:)` and `notLike(_:escape:)` operators on any
+/// `String`-valued expression — direct construction is rarely needed.
 ///
-/// Example:
 /// ```swift
-/// let name = ColumnExpression<String>("name")
-/// let condition = name.like("Admin%")
-/// // Generates: (name LIKE ?)
+/// struct User: Codable { let id: Int64; let email: String }
+///
+/// let email = ColumnExpression<String>("email")
+/// let admins = try await db.query(
+///   "SELECT id, email FROM users WHERE \(email.like("admin@%"))",
+///   as: User.self
+/// )
 /// ```
 public struct LikeExpression<Left: Expression, Right: Expression>: Expression
 where Left.ExpressionValue == String, Right.ExpressionValue == String {
   public typealias ExpressionValue = Bool
 
+  /// Variant of the pattern match: `LIKE` or `NOT LIKE`.
   public enum LikeType: Sendable {
     case like
     case notLike
@@ -31,6 +36,7 @@ where Left.ExpressionValue == String, Right.ExpressionValue == String {
   /// Escape character for treating `%` and `_` as literals (optional).
   let escape: Character?
 
+  /// Creates a pattern-match expression comparing `left` against `right`.
   public init(left: Left, right: Right, likeType: LikeType = .like, escape: Character? = nil) {
     self.left = left
     self.right = right
@@ -56,49 +62,46 @@ where Left.ExpressionValue == String, Right.ExpressionValue == String {
 }
 
 extension Expression where ExpressionValue == String {
-  /// SQL LIKE pattern matching operator.
+  /// Tests whether the expression matches a SQL `LIKE` pattern.
   ///
-  /// Use `%` to match any sequence of characters and `_` to match a single character.
+  /// `%` matches any sequence of characters; `_` matches exactly one character. Pass `escape`
+  /// to treat `%` or `_` as literals — the chosen character precedes the literal in the pattern.
   ///
-  /// Example:
   /// ```swift
-  /// let name = ColumnExpression<String>("name")
-  /// name.like("John%")  // Matches names starting with "John"
-  /// name.like("%Smith") // Matches names ending with "Smith"
-  /// name.like("J_n")    // Matches "Jon", "Jan", "Jin", etc.
-  /// // Generates: (name LIKE ?)
-  /// name.like("100\\%", escape: "\\") // Matches "100%" if escape character is set to "\\"
-  /// // Generates: (name LIKE ? ESCAPE '\')
-  /// ```
+  /// let email = ColumnExpression<String>("email")
   ///
-  /// - Parameters:
-  ///   - pattern: The pattern to match, using `%` and `_` wildcards.
-  ///   - escape: An optional escape character to treat `%` and `_` as literals.
-  /// - Returns: A binary operation expression representing the SQL LIKE operation.
+  /// // Find all admin addresses.
+  /// let admins = try await db.query(
+  ///   "SELECT id FROM users WHERE \(email.like("admin@%"))",
+  ///   as: Int64.self
+  /// )
+  ///
+  /// // Find rows whose comment column literally contains "100%".
+  /// let comment = ColumnExpression<String>("comment")
+  /// let promos = try await db.query(
+  ///   "SELECT id FROM offers WHERE \(comment.like("%100\\%%", escape: "\\"))",
+  ///   as: Int64.self
+  /// )
+  /// ```
   public func like<R: Expression>(_ pattern: R, escape: Character? = nil) -> LikeExpression<Self, R>
   where R.ExpressionValue == String {
     LikeExpression(left: self, right: pattern, likeType: .like, escape: escape)
   }
 
-  /// SQL NOT LIKE pattern matching operator.
+  /// Tests whether the expression does not match a SQL `LIKE` pattern.
   ///
-  /// Use `%` to match any sequence of characters and `_` to match a single character.
+  /// `%` matches any sequence of characters; `_` matches exactly one character. Pass `escape`
+  /// to treat `%` or `_` as literals — the chosen character precedes the literal in the pattern.
   ///
-  /// Example:
   /// ```swift
-  /// let name = ColumnExpression<String>("name")
-  /// name.notLike("John%")  // Matches names not starting with "John"
-  /// name.notLike("%Smith") // Matches names not ending with "Smith"
-  /// name.notLike("J_n")    // Matches names not "Jon", "Jan", "Jin", etc.
-  /// // Generates: (name NOT LIKE ?)
-  /// name.notLike("100\\%", escape: "\\") // Matches names not "100%" if escape character is set to "\\"
-  /// // Generates: (name NOT LIKE ? ESCAPE '\')
-  /// ```
+  /// let email = ColumnExpression<String>("email")
   ///
-  /// - Parameters:
-  ///   - pattern: The pattern to match, using `%` and `_` wildcards.
-  ///   - escape: An optional escape character to treat `%` and `_` as literals.
-  /// - Returns: A binary operation expression representing the SQL NOT LIKE operation.
+  /// // Find users whose address is not on the corporate domain.
+  /// let external = try await db.query(
+  ///   "SELECT id FROM users WHERE \(email.notLike("%@example.com"))",
+  ///   as: Int64.self
+  /// )
+  /// ```
   public func notLike<R: Expression>(_ pattern: R, escape: Character? = nil) -> LikeExpression<Self, R>
   where R.ExpressionValue == String {
     LikeExpression(left: self, right: pattern, likeType: .notLike, escape: escape)

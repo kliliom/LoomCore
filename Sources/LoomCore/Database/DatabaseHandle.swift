@@ -1,26 +1,19 @@
 import SQLite3
 
-/// Wrapper type for a handle to an SQLite database connection.
+/// Owns an open SQLite connection and its cached prepared statements.
 ///
-/// This type manages the lifetime of an SQLite database connection (`sqlite3*` pointer)
-/// and its associated resources such as cached prepared statements. It uses Swift's
-/// non-copyable types (`~Copyable`) to ensure exclusive ownership and prevent
-/// use-after-free errors or double-close bugs.
+/// `DatabaseHandle` is non-copyable to enforce exclusive ownership of the underlying
+/// `sqlite3*` pointer. When the handle is destroyed, every cached statement is
+/// finalized and the connection is closed; because `deinit` may run off-actor,
+/// cleanup is dispatched to `DatabaseActor` via a `Task`.
 ///
-/// When this handle is deinitialized, all cached prepared statements are finalized
-/// and the database connection is closed. Cleanup is dispatched to ``DatabaseActor``
-/// to ensure it runs in the correct isolation context.
-///
-/// - Important: This type is not copyable to maintain exclusive ownership of the
-///              database connection. Pass it using `consuming` or `borrowing` semantics.
+/// Pass instances using `consuming` or `borrowing` parameters rather than copying.
 @DatabaseActor
 public struct DatabaseHandle: ~Copyable, Sendable {
-  /// Raw SQLite database connection pointer.
+  // Raw SQLite database connection pointer; `nil` after `close()`.
   private var ptrRaw: OpaquePointer?
 
-  /// Returns the raw SQLite database connection pointer.
-  ///
-  /// - Throws: `LoomError` with code `.databaseClosed` if the connection has already been closed.
+  // Throws `LoomError(.databaseClosed)` once the connection has been closed.
   var ptr: OpaquePointer {
     get throws {
       guard let ptrRaw else {
@@ -30,36 +23,24 @@ public struct DatabaseHandle: ~Copyable, Sendable {
     }
   }
 
-  /// Shared resource store that owns cached prepared statements.
-  ///
-  /// This reference-type store allows resources to be transferred to an
-  /// actor-isolated ``Task`` during `deinit` for safe cleanup.
+  // Reference-type store so cached statements can be captured by value into
+  // the deinit cleanup `Task`.
   let resourceStore = ResourceStore()
 
-  /// Creates a new database handle wrapping an SQLite connection.
-  ///
-  /// - Parameter ptr: Raw SQLite database connection pointer from `sqlite3_open()`.
   init(ptr: OpaquePointer) {
     self.ptrRaw = ptr
   }
 
-  /// Schedules cleanup of all database resources when the handle is destroyed.
-  ///
-  /// Because `deinit` on a `@DatabaseActor`-isolated struct may run off-actor,
-  /// the actual cleanup (statement finalization and connection close) is dispatched
-  /// to ``DatabaseActor`` via a ``Task``. Both the raw pointer and the resource
-  /// store are captured by value to ensure they remain valid.
+  // `deinit` may run off-actor, so cleanup hops onto `DatabaseActor`.
+  // Both the pointer and the resource store are captured by value.
   deinit {
     Task { @DatabaseActor [ptrRaw, resourceStore] in
       resourceStore.close(dbPtr: ptrRaw)
     }
   }
 
-  /// Explicitly closes the database connection and finalizes all cached statements.
-  ///
-  /// After calling this method, any subsequent attempt to access ``ptr`` will throw.
-  /// This allows eager resource release without waiting for `deinit`. The `deinit`
-  /// cleanup becomes a no-op because ``ptrRaw`` is set to `nil`.
+  // Eagerly closes the connection and finalizes cached statements. After this
+  // returns, `ptr` throws and the `deinit` cleanup becomes a no-op.
   mutating func close() {
     resourceStore.close(dbPtr: ptrRaw)
     ptrRaw = nil
@@ -67,26 +48,15 @@ public struct DatabaseHandle: ~Copyable, Sendable {
 }
 
 extension DatabaseHandle {
-  /// Internal storage for database resources that must outlive the ``DatabaseHandle`` struct.
-  ///
-  /// This class exists because `DatabaseHandle` is a non-copyable struct whose `deinit`
-  /// may run on an arbitrary thread. By storing resources in a reference type, they can
-  /// be safely captured and moved into an actor-isolated ``Task`` for cleanup.
+  // Reference-type backing store for resources that must outlive the
+  // non-copyable `DatabaseHandle` struct so they can be moved into the
+  // deinit cleanup `Task`.
   @DatabaseActor
   final class ResourceStore: Sendable {
-    /// Cache of compiled SQL statements for reuse.
-    ///
-    /// Maps SQL strings to their compiled statement pointers. Cached statements are
-    /// finalized when ``close(dbPtr:)`` is called during database shutdown.
     var statementCache: [String: OpaquePointer] = [:]
 
-    /// Finalizes all cached statements and closes the database connection.
-    ///
-    /// This method first finalizes every cached prepared statement, then clears
-    /// the cache, and finally closes the SQLite connection. If closing fails,
-    /// a warning is logged.
-    ///
-    /// - Parameter dbPtr: The raw SQLite database connection pointer to close.
+    // Finalizes every cached statement, clears the cache, and closes the
+    // SQLite connection. A failed `sqlite3_close` is logged as a warning.
     consuming func close(dbPtr: OpaquePointer?) {
       for (_, stmtPtr) in statementCache {
         sqlite3_finalize(stmtPtr)

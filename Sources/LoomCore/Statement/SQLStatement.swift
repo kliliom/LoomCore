@@ -1,104 +1,79 @@
-/// A SQL statement with safe parameter binding.
+/// SQL statement with safe parameter binding.
 ///
-/// `SQLStatement` represents a complete SQL statement consisting of a SQL string with
-/// parameter placeholders (`?`) and associated binder closures that safely bind values
-/// to those parameters at execution time.
-///
-/// ## Creating Statements
-///
-/// The most convenient way to create statements is through string interpolation:
+/// `SQLStatement` pairs a SQL string containing `?` placeholders with binder closures that
+/// bind values into those placeholders at execution time. Build statements with string
+/// interpolation — interpolated values become bound parameters, not text concatenated into SQL,
+/// so user input cannot escape into the statement.
 ///
 /// ```swift
 /// let name = "Alice"
-/// let age = 25
-/// let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(name) AND age > \(age)"
-/// // Produces: "SELECT * FROM users WHERE name = ? AND age > ?"
-/// // With binders for "Alice" and 25
+/// let minAge = 21
+/// let stmt: SQLStatement = """
+///   SELECT id, name FROM users
+///   WHERE name = \(name) AND age > \(minAge)
+///   """
+/// // sql:     "SELECT id, name FROM users WHERE name = ? AND age > ?"
+/// // binders: ["Alice", 21]
+/// for try await row in db.query(stmt) { ... }
 /// ```
 ///
-/// For raw SQL without parameter binding:
+/// ## Raw mode for trusted identifiers
+///
+/// Interpolating with `mode: .raw` skips parameter binding and inlines the value directly
+/// into the SQL. Reserve this for SQL identifiers from trusted sources — table or column
+/// names from configuration. Never use `.raw` with user input; it bypasses the parameter
+/// binding that prevents SQL injection.
 ///
 /// ```swift
-/// let stmt = SQLStatement.raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-/// ```
-///
-/// ## Type Safety
-///
-/// String interpolation automatically creates parameter bindings for ``Bindable`` types,
-/// ensuring type-safe conversion and preventing SQL injection vulnerabilities:
-///
-/// ```swift
-/// let userInput = "'; DROP TABLE users; --"
-/// let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(userInput)"
-/// // Safely bound as parameter, not embedded in SQL
-/// ```
-///
-/// ## Raw Mode for Identifiers
-///
-/// Use raw mode for table/column names from trusted sources:
-///
-/// ```swift
-/// let table = "users"  // From trusted configuration
+/// let table = "users"  // trusted, e.g. from a configuration enum
 /// let stmt: SQLStatement = "SELECT * FROM \(table, mode: .raw)"
 /// ```
+///
+/// For DDL or other statements that contain no dynamic values, use ``raw(_:)``.
 ///
 /// ## See Also
 /// - ``SQLBuilder``
 /// - ``Bindable``
 /// - ``Expression``
 public struct SQLStatement: Sendable {
-  /// The SQL string with `?` placeholders for parameters.
-  ///
-  /// This is the complete SQL statement that will be prepared by SQLite.
-  /// Parameter placeholders use the `?` syntax, which are bound using the ``binders``.
+  /// SQL string with `?` placeholders for each bound parameter.
   public let sql: String
 
-  /// The binder closures that bind values to parameters.
-  ///
-  /// Each binder corresponds to a `?` placeholder in the ``sql`` string.
-  /// Binders are executed in order when the statement is prepared and executed.
+  /// Binder closures, one per `?` placeholder in ``sql``, applied in order at execution.
   public let binders: [Database.ManagedBinder]
 
-  /// Creates a SQL statement with explicit SQL string and binders.
+  /// Creates a statement from a SQL string and matching binders.
   ///
-  /// This initializer is typically not called directly. Use string interpolation
-  /// or ``raw(_:)`` instead for most cases.
+  /// Most call sites should build statements through string interpolation or ``raw(_:)``
+  /// rather than calling this initializer directly. Use it when composing a statement
+  /// from binders produced elsewhere — for example, when implementing a custom
+  /// ``Expression`` that emits its own SQL fragment.
   ///
   /// - Parameters:
-  ///   - sql: The SQL string with `?` placeholders.
-  ///   - binders: The binder closures for each parameter.
+  ///   - sql: SQL string with one `?` for each entry in `binders`.
+  ///   - binders: Binder closures invoked in order against the prepared statement.
   public init(sql: String, binders: [Database.ManagedBinder]) {
     self.sql = sql
     self.binders = binders
   }
 
-  /// Creates a raw SQL statement without parameter binding.
+  /// Creates a statement from raw SQL with no parameter binding.
   ///
-  /// Use this for SQL statements that don't require parameter binding, such as
-  /// DDL statements (CREATE TABLE, DROP TABLE, etc.) or queries without dynamic values.
-  ///
-  /// ## Example
+  /// Use this for DDL or pragma statements that contain no dynamic values:
   ///
   /// ```swift
-  /// let stmt = SQLStatement.raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-  /// let stmt2 = SQLStatement.raw("PRAGMA foreign_keys = ON")
+  /// try await db.exec(.raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"))
+  /// try await db.exec(.raw("PRAGMA foreign_keys = ON"))
   /// ```
   ///
-  /// **Warning**: Do not use this with user input or untrusted data, as it bypasses
-  /// parameter binding and can lead to SQL injection vulnerabilities.
-  ///
-  /// - Parameter sql: The complete SQL statement without placeholders.
-  /// - Returns: A SQL statement with no binders.
+  /// - Warning: Never pass user-controlled input here — `raw(_:)` bypasses parameter
+  ///   binding, which is the protection against SQL injection. For dynamic values use
+  ///   string interpolation; for trusted identifiers use ``ColumnExpression`` or the
+  ///   `mode: .raw` interpolation modifier.
   public static func raw(_ sql: String) -> SQLStatement {
     SQLStatement(sql: sql, binders: [])
   }
 
-  /// Creates a binder closure that executes all parameter bindings.
-  ///
-  /// This property constructs a ``Database/Binder`` that starts with index 0 and
-  /// sequentially binds all parameter values to the prepared statement.
-  ///
-  /// - Returns: A closure that binds all parameters starting from index 0.
   var binder: Database.Binder {
     { [binders] handle in
       var index = ManagedIndex()
@@ -108,12 +83,6 @@ public struct SQLStatement: Sendable {
     }
   }
 
-  /// Creates a managed binder closure that continues from a given index.
-  ///
-  /// This property constructs a ``Database/ManagedBinder`` that can be composed
-  /// with other binders, continuing from the current managed index.
-  ///
-  /// - Returns: A closure that binds all parameters with managed index continuation.
   var managedBinder: Database.ManagedBinder {
     { [binders] stmt, index in
       for binder in binders {
@@ -128,21 +97,14 @@ public struct SQLStatement: Sendable {
 extension SQLStatement: ExpressibleByStringLiteral {
   public typealias StringLiteralType = String
 
-  /// Creates a SQL statement from a string literal without parameter binding.
-  ///
-  /// This initializer allows you to create simple SQL statements using string literals.
-  /// The resulting statement has no parameter binders.
-  ///
-  /// ## Example
+  /// Creates a statement from a static string literal with no parameter binding.
   ///
   /// ```swift
   /// let stmt: SQLStatement = "SELECT * FROM users"
   /// ```
   ///
-  /// **Note**: For statements with dynamic values, use string interpolation instead
-  /// to ensure safe parameter binding.
-  ///
-  /// - Parameter value: The SQL string.
+  /// For statements that include dynamic values, use string interpolation instead so the
+  /// values are bound as parameters rather than spliced into the SQL.
   public init(stringLiteral value: StringLiteralType) {
     self.sql = value
     self.binders = []
@@ -154,22 +116,18 @@ extension SQLStatement: ExpressibleByStringLiteral {
 extension SQLStatement: ExpressibleByStringInterpolation {
   public typealias StringInterpolation = SQLBuilder
 
-  /// Creates a SQL statement from string interpolation with parameter binding.
+  /// Creates a statement from string interpolation, binding interpolated values as parameters.
   ///
-  /// This initializer is called automatically when you use string interpolation
-  /// to create a ``SQLStatement``. It combines the SQL fragments and binders
-  /// from the ``SQLBuilder`` into a complete statement.
-  ///
-  /// ## Example
+  /// Called implicitly whenever a `SQLStatement` is built from an interpolated string. The
+  /// ``SQLBuilder`` collects literal SQL fragments and binders for each interpolation; this
+  /// initializer joins the fragments with single spaces and carries the binders through.
   ///
   /// ```swift
   /// let name = "Alice"
   /// let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(name)"
-  /// // sql: "SELECT * FROM users WHERE name = ?"
-  /// // binders: [closure that binds "Alice"]
+  /// // sql:     "SELECT * FROM users WHERE name = ?"
+  /// // binders: ["Alice"]
   /// ```
-  ///
-  /// - Parameter stringInterpolation: The builder containing SQL fragments and binders.
   public init(stringInterpolation: SQLBuilder) {
     sql = stringInterpolation.sql.joined(separator: " ")
     binders = stringInterpolation.binders
@@ -179,26 +137,18 @@ extension SQLStatement: ExpressibleByStringInterpolation {
 // MARK: - Operators
 
 extension SQLStatement {
-  /// Combines two SQL statements into one by concatenating their SQL strings and binders.
+  /// Concatenates two statements, joining their SQL with a single space and appending their binders.
   ///
-  /// This operator creates a new statement by joining the SQL strings with a space
-  /// and merging the binder arrays in sequence.
-  ///
-  /// ## Example
+  /// Useful for assembling a query from reusable fragments — a base `SELECT`, a conditional
+  /// `WHERE`, an optional `ORDER BY`:
   ///
   /// ```swift
-  /// let select: SQLStatement = "SELECT * FROM users"
-  /// let name = "Alice"
-  /// let whereClause: SQLStatement = "WHERE name = \(name)"
-  /// let stmt = select + whereClause
-  /// // sql: "SELECT * FROM users WHERE name = ?"
-  /// // binders: [closure that binds "Alice"]
+  /// var stmt: SQLStatement = "SELECT id, name FROM users"
+  /// if let search {
+  ///   stmt = stmt + "WHERE name LIKE \(search + "%")"
+  /// }
+  /// stmt = stmt + "ORDER BY name"
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The first SQL statement.
-  ///   - rhs: The second SQL statement to append.
-  /// - Returns: A new SQL statement combining both inputs.
   public static func + (lhs: SQLStatement, rhs: SQLStatement) -> SQLStatement {
     SQLStatement(
       sql: lhs.sql + " " + rhs.sql,
@@ -206,24 +156,13 @@ extension SQLStatement {
     )
   }
 
-  /// Appends a SQL statement to another by concatenating their SQL strings and binders.
-  ///
-  /// This operator mutates the left-hand statement by appending the right-hand statement's
-  /// SQL and binders.
-  ///
-  /// ## Example
+  /// Appends a statement to another in place, joining their SQL with a single space.
   ///
   /// ```swift
   /// var stmt: SQLStatement = "SELECT * FROM users"
   /// let name = "Alice"
   /// stmt += "WHERE name = \(name)"
-  /// // sql: "SELECT * FROM users WHERE name = ?"
-  /// // binders: [closure that binds "Alice"]
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The SQL statement to modify.
-  ///   - rhs: The SQL statement to append.
   public static func += (lhs: inout SQLStatement, rhs: SQLStatement) {
     lhs = lhs + rhs
   }

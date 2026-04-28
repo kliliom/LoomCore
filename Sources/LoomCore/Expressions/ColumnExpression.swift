@@ -1,15 +1,10 @@
-/// An expression that references a column in a SQL statement.
+/// Typed reference to a SQL column, optionally qualified by a table name.
 ///
-/// `ColumnExpression` produces a properly quoted SQL identifier for a column,
-/// optionally qualified by a table name. The generic parameter `T` types the
-/// column for use with operators and aggregate/scalar functions.
-///
-/// Identifiers are always rendered with double-quote escaping
-/// (e.g. `"name"` or `"users"."name"`), making them safe to use with reserved
-/// words and identifiers containing special characters. Embedded double quotes
-/// are escaped by doubling.
-///
-/// ## Example
+/// The generic parameter `T` carries the column's value type so it composes
+/// with operators and with aggregate and scalar functions in the expression
+/// DSL. Identifiers always render double-quoted (`"name"` or `"users"."name"`),
+/// so reserved words and special characters are safe to use; embedded `"`
+/// characters are escaped by doubling.
 ///
 /// ```swift
 /// let name = ColumnExpression<String>("name")
@@ -24,23 +19,21 @@
 ///
 /// ## Validation
 ///
-/// Column and table names are validated at construction time. The following
-/// trigger a precondition failure (programmer error):
-/// - Empty string
-/// - Strings containing a NUL byte (`\0`)
+/// Column and table names are validated at construction. Empty strings and
+/// strings containing a NUL byte (`\0`) trigger a precondition failure.
 public struct ColumnExpression<T>: Expression {
   public typealias ExpressionValue = T
 
-  /// The column name (unquoted, as supplied at construction time).
+  /// Column name as supplied at construction, unquoted.
   public let columnName: String
 
-  /// The table name (unquoted, as supplied at construction time), or `nil`
-  /// if the column reference is unqualified.
+  /// Qualifying table name as supplied at construction, unquoted; `nil` for
+  /// unqualified column references.
   public let tableName: String?
 
   /// Creates an unqualified column reference.
   ///
-  /// - Parameter columnName: The column name. Must be non-empty and free of NUL bytes.
+  /// - Parameter columnName: Column name. Must be non-empty and free of NUL bytes.
   public init(_ columnName: String) {
     Self.validate(columnName, role: "Column")
     self.columnName = columnName
@@ -50,8 +43,8 @@ public struct ColumnExpression<T>: Expression {
   /// Creates a column reference qualified by a table name.
   ///
   /// - Parameters:
-  ///   - columnName: The column name. Must be non-empty and free of NUL bytes.
-  ///   - tableName: The table name. Must be non-empty and free of NUL bytes.
+  ///   - columnName: Column name. Must be non-empty and free of NUL bytes.
+  ///   - tableName: Table name. Must be non-empty and free of NUL bytes.
   public init(_ columnName: String, of tableName: String) {
     Self.validate(columnName, role: "Column")
     Self.validate(tableName, role: "Table")

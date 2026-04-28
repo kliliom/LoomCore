@@ -24,39 +24,34 @@ struct DatabaseOptions: OptionSet {
   static let transactionActive = DatabaseOptions(rawValue: 1 << 1)
 }
 
-/// Thread-safe interface for interacting with an SQLite database.
+/// SQLite database connection serialized through ``DatabaseActor``.
 ///
-/// This class provides a high-level API for database operations while managing the
-/// underlying SQLite connection lifecycle, statement caching, and transaction state.
+/// Owns the underlying `sqlite3*` handle, the prepared-statement cache, and any registered
+/// services. Every public method is `@DatabaseActor`-isolated, so the compiler enforces that
+/// SQLite access happens on a single concurrency context — there is no internal locking.
+/// Cleanup of the connection and cached statements is driven by ``DatabaseHandle``'s deinit.
 ///
-/// All public methods are isolated to ``DatabaseActor``, ensuring thread-safe access
-/// to the database. Resource cleanup — including cached prepared statements and the
-/// database connection — is managed by the underlying ``DatabaseHandle``.
-///
-/// ## Usage
-///
-/// Create a database using one of the static factory methods:
+/// Open a database with one of the static factory methods, then use ``exec(_:)`` for writes
+/// and ``query(_:stepper:)`` for reads:
 ///
 /// ```swift
-/// // In-memory database
 /// let db = try await Database.openInMemory()
+/// try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
 ///
-/// // File-based database
-/// let db = try await Database.open(url: fileURL)
-/// ```
+/// let name = "Alice"
+/// try await db.exec("INSERT INTO users (name) VALUES (\(name))")
 ///
-/// Then use ``exec(_:)`` for writes and ``query(_:stepper:)`` for reads:
-///
-/// ```swift
-/// try db.exec("INSERT INTO users (name) VALUES (\(name))")
-///
-/// let names = try db.query("SELECT name FROM users") { stmt, _ in
+/// let names = try await db.query("SELECT name FROM users") { stmt, _ in
 ///   try String.column(of: stmt, at: 0)
 /// }
 /// ```
 ///
-/// - Important: Instances are automatically isolated to ``DatabaseActor``. All database
-///              operations are serialized through this actor to prevent race conditions.
+/// File-backed databases use ``open(url:)``:
+///
+/// ```swift
+/// let url = URL(fileURLWithPath: "/tmp/app.sqlite")
+/// let db = try await Database.open(url: url)
+/// ```
 @DatabaseActor
 public final class Database: Sendable {
   /// The underlying SQLite database connection and its associated resources.
@@ -83,14 +78,18 @@ public final class Database: Sendable {
     self.handle = handle
   }
 
-  /// Explicitly closes the database connection and releases all resources.
+  /// Closes the SQLite connection and finalizes every cached prepared statement.
   ///
-  /// This method delegates to ``DatabaseHandle/close()`` to immediately finalize
-  /// all cached prepared statements and close the SQLite connection. After calling
-  /// this method, any further database operations will throw.
+  /// Use this when deterministic resource release is required rather than relying on
+  /// deallocation timing — for example, before deleting the underlying database file
+  /// or when running large numbers of short-lived connections in tests. Any subsequent
+  /// operation on this database will throw.
   ///
-  /// Use this when you need deterministic resource release rather than relying
-  /// on deallocation timing.
+  /// ```swift
+  /// let db = try await Database.open(url: tempURL)
+  /// defer { Task { @DatabaseActor in db.close() } }
+  /// try await db.exec("…")
+  /// ```
   public func close() {
     handle.close()
   }

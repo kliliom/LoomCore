@@ -1,0 +1,180 @@
+@Tutorial(time: 15) {
+  @Intro(title: "Getting started with LoomCore") {
+    Build a small notes store: open a database, create a schema, insert rows safely, run queries, and group writes in a transaction. By the end you will have a working command-line app that exercises the core LoomCore API.
+  }
+
+  @Section(title: "Open a database") {
+    @ContentAndMedia {
+      Every LoomCore program begins by opening a `Database`. For a one-off script or an integration test, open one in memory; for a real app, point it at a file URL.
+
+      `Database.open(...)` and `Database.openInMemory()` are async because the SQLite handle is created on the global ``DatabaseActor``.
+    }
+
+    @Steps {
+      @Step {
+        Create a Swift Package or app and add LoomCore to its dependencies.
+
+        @Code(name: "Package.swift", file: gs-01-package.swift)
+      }
+
+      @Step {
+        Open an in-memory database. We will use this for the rest of the tutorial; the same code works against a file by calling `Database.open(url:)` instead.
+
+        @Code(name: "main.swift", file: gs-02-open.swift)
+      }
+    }
+  }
+
+  @Section(title: "Define a schema") {
+    @ContentAndMedia {
+      LoomCore does not generate schema. You write the `CREATE TABLE` statement yourself with `db.exec(_:)`. SQL identifiers (table and column names) come from your own code, so it is safe to embed them with the literal SQL string.
+    }
+
+    @Steps {
+      @Step {
+        Add a `notes` table with a primary key, a body, and a creation timestamp.
+
+        @Code(name: "main.swift", file: gs-03-schema.swift, previousFile: gs-02-open.swift)
+      }
+
+      @Step {
+        Inspect the schema with `db.tableInfo(_:)` to confirm the columns landed as expected. This call runs a `PRAGMA table_info` and returns a typed array of ``Database/ColumnInfo``.
+
+        @Code(name: "main.swift", file: gs-04-introspect.swift, previousFile: gs-03-schema.swift)
+      }
+    }
+  }
+
+  @Section(title: "Insert rows safely") {
+    @ContentAndMedia {
+      Interpolated values become parameters by default. The library binds them at execution time, so user input cannot break out of the SQL string. This is the key safety guarantee — you should reach for raw SQL concatenation only when binding genuinely cannot work (table names, etc.).
+    }
+
+    @Steps {
+      @Step {
+        Insert a single note. The interpolated `body` and `createdAt` are bound as `?` parameters; the SQL the database actually sees is `INSERT INTO notes (body, created_at) VALUES (?, ?)`.
+
+        @Code(name: "main.swift", file: gs-05-insert.swift, previousFile: gs-04-introspect.swift)
+      }
+
+      @Step {
+        Get back the auto-assigned `id` with ``Database/lastInsertedRowID``.
+
+        @Code(name: "main.swift", file: gs-06-rowid.swift, previousFile: gs-05-insert.swift)
+      }
+    }
+  }
+
+  @Section(title: "Query with a stepper") {
+    @ContentAndMedia {
+      `db.query(_:stepper:)` runs a SELECT and calls your stepper closure once per row. The closure pulls columns out by index and returns whatever value belongs in the result array.
+    }
+
+    @Steps {
+      @Step {
+        Read all notes ordered by creation time. Column extraction is **0-based**, so the leftmost column is index `0`.
+
+        @Code(name: "main.swift", file: gs-07-query.swift, previousFile: gs-06-rowid.swift)
+      }
+
+      @Step {
+        Use a managed index for clarity when there are several columns. The index auto-increments after each read, so adding or removing a column does not require renumbering.
+
+        @Code(name: "main.swift", file: gs-08-managed.swift, previousFile: gs-07-query.swift)
+      }
+    }
+  }
+
+  @Section(title: "Group writes in a transaction") {
+    @ContentAndMedia {
+      Two related writes that should either both succeed or both be rolled back belong in a transaction. If the closure throws, LoomCore rolls back automatically and re-throws the error.
+    }
+
+    @Steps {
+      @Step {
+        Move a note from one folder to another by deleting and re-inserting in a single transaction.
+
+        @Code(name: "main.swift", file: gs-09-transaction.swift, previousFile: gs-08-managed.swift)
+      }
+
+      @Step {
+        Watch what happens when the closure throws — the row is **not** removed because the rollback undoes the delete.
+
+        @Code(name: "main.swift", file: gs-10-rollback.swift, previousFile: gs-09-transaction.swift)
+      }
+    }
+  }
+
+  @Assessments {
+    @MultipleChoice {
+      Which index does SQLite use for the leftmost parameter (`?`)?
+
+      @Choice(isCorrect: true) {
+        `1`
+
+        @Justification(reaction: "Correct!") {
+          Parameter binding is 1-based. The leftmost `?` is index `1`.
+        }
+      }
+      @Choice(isCorrect: false) {
+        `0`
+
+        @Justification(reaction: "Try again.") {
+          Column extraction is 0-based, but parameter binding is 1-based — the two are intentionally different.
+        }
+      }
+      @Choice(isCorrect: false) {
+        `-1`
+
+        @Justification(reaction: "Try again.") {
+          Negative indices are not valid in SQLite parameter binding.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      Which interpolation produces a parameter (`?`) rather than literal text?
+
+      @Choice(isCorrect: true) {
+        `"WHERE id = \(id)"`
+
+        @Justification(reaction: "Correct!") {
+          The default mode is `.bind`, so the value is sent as a parameter.
+        }
+      }
+      @Choice(isCorrect: false) {
+        `"WHERE id = \(id, mode: .raw)"`
+
+        @Justification(reaction: "Try again.") {
+          `.raw` pastes the value directly into the SQL string. Use it only for trusted identifiers.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      What happens if the closure passed to `db.transaction { … }` throws an error?
+
+      @Choice(isCorrect: true) {
+        The transaction is rolled back and the error is re-thrown.
+
+        @Justification(reaction: "Correct!") {
+          A throwing block triggers `ROLLBACK`; the caller sees the original error.
+        }
+      }
+      @Choice(isCorrect: false) {
+        The transaction is committed and the error is swallowed.
+
+        @Justification(reaction: "Try again.") {
+          That would defeat the purpose of a transaction.
+        }
+      }
+      @Choice(isCorrect: false) {
+        The database is closed.
+
+        @Justification(reaction: "Try again.") {
+          The connection stays open; only the in-flight transaction is rolled back.
+        }
+      }
+    }
+  }
+}

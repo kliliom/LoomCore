@@ -1,19 +1,26 @@
-/// An SQL aggregate function that returns the maximum value from a set of values.
+/// SQL `MAX()` aggregate that returns the largest value in a group.
 ///
-/// This function generates SQL's `MAX()` aggregate function, which finds the largest value
-/// in a group of values. The result is optional because the aggregate may be applied to an
-/// empty set.
+/// The result is optional because `MAX` returns `NULL` over an empty set.
 ///
-/// Example SQL output: `MAX(column_name)`
+/// ```swift
+/// let users = ColumnExpression<Int>("age", in: "users")
+/// let oldest = Max(users)
+/// // SQL: MAX("users"."age")
+/// ```
+///
+/// Prefer the `max()` method on `Expression` for fluent call sites:
+///
+/// ```swift
+/// let stats = try await db.query("SELECT \(users.max()) FROM users") { row in
+///   try Int?.column(of: row, at: 0)
+/// }
+/// ```
 public struct Max<T: Bindable>: Function {
   public typealias ExpressionValue = T?
 
-  /// The expression to find the maximum value of.
   let expression: any Expression<T>
 
-  /// Creates a new maximum aggregate function.
-  ///
-  /// - Parameter expression: The expression to find the maximum value of.
+  /// Wraps `expression` in a `MAX()` aggregate.
   public init(_ expression: any Expression<T>) {
     self.expression = expression
   }
@@ -26,9 +33,13 @@ public struct Max<T: Bindable>: Function {
 }
 
 extension Expression where ExpressionValue: Bindable {
-  /// Returns the maximum value of this expression across all rows.
+  /// Wraps the expression in a `MAX()` aggregate.
   ///
-  /// - Returns: A `Max` aggregate function that computes the maximum value.
+  /// ```swift
+  /// let price = ColumnExpression<Double>("price", in: "orders")
+  /// let topPrice = price.max()
+  /// // SQL: MAX("orders"."price")
+  /// ```
   public func max() -> Max<ExpressionValue> {
     Max(self)
   }

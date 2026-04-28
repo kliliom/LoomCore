@@ -1,19 +1,26 @@
-/// An SQL aggregate function that returns the sum of all values in a set.
+/// SQL `SUM()` aggregate that totals all values in a group.
 ///
-/// This function generates SQL's `SUM()` aggregate function, which calculates the total
-/// of all values in a group. The result is optional because the aggregate may be applied
-/// to an empty set.
+/// Wraps SQLite's `SUM()` aggregate. `ExpressionValue` is `T?` because `SUM` returns
+/// `NULL` when applied to an empty set.
 ///
-/// Example SQL output: `SUM(column_name)`
+/// ```swift
+/// let total = try await db.queryOne(
+///   "SELECT \(Sum(ColumnExpression<Int>("amount"))) FROM \(raw: "orders") WHERE \(ColumnExpression<String>("status")) = \("paid")"
+/// )
+/// ```
+///
+/// Prefer the `sum()` method on an existing expression for readability:
+///
+/// ```swift
+/// let amount = ColumnExpression<Int>("amount")
+/// let total = amount.sum()  // SUM("amount")
+/// ```
 public struct Sum<T: Bindable>: Function {
   public typealias ExpressionValue = T?
 
-  /// The expression to sum.
   let expression: any Expression<T>
 
-  /// Creates a new sum aggregate function.
-  ///
-  /// - Parameter expression: The expression to sum.
+  /// Creates a `SUM()` aggregate over `expression`.
   public init(_ expression: any Expression<T>) {
     self.expression = expression
   }
@@ -26,9 +33,13 @@ public struct Sum<T: Bindable>: Function {
 }
 
 extension Expression where ExpressionValue: Bindable {
-  /// Returns the sum of this expression across all rows.
+  /// Wraps this expression in a SQL `SUM()` aggregate.
   ///
-  /// - Returns: A `Sum` aggregate function that computes the total.
+  /// ```swift
+  /// let price = ColumnExpression<Double>("price")
+  /// let revenue = price.sum()
+  /// // SQL: SUM("price")
+  /// ```
   public func sum() -> Sum<ExpressionValue> {
     Sum(self)
   }

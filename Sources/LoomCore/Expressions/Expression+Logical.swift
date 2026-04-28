@@ -2,65 +2,51 @@
 
 /// Logical operators for boolean expressions.
 ///
-/// These operators enable natural logical operations on SQL expressions.
-/// Both optional and non-optional Bool expressions are supported.
+/// Combines SQL boolean expressions with the Swift `&&`, `||`, and `!` operators. Each operator
+/// produces a composable expression tree that renders to parenthesized SQL when interpolated into
+/// a statement.
 ///
-/// Example:
 /// ```swift
 /// let age = ColumnExpression<Int>("age")
 /// let status = ColumnExpression<String>("status")
-/// let condition = (age > 18) && (status == "active")
-/// // Generates: ((age > ?) AND (status = ?))
+/// let activeAdults = (age > 18) && (status == "active")
+/// // Renders: ( ( "age" > ? ) AND ( "status" = ? ) )
 /// ```
 
 extension Expression where ExpressionValue == Bool {
-  /// Logical AND operator for non-optional boolean expressions.
+  /// Combines two boolean expressions with SQL `AND`.
   ///
-  /// Example:
   /// ```swift
   /// let isActive = ColumnExpression<Bool>("is_active")
   /// let isVerified = ColumnExpression<Bool>("is_verified")
-  /// let condition = isActive && isVerified
-  /// // Generates: (is_active AND is_verified)
+  /// let eligible = isActive && isVerified
+  /// // Renders: ( "is_active" AND "is_verified" )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the logical AND.
   public static func && <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == Bool {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "AND")
   }
 
-  /// Logical OR operator for non-optional boolean expressions.
+  /// Combines two boolean expressions with SQL `OR`.
   ///
-  /// Example:
   /// ```swift
-  /// let isActive = ColumnExpression<Bool>("is_active")
-  /// let isVerified = ColumnExpression<Bool>("is_verified")
-  /// let condition = isActive || isVerified
-  /// // Generates: (is_active OR is_verified)
+  /// let isAdmin = ColumnExpression<Bool>("is_admin")
+  /// let isOwner = ColumnExpression<Bool>("is_owner")
+  /// let canEdit = isAdmin || isOwner
+  /// // Renders: ( "is_admin" OR "is_owner" )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the logical OR.
   public static func || <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == Bool {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "OR")
   }
 
-  /// Logical NOT operator for non-optional boolean expressions.
+  /// Negates a boolean expression with SQL `NOT`.
   ///
-  /// Example:
   /// ```swift
-  /// let isActive = ColumnExpression<Bool>("is_active")
-  /// let condition = !isActive
-  /// // Generates: (NOT is_active)
+  /// let isArchived = ColumnExpression<Bool>("is_archived")
+  /// let visible = !isArchived
+  /// // Renders: ( NOT "is_archived" )
   /// ```
-  ///
   public static prefix func ! (operand: Self) -> UnaryOperation<Self, Bool> {
     UnaryOperation(operand: operand, sqlOperator: "NOT", isPrefix: true)
   }

@@ -1,12 +1,17 @@
-/// An SQL expression that tests whether a value is in (or not in) a set of values or subquery.
+/// Membership test against a list or subquery, rendering SQL `IN` or `NOT IN`.
 ///
-/// This expression generates SQL's `IN` or `NOT IN` operator, which checks if a value matches
-/// (or does not match) any value in a list or subquery result. The result is a boolean: `true`
-/// if the condition matches, `false` otherwise, or `nil` if the needle expression is NULL.
+/// Evaluates to `true` when the needle matches any value in the haystack, `false` when it does
+/// not, and `nil` when the needle is NULL. An empty list is rewritten to an always-false (`IN`)
+/// or always-true (`NOT IN`) predicate, since `IN ()` is not valid SQLite.
 ///
-/// Example SQL output:
-/// - List: `column_name IN (?, ?, ?)` or `column_name NOT IN (?, ?, ?)`
-/// - Subquery: `column_name IN (SELECT ...)` or `column_name NOT IN (SELECT ...)`
+/// ```swift
+/// let status = ColumnExpression<String>("status")
+/// let active = status.in(values: "active", "pending", "trial")
+/// // ( "status" IN (?, ?, ?) )
+///
+/// let archived = status.notIn(array: ["deleted", "banned"])
+/// // ( "status" NOT IN (?, ?) )
+/// ```
 public struct InExpression<T: Bindable>: Expression {
   public typealias ExpressionValue = Bool?
 
@@ -20,12 +25,12 @@ public struct InExpression<T: Bindable>: Expression {
   /// Whether this is a negated (NOT IN) expression.
   let isNegated: Bool
 
-  /// Creates a new IN or NOT IN expression.
+  /// Creates an `IN` or `NOT IN` expression from a needle and haystack.
   ///
-  /// - Parameters:
-  ///   - needleExpression: The expression to test.
-  ///   - haystackExpression: The expression representing the set of values (list or subquery).
-  ///   - isNegated: Whether this is a NOT IN expression. Defaults to `false`.
+  /// Prefer the `in(array:)`, `in(values:)`, `in(subquery:)`, and their `notIn` counterparts on
+  /// `Expression` over calling this initializer directly.
+  ///
+  /// - Parameter isNegated: Pass `true` to render `NOT IN`, `false` for `IN`.
   public init(
     needleExpression: any Expression,
     haystackExpression: any Expression<T>,
@@ -61,14 +66,9 @@ public struct InExpression<T: Bindable>: Expression {
     builder.appendLiteral(")")
   }
 
-  /// An internal expression type that represents a list of values for the IN clause.
-  ///
-  /// This type handles rendering a comma-separated list of bound parameters
-  /// for use in IN expressions.
   struct HaystackListExpression: Expression {
     public typealias ExpressionValue = T
 
-    /// The list of values to render.
     let values: [T]
 
     func append(to builder: inout SQLBuilder) {
@@ -83,13 +83,16 @@ public struct InExpression<T: Bindable>: Expression {
 }
 
 extension Expression {
-  /// Tests whether this expression matches any value in the provided array.
+  /// Tests whether this expression matches any value in `array`, rendering SQL `IN`.
   ///
-  /// This method generates an `IN` clause with the values as bound parameters.
+  /// Each value is bound as a parameter, never inlined. An empty array is safe — it renders an
+  /// always-false predicate rather than the invalid `IN ()`.
   ///
-  /// - Parameter array: The array of values to check against.
-  /// - Returns: An `InExpression` that evaluates to `true` if the value is found,
-  ///            `false` if not found, or `nil` if the expression is NULL.
+  /// ```swift
+  /// let role = ColumnExpression<String>("role")
+  /// let allowedRoles = ["admin", "editor", "owner"]
+  /// let canEdit = role.in(array: allowedRoles)
+  /// ```
   public func `in`<T: Bindable>(array: [T]) -> InExpression<T> {
     InExpression(
       needleExpression: self,
@@ -98,13 +101,14 @@ extension Expression {
     )
   }
 
-  /// Tests whether this expression does not match any value in the provided array.
+  /// Tests whether this expression matches no value in `array`, rendering SQL `NOT IN`.
   ///
-  /// This method generates a `NOT IN` clause with the values as bound parameters.
+  /// Each value is bound as a parameter. An empty array renders an always-true predicate.
   ///
-  /// - Parameter array: The array of values to check against.
-  /// - Returns: An `InExpression` that evaluates to `true` if the value is not found,
-  ///            `false` if found, or `nil` if the expression is NULL.
+  /// ```swift
+  /// let status = ColumnExpression<String>("status")
+  /// let visible = status.notIn(array: ["deleted", "banned", "spam"])
+  /// ```
   public func notIn<T: Bindable>(array: [T]) -> InExpression<T> {
     InExpression(
       needleExpression: self,
@@ -113,13 +117,14 @@ extension Expression {
     )
   }
 
-  /// Tests whether this expression matches any value in the provided variadic list.
+  /// Tests whether this expression matches any of the variadic `values`, rendering SQL `IN`.
   ///
-  /// This method generates an `IN` clause with the values as bound parameters.
+  /// Convenience for inline value lists; use `in(array:)` when the values come from a collection.
   ///
-  /// - Parameter values: The values to check against.
-  /// - Returns: An `InExpression` that evaluates to `true` if the value is found,
-  ///            `false` if not found, or `nil` if the expression is NULL.
+  /// ```swift
+  /// let priority = ColumnExpression<Int>("priority")
+  /// let urgent = priority.in(values: 1, 2, 3)
+  /// ```
   public func `in`<T: Bindable>(values: T...) -> InExpression<T> {
     InExpression(
       needleExpression: self,
@@ -128,13 +133,12 @@ extension Expression {
     )
   }
 
-  /// Tests whether this expression does not match any value in the provided variadic list.
+  /// Tests whether this expression matches none of the variadic `values`, rendering SQL `NOT IN`.
   ///
-  /// This method generates a `NOT IN` clause with the values as bound parameters.
-  ///
-  /// - Parameter values: The values to check against.
-  /// - Returns: An `InExpression` that evaluates to `true` if the value is not found,
-  ///            `false` if found, or `nil` if the expression is NULL.
+  /// ```swift
+  /// let category = ColumnExpression<String>("category")
+  /// let nonInternal = category.notIn(values: "internal", "test", "draft")
+  /// ```
   public func notIn<T: Bindable>(values: T...) -> InExpression<T> {
     InExpression(
       needleExpression: self,
@@ -143,24 +147,26 @@ extension Expression {
     )
   }
 
-  /// Tests whether this expression matches any value returned by a subquery.
+  /// Tests whether this expression matches any row produced by `subquery`, rendering SQL `IN (SELECT ...)`.
   ///
-  /// This method generates an `IN` clause with a subquery expression.
+  /// The subquery must produce a single column of a type compatible with the needle.
   ///
-  /// - Parameter subquery: The subquery expression to check against.
-  /// - Returns: An `InExpression` that evaluates to `true` if the value is found in the subquery results,
-  ///            `false` if not found, or `nil` if the expression is NULL.
+  /// ```swift
+  /// let userId = ColumnExpression<Int>("user_id")
+  /// let activeUserIds: any Expression<Int> = activeUsersSubquery
+  /// let isActive = userId.in(subquery: activeUserIds)
+  /// // ( "user_id" IN ( SELECT id FROM users WHERE ... ) )
+  /// ```
   public func `in`<T: Bindable>(subquery: any Expression<T>) -> InExpression<T> {
     InExpression(needleExpression: self, haystackExpression: subquery, isNegated: false)
   }
 
-  /// Tests whether this expression does not match any value returned by a subquery.
+  /// Tests whether this expression matches no row produced by `subquery`, rendering SQL `NOT IN (SELECT ...)`.
   ///
-  /// This method generates a `NOT IN` clause with a subquery expression.
-  ///
-  /// - Parameter subquery: The subquery expression to check against.
-  /// - Returns: An `InExpression` that evaluates to `true` if the value is not found in the subquery results,
-  ///            `false` if found, or `nil` if the expression is NULL.
+  /// ```swift
+  /// let userId = ColumnExpression<Int>("user_id")
+  /// let isInactive = userId.notIn(subquery: activeUserIds)
+  /// ```
   public func notIn<T: Bindable>(subquery: any Expression<T>) -> InExpression<T> {
     InExpression(needleExpression: self, haystackExpression: subquery, isNegated: true)
   }

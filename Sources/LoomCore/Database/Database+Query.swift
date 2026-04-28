@@ -1,29 +1,16 @@
-/// Database methods for executing SQL queries that return results.
+/// Database methods for executing SQL queries that return rows.
 ///
-/// This file provides various `query` methods for executing SELECT statements and other
-/// queries that return rows. For statements that don't return results (INSERT, UPDATE, DELETE),
-/// use the `exec` methods instead.
+/// For statements that don't return rows (INSERT, UPDATE, DELETE), use the `exec` family.
 
 import SQLite3
 
 // MARK: - Raw Statement Queries
 
 extension Database {
-  /// Executes a SQL query that returns results, with custom parameter binding and row extraction.
+  /// Executes a raw SQL query, binding parameters and extracting each row through closures.
   ///
-  /// This is the primary query method used for executing SELECT statements and other queries
-  /// that return rows. The statement is prepared, parameters are bound using the binder closure,
-  /// and then each result row is extracted using the stepper closure.
-  ///
-  /// ## When to Use
-  ///
-  /// Use this method for:
-  /// - SELECT queries that return data
-  /// - Queries with parameters that need binding
-  /// - Custom result extraction logic
-  /// - Queries with PRAGMA statements that return values
-  ///
-  /// ## Example
+  /// Prepares `statement`, invokes `binder` once to bind parameters, then calls `stepper`
+  /// for every result row. Returned values are collected into an array.
   ///
   /// ```swift
   /// let users = try db.query(
@@ -37,39 +24,22 @@ extension Database {
   ///     return (name, age)
   ///   }
   /// )
-  /// // users: [(String, Int)]
   /// ```
   ///
-  /// ## Early Termination
-  ///
-  /// You can stop iterating through rows by setting `stop` to `true` in the stepper:
+  /// Set `stop` to `true` inside `stepper` to halt iteration after the current row:
   ///
   /// ```swift
-  /// let firstMatch = try db.query(
-  ///   raw: "SELECT name FROM users",
+  /// let firstActive = try db.query(
+  ///   raw: "SELECT id, name FROM users WHERE active = 1 ORDER BY id",
   ///   binder: { _ in },
   ///   stepper: { stmt, stop in
-  ///     let name = try String.column(of: stmt, at: 0)
-  ///     if name == "Target" {
-  ///       stop = true
-  ///     }
-  ///     return name
+  ///     stop = true
+  ///     return try (Int.column(of: stmt, at: 0), String.column(of: stmt, at: 1))
   ///   }
-  /// )
+  /// ).first
   /// ```
   ///
-  /// ## Row Processing
-  ///
-  /// The stepper closure is called for each row in the result set. All rows are collected
-  /// into an array and returned. For large result sets, consider using streaming methods
-  /// or processing rows in batches.
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query string with `?` placeholders for parameters.
-  ///   - binder: A closure that binds values to the query parameters.
-  ///   - stepper: A closure that extracts values from each result row.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, binding, execution, or extraction fails.
+  /// Parameter indices are 1-based; column indices are 0-based. See <doc:IndexConventions>.
   public func query<R>(
     raw statement: String,
     binder: Binder,
@@ -94,41 +64,22 @@ extension Database {
 }
 
 extension Database {
-  /// Executes a SQL query without parameters, extracting results with a stepper closure.
-  ///
-  /// This convenience method is for executing queries that don't require parameter binding.
-  /// Use this for static SELECT statements or queries without dynamic values.
-  ///
-  /// ## Example
+  /// Executes a parameter-free raw SQL query and extracts each row through `stepper`.
   ///
   /// ```swift
-  /// // Query all users
-  /// let users = try db.query(
-  ///   raw: "SELECT name, age FROM users",
-  ///   stepper: { stmt, stop in
-  ///     let name = try String.column(of: stmt, at: 0)
-  ///     let age = try Int.column(of: stmt, at: 1)
-  ///     return (name, age)
-  ///   }
-  /// )
-  ///
-  /// // Query with WHERE clause (no dynamic values)
-  /// let adults = try db.query(
-  ///   raw: "SELECT name FROM users WHERE age >= 18",
-  ///   stepper: { stmt, stop in
-  ///     try String.column(of: stmt, at: 0)
+  /// let counts = try db.query(
+  ///   raw: "SELECT status, COUNT(*) FROM orders GROUP BY status",
+  ///   stepper: { stmt, _ in
+  ///     let status = try String.column(of: stmt, at: 0)
+  ///     let count = try Int.column(of: stmt, at: 1)
+  ///     return (status, count)
   ///   }
   /// )
   /// ```
   ///
-  /// **Note**: For queries with dynamic values, use one of the other `query` overloads
-  /// to ensure safe parameter binding and prevent SQL injection.
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query string without parameters.
-  ///   - stepper: A closure that extracts values from each result row.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, execution, or extraction fails.
+  /// For queries with dynamic values, prefer the ``SQLStatement``-based overloads
+  /// or `binding:` variant — interpolating values into the SQL string opens the door
+  /// to SQL injection.
   @inline(__always)
   public func query<R>(
     raw statement: String,
@@ -145,43 +96,27 @@ extension Database {
 // MARK: - Managed Index Convenience
 
 extension Database {
-  /// Executes a SQL query with automatic parameter and column index management.
+  /// Executes a raw SQL query using ``ManagedIndex``-backed binder and stepper closures.
   ///
-  /// This convenience method accepts ``ManagedBinder`` and ``ManagedStepper`` closures
-  /// that automatically manage indices. Parameter indices start at 0 and are incremented
-  /// for each bind operation. Column indices start at 0 and are incremented for each
-  /// column extraction.
-  ///
-  /// ## Example
+  /// Both closures receive a `ManagedIndex` that auto-advances on each bind or column
+  /// read, removing the need to track positions by hand and making it safe to add or
+  /// remove parameters and columns without renumbering.
   ///
   /// ```swift
   /// let users = try db.query(
   ///   raw: "SELECT name, age, email FROM users WHERE age > ? AND status = ?",
   ///   binder: { stmt, index in
-  ///     try 18.bind(to: stmt, at: &index)       // Binds at index 1
-  ///     try "active".bind(to: stmt, at: &index) // Binds at index 2
+  ///     try 18.bind(to: stmt, at: &index)
+  ///     try "active".bind(to: stmt, at: &index)
   ///   },
-  ///   stepper: { stmt, index, stop in
-  ///     let name = try String.column(of: stmt, at: &index)  // Reads column 0
-  ///     let age = try Int.column(of: stmt, at: &index)      // Reads column 1
-  ///     let email = try String.column(of: stmt, at: &index) // Reads column 2
+  ///   stepper: { stmt, index, _ in
+  ///     let name = try String.column(of: stmt, at: &index)
+  ///     let age = try Int.column(of: stmt, at: &index)
+  ///     let email = try String.column(of: stmt, at: &index)
   ///     return (name, age, email)
   ///   }
   /// )
   /// ```
-  ///
-  /// ## Benefits
-  ///
-  /// - **No Manual Counting**: Indices are managed automatically
-  /// - **Error Prevention**: Eliminates off-by-one errors
-  /// - **Maintainability**: Adding/removing parameters or columns doesn't require renumbering
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query string with `?` placeholders for parameters.
-  ///   - binder: A closure that binds values using automatic index management.
-  ///   - stepper: A closure that extracts values using automatic index management.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, binding, execution, or extraction fails.
   @inline(__always)
   public func query<R>(
     raw statement: String,
@@ -201,30 +136,19 @@ extension Database {
     )
   }
 
-  /// Executes a SQL query without parameters, extracting results with automatic column index management.
-  ///
-  /// This convenience method is for queries without parameters, using a ``ManagedStepper``
-  /// for automatic column index management.
-  ///
-  /// ## Example
+  /// Executes a parameter-free raw SQL query using a ``ManagedStepper`` for column extraction.
   ///
   /// ```swift
   /// let users = try db.query(
   ///   raw: "SELECT name, age, email FROM users",
-  ///   stepper: { stmt, index, stop in
-  ///     let name = try String.column(of: stmt, at: &index)  // Reads column 0
-  ///     let age = try Int.column(of: stmt, at: &index)      // Reads column 1
-  ///     let email = try String.column(of: stmt, at: &index) // Reads column 2
+  ///   stepper: { stmt, index, _ in
+  ///     let name = try String.column(of: stmt, at: &index)
+  ///     let age = try Int.column(of: stmt, at: &index)
+  ///     let email = try String.column(of: stmt, at: &index)
   ///     return (name, age, email)
   ///   }
   /// )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query string without parameters.
-  ///   - stepper: A closure that extracts values using automatic index management.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, execution, or extraction fails.
   @inline(__always)
   public func query<R>(
     raw statement: String,
@@ -237,49 +161,22 @@ extension Database {
 // MARK: - Variadic Binding
 
 extension Database {
-  /// Executes a SQL query with inline parameter values and automatic index management.
+  /// Executes a raw SQL query with parameters supplied inline as variadic ``Bindable`` values.
   ///
-  /// This convenience method provides the most concise syntax for queries with parameters.
-  /// Simply pass the parameter values directly as arguments, and they'll be automatically
-  /// bound to the query in order. Column extraction uses a ``ManagedStepper`` for automatic
-  /// index management.
-  ///
-  /// ## Example
+  /// Values are bound left-to-right in the order given. Column extraction uses a
+  /// ``ManagedStepper``.
   ///
   /// ```swift
-  /// // Query with inline parameter values
   /// let users = try db.query(
   ///   raw: "SELECT name, age FROM users WHERE age > ? AND status = ?",
   ///   binding: 18, "active",
-  ///   stepper: { stmt, index, stop in
+  ///   stepper: { stmt, index, _ in
   ///     let name = try String.column(of: stmt, at: &index)
   ///     let age = try Int.column(of: stmt, at: &index)
   ///     return (name, age)
   ///   }
   /// )
-  ///
-  /// // Query with a single parameter
-  /// let admins = try db.query(
-  ///   raw: "SELECT name FROM users WHERE role = ?",
-  ///   binding: "admin",
-  ///   stepper: { stmt, index, stop in
-  ///     try String.column(of: stmt, at: &index)
-  ///   }
-  /// )
   /// ```
-  ///
-  /// ## Type Safety
-  ///
-  /// All parameter values must conform to ``Bindable``. The compiler ensures type safety
-  /// at compile time, and values are automatically converted to appropriate SQLite types.
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query string without parameters.
-  ///   - firstValue: The first parameter value to bind.
-  ///   - otherValues: Additional parameter values to bind, in order.
-  ///   - stepper: A closure that extracts values using automatic index management.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, binding, execution, or extraction fails.
   @inline(__always)
   public func query<R, each Values: Bindable>(
     raw statement: String,
@@ -318,22 +215,17 @@ extension Database {
 // MARK: - SQLStatement Queries
 
 extension Database {
-  /// Executes a ``SQLStatement`` query with its embedded parameter bindings.
+  /// Executes a ``SQLStatement`` query, using its embedded bindings and a `Stepper` for extraction.
   ///
-  /// This is the recommended method for executing queries in most cases. It provides
-  /// the best combination of safety, readability, and flexibility through Swift's string
-  /// interpolation.
-  ///
-  /// ## String Interpolation
-  ///
-  /// Create query statements using string interpolation for automatic, safe parameter binding:
+  /// Prefer this overload for everyday querying: string interpolation produces safely
+  /// bound parameters with no manual binder closure.
   ///
   /// ```swift
   /// let minAge = 18
   /// let status = "active"
   /// let users = try db.query(
   ///   "SELECT name, age FROM users WHERE age > \(minAge) AND status = \(status)",
-  ///   stepper: { stmt, stop in
+  ///   stepper: { stmt, _ in
   ///     let name = try String.column(of: stmt, at: 0)
   ///     let age = try Int.column(of: stmt, at: 1)
   ///     return (name, age)
@@ -341,33 +233,7 @@ extension Database {
   /// )
   /// ```
   ///
-  /// ## Raw SQL
-  ///
-  /// For queries without parameters, use ``SQLStatement/raw(_:)``:
-  ///
-  /// ```swift
-  /// let allUsers = try db.query(
-  ///   SQLStatement.raw("SELECT name, age FROM users"),
-  ///   stepper: { stmt, stop in
-  ///     let name = try String.column(of: stmt, at: 0)
-  ///     let age = try Int.column(of: stmt, at: 1)
-  ///     return (name, age)
-  ///   }
-  /// )
-  /// ```
-  ///
-  /// ## Benefits
-  ///
-  /// - **Type Safety**: Compile-time type checking for parameter values
-  /// - **SQL Injection Prevention**: Automatic parameter binding prevents injection attacks
-  /// - **Readability**: SQL reads naturally with interpolated values
-  /// - **Reusability**: Statements can be constructed once and reused
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query statement with its parameter bindings.
-  ///   - stepper: A closure that extracts values from each result row.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, binding, execution, or extraction fails.
+  /// For queries without parameters, build the statement with ``SQLStatement/raw(_:)``.
   @inline(__always)
   public func query<R>(
     _ statement: SQLStatement,
@@ -376,36 +242,20 @@ extension Database {
     try query(raw: statement.sql, binder: statement.binder, stepper: stepper)
   }
 
-  /// Executes a ``SQLStatement`` query with automatic column index management.
-  ///
-  /// This variant uses a ``ManagedStepper`` for automatic column index management,
-  /// eliminating the need to manually track column indices during extraction.
-  ///
-  /// ## Example
+  /// Executes a ``SQLStatement`` query, pairing its embedded bindings with a ``ManagedStepper``.
   ///
   /// ```swift
   /// let minAge = 18
   /// let users = try db.query(
   ///   "SELECT name, age, email FROM users WHERE age > \(minAge)",
-  ///   stepper: { stmt, index, stop in
-  ///     let name = try String.column(of: stmt, at: &index)  // Column 0
-  ///     let age = try Int.column(of: stmt, at: &index)      // Column 1
-  ///     let email = try String.column(of: stmt, at: &index) // Column 2
+  ///   stepper: { stmt, index, _ in
+  ///     let name = try String.column(of: stmt, at: &index)
+  ///     let age = try Int.column(of: stmt, at: &index)
+  ///     let email = try String.column(of: stmt, at: &index)
   ///     return (name, age, email)
   ///   }
   /// )
   /// ```
-  ///
-  /// ## Benefits
-  ///
-  /// Combines the benefits of ``SQLStatement`` (safe parameter binding through string
-  /// interpolation) with automatic column index management for cleaner extraction code.
-  ///
-  /// - Parameters:
-  ///   - statement: The SQL query statement with its parameter bindings.
-  ///   - stepper: A closure that extracts values using automatic index management.
-  /// - Returns: An array of results, one element per row.
-  /// - Throws: An error if query preparation, binding, execution, or extraction fails.
   @inline(__always)
   public func query<R>(
     _ statement: SQLStatement,

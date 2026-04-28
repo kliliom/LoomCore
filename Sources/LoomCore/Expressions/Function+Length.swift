@@ -1,19 +1,21 @@
-/// An SQL function that returns the length of a string or blob.
+/// SQL `LENGTH()` function — character count for strings, byte count for blobs.
 ///
-/// This function generates SQL's `LENGTH()` function, which returns the number of
-/// characters in a string or the number of bytes in a blob. The result is optional
-/// because the input expression may be NULL.
+/// The result is `Int?` because `LENGTH(NULL)` is NULL.
 ///
-/// Example SQL output: `LENGTH(column_name)`
+/// ```swift
+/// let name = ColumnExpression<String>("name")
+/// let users = try await db.query(
+///   "SELECT \(name) FROM users WHERE \(name.length()) > \(10)",
+///   read: { try String.column(of: $0, at: 0) }
+/// )
+/// ```
+///
+/// Generates SQL of the form `LENGTH("name")`.
 public struct Length: Function {
   public typealias ExpressionValue = Int?
 
-  /// The expression to get the length of.
   let expression: any Expression
 
-  /// Creates a new length function.
-  ///
-  /// - Parameter expression: The expression to get the length of.
   public init(_ expression: any Expression) {
     self.expression = expression
   }
@@ -26,9 +28,12 @@ public struct Length: Function {
 }
 
 extension Expression {
-  /// Returns the length of this expression.
+  /// Wraps this expression in SQL `LENGTH()`.
   ///
-  /// - Returns: A `Length` function that computes the number of characters or bytes.
+  /// ```swift
+  /// let bio = ColumnExpression<String>("bio")
+  /// let hasBio = bio.length() > 0
+  /// ```
   public func length() -> Length {
     Length(self)
   }

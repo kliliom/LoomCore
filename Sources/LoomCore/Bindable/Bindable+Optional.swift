@@ -1,6 +1,16 @@
 import Foundation
 import SQLite3
 
+/// Conforms `Optional` to `Expression` so nullable values participate in expression building.
+///
+/// `nil` is emitted as a bound `NULL` parameter rather than a raw SQL literal, preserving
+/// parameter-binding safety for absent values.
+///
+/// ```swift
+/// let nickname: String? = nil
+/// let users = ColumnExpression<String?>("nickname")
+/// try db.fetch(SQLStatement("SELECT id FROM users WHERE \(users) IS \(nickname)"))
+/// ```
 extension Optional: Expression where Wrapped: Bindable {
   public typealias ExpressionValue = Self
 
@@ -10,6 +20,21 @@ extension Optional: Expression where Wrapped: Bindable {
   }
 }
 
+/// Conforms `Optional` to `Bindable` so any `Bindable` type gains nullable storage automatically.
+///
+/// `nil` round-trips through SQLite `NULL`; non-nil values delegate binding and column extraction
+/// to the wrapped type. The default storage type is inherited from `Wrapped` — SQLite columns hold
+/// `NULL` regardless of declared affinity.
+///
+/// ```swift
+/// struct Profile {
+///   var id: Int
+///   var bio: String?
+/// }
+///
+/// let profile = Profile(id: 1, bio: nil)
+/// try db.execute("UPDATE profiles SET bio = \(profile.bio) WHERE id = \(profile.id)")
+/// ```
 extension Optional: Bindable where Wrapped: Bindable {
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {
     if let value {

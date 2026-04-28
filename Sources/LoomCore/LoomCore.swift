@@ -1,5 +1,5 @@
-/// LoomCore - A Swift SQLite database framework.
+/// LoomCore — type-safe, actor-isolated SQLite for Swift.
 ///
-/// This framework provides a type-safe, actor-isolated interface for working with SQLite
-/// databases in Swift applications. It emphasizes thread safety through Swift's actor model
-/// and provides clean APIs for common database operations.
+/// Wraps SQLite directly without ORM abstractions, closing off unsafe edges
+/// (string concatenation, manual binding, raw pointers, threading) through
+/// the type system and `@DatabaseActor` isolation.

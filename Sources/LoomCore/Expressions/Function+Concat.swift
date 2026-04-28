@@ -1,18 +1,20 @@
-/// An SQL function that concatenates multiple string expressions into a single string.
+/// SQL string concatenation using the `||` operator.
 ///
-/// This function uses SQL's concatenation operator (`||`) to join multiple expressions
-/// together. All expressions are evaluated and concatenated in the order they are provided.
+/// Joins multiple expressions into a single string in the order provided. Combine
+/// columns with literals to build display values directly in SQL:
 ///
-/// Example SQL output: `(column1 || column2 || 'literal')`
+/// ```swift
+/// let firstName = ColumnExpression<String>("first_name")
+/// let lastName = ColumnExpression<String>("last_name")
+/// let fullName = Concat(expressions: [firstName, " ", lastName])
+/// // ( "first_name" || ? || "last_name" )
+/// ```
 public struct Concat: Function {
   public typealias ExpressionValue = String
 
-  /// The expressions to concatenate.
   let expressions: [any Expression]
 
-  /// Creates a new concatenation function.
-  ///
-  /// - Parameter expressions: An array of expressions to concatenate together.
+  /// Creates a concatenation of the given expressions.
   public init(expressions: [any Expression]) {
     self.expressions = expressions
   }
@@ -29,13 +31,14 @@ public struct Concat: Function {
   }
 }
 
-/// Concatenates multiple expressions into a single string.
+/// Concatenates expressions into a single string using SQL's `||` operator.
 ///
-/// This is a convenience function that creates a `Concat` function from a variadic
-/// list of expressions.
+/// Variadic shorthand for ``Concat``:
 ///
-/// - Parameter expressions: The expressions to concatenate together.
-/// - Returns: A `Concat` function that joins all expressions.
+/// ```swift
+/// let label = concat(ColumnExpression<String>("city"), ", ", ColumnExpression<String>("country"))
+/// // ( "city" || ? || "country" )
+/// ```
 public func concat(_ expressions: any Expression...) -> Concat {
   Concat(expressions: expressions)
 }

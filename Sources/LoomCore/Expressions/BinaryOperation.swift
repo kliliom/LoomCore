@@ -1,26 +1,36 @@
-/// A binary operation expression that combines two operands with an SQL operator.
+/// Binary operation expression combining two operands with an SQL operator.
 ///
-/// This type represents SQL binary operations like arithmetic (`+`, `-`, `*`, `/`),
-/// comparison (`=`, `<`, `>`), and logical (`AND`, `OR`) operations.
+/// Represents SQL binary operations such as arithmetic (`+`, `-`, `*`, `/`),
+/// comparison (`=`, `<`, `>`, `<=`, `>=`), and logical (`AND`, `OR`) operators.
+/// The generated SQL is always wrapped in parentheses to preserve operator precedence
+/// when nested inside larger expressions.
 ///
-/// Example:
+/// Build instances through the operator overloads on `Expression` rather than
+/// constructing them directly:
+///
 /// ```swift
 /// let price = ColumnExpression<Int>("price")
-/// let minPrice = 100
-/// let condition = price > minPrice  // BinaryOperation<ColumnExpression<Int>, Int, Bool?>
+/// let stock = ColumnExpression<Int>("stock")
+///
+/// let inStockBudget = (price <= 100) && (stock > 0)
+/// let rows = try db.query("SELECT * FROM products WHERE \(inStockBudget)") { row in
+///   try row.string(at: 0)
+/// }
 /// ```
 public struct BinaryOperation<Left: Expression, Right: Expression, Result>: Expression {
   public typealias ExpressionValue = Result
 
-  /// The left-hand side expression.
   let left: Left
 
-  /// The right-hand side expression.
   let right: Right
 
-  /// The SQL operator to apply (e.g., "+", "=", "AND").
   let sqlOperator: String
 
+  /// Creates a binary operation from two operands and an SQL operator token.
+  ///
+  /// - Parameter sqlOperator: The literal operator emitted between the operands
+  ///   (e.g. `"+"`, `"="`, `"AND"`). Inserted verbatim, so it must be a trusted,
+  ///   non-user-controlled string.
   public init(left: Left, right: Right, sqlOperator: String) {
     self.left = left
     self.right = right

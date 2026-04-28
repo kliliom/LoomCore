@@ -2,6 +2,10 @@ import Foundation
 import SQLite3
 
 extension String: Bindable {
+  /// Binds the UTF-8 bytes as a `TEXT` parameter via `sqlite3_bind_text`, copying with `SQLITE_TRANSIENT`.
+  ///
+  /// Tries the contiguous-storage fast path first; falls back to materializing UTF-8 into a temporary buffer
+  /// when the storage isn't already contiguous.
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {
     let success = try value.utf8.withContiguousStorageIfAvailable { ptr in
       try check(
@@ -25,6 +29,9 @@ extension String: Bindable {
     }
   }
 
+  /// Reads the column as UTF-8 `TEXT`.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `String?` for nullable columns.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
     if let cString = sqlite3_column_text(stmt.stmtPtr, index) {
       return String(cString: cString)
@@ -33,10 +40,17 @@ extension String: Bindable {
     }
   }
 
+  /// Renders the value as a single-quoted SQL string literal, doubling embedded single quotes.
+  ///
+  /// ```swift
+  /// try "Alice".asSQLLiteral()    // "'Alice'"
+  /// try "O'Brien".asSQLLiteral()  // "'O''Brien'"
+  /// ```
   public func asSQLLiteral() throws -> String {
     let escaped = replacingOccurrences(of: "'", with: "''")
     return "'\(escaped)'"
   }
 
+  /// SQLite storage type for `String` columns: `TEXT`.
   public static var defaultSQLStorageType: String { "TEXT" }
 }

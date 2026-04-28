@@ -2,47 +2,34 @@
 
 /// Comparison operators for expressions.
 ///
-/// These operators enable natural comparison operations on SQL expressions.
+/// Build SQL predicates using the standard Swift comparison operators against any `Expression`
+/// whose value type is `Equatable` or `Comparable`. The right-hand side may be another column,
+/// a literal, or any other expression sharing the same value type.
 ///
-/// Example:
 /// ```swift
 /// let price = ColumnExpression<Int>("price")
-/// let condition = price >= 1000
-/// // Generates: (price >= ?)
+/// let cost = ColumnExpression<Int>("cost")
+/// let rows = try database.query("SELECT * FROM products WHERE \(price >= 1000) AND \(price > cost)")
 /// ```
 
 extension Expression where ExpressionValue: Equatable {
-  /// Equality comparison operator.
+  /// Builds a SQL `=` predicate between two expressions of the same value type.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Int>("price")
-  /// let condition = price == 1000
-  /// // Generates: (price = ?)
+  /// let status = ColumnExpression<String>("status")
+  /// let active = try database.query("SELECT * FROM orders WHERE \(status == "active")")
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the equality comparison.
   public static func == <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "=")
   }
 
-  /// Inequality comparison operator.
+  /// Builds a SQL `<>` predicate between two expressions of the same value type.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Int>("price")
-  /// let condition = price != 1000
-  /// // Generates: (price <> ?)
+  /// let status = ColumnExpression<String>("status")
+  /// let nonArchived = try database.query("SELECT * FROM orders WHERE \(status != "archived")")
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the inequality comparison.
   public static func != <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "<>")
@@ -50,73 +37,45 @@ extension Expression where ExpressionValue: Equatable {
 }
 
 extension Expression where ExpressionValue: Comparable {
-  /// Less than comparison operator.
+  /// Builds a SQL `<` predicate between two expressions of the same value type.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Int>("price")
-  /// let condition = price < 1000
-  /// // Generates: (price < ?)
+  /// let stock = ColumnExpression<Int>("stock")
+  /// let lowStock = try database.query("SELECT * FROM products WHERE \(stock < 10)")
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the less than comparison.
   public static func < <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "<")
   }
 
-  /// Greater than comparison operator.
+  /// Builds a SQL `>` predicate between two expressions of the same value type.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Int>("price")
-  /// let condition = price > 1000
-  /// // Generates: (price > ?)
+  /// let age = ColumnExpression<Int>("age")
+  /// let adults = try database.query("SELECT * FROM users WHERE \(age > 17)")
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the greater than comparison.
   public static func > <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: ">")
   }
 
-  /// Less than or equal comparison operator.
+  /// Builds a SQL `<=` predicate between two expressions of the same value type.
   ///
-  /// Example:
   /// ```swift
   /// let price = ColumnExpression<Int>("price")
-  /// let condition = price <= 1000
-  /// // Generates: (price <= ?)
+  /// let affordable = try database.query("SELECT * FROM products WHERE \(price <= 5000)")
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the less than or equal comparison.
   public static func <= <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "<=")
   }
 
-  /// Greater than or equal comparison operator.
+  /// Builds a SQL `>=` predicate between two expressions of the same value type.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Int>("price")
-  /// let condition = price >= 1000
-  /// // Generates: (price >= ?)
+  /// let score = ColumnExpression<Int>("score")
+  /// let passing = try database.query("SELECT * FROM exams WHERE \(score >= 60)")
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the greater than or equal comparison.
   public static func >= <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: ">=")

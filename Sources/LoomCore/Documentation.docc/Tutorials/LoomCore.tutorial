@@ -1,0 +1,17 @@
+@Tutorials(name: "LoomCore") {
+  @Intro(title: "Build with LoomCore") {
+    Walkthroughs that build small but realistic apps end-to-end. Start with the beginner tutorial to learn the core API; the advanced tutorial covers expression-based queries, custom types, and transaction lifecycle hooks.
+  }
+
+  @Chapter(name: "Getting started") {
+    Open a database, create a schema, and run safe parameterised inserts and queries.
+
+    @TutorialReference(tutorial: "doc:GettingStarted")
+  }
+
+  @Chapter(name: "Expressions and services") {
+    Build composable, type-checked SQL expressions, store custom Codable types, and react to commits with services.
+
+    @TutorialReference(tutorial: "doc:ExpressionsAndServices")
+  }
+}

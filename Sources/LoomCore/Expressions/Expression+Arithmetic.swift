@@ -2,86 +2,67 @@
 
 /// Arithmetic operators for numeric expressions.
 ///
-/// These operators enable natural arithmetic operations on SQL expressions:
+/// Compose SQL arithmetic from typed column expressions and literals:
 /// ```swift
 /// let price = ColumnExpression<Double>("price")
 /// let discount = ColumnExpression<Double>("discount")
-/// let total = price - discount
-/// // Generates: (price - discount)
+/// let net = price - discount
+/// // Renders: ( "price" - "discount" )
 /// ```
 
 extension Expression where ExpressionValue: Numeric {
-  /// Addition operator for numeric expressions.
+  /// Adds two numeric expressions.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Double>("price")
+  /// let subtotal = ColumnExpression<Double>("subtotal")
   /// let tax = ColumnExpression<Double>("tax")
-  /// let total = price + tax
-  /// // Generates: (price + tax)
+  /// let invoices = try await db.query(
+  ///   sql: "SELECT \(subtotal + tax) AS total FROM \(raw: "invoices")",
+  ///   step: { stmt, _ in Double.column(of: stmt, at: 0) }
+  /// )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the addition.
   public static func + <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, ExpressionValue>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "+")
   }
 
-  /// Subtraction operator for numeric expressions.
+  /// Subtracts one numeric expression from another.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Double>("price")
+  /// let listPrice = ColumnExpression<Double>("list_price")
   /// let discount = ColumnExpression<Double>("discount")
-  /// let total = price - discount
-  /// // Generates: (price - discount)
+  /// let net = listPrice - discount
+  /// // Renders: ( "list_price" - "discount" )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the subtraction.
   public static func - <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, ExpressionValue>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "-")
   }
 
-  /// Multiplication operator for numeric expressions.
+  /// Multiplies two numeric expressions.
   ///
-  /// Example:
   /// ```swift
-  /// let price = ColumnExpression<Double>("price")
+  /// let unitPrice = ColumnExpression<Double>("unit_price")
   /// let quantity = ColumnExpression<Double>("quantity")
-  /// let total = price * quantity
-  /// // Generates: (price * quantity)
+  /// let lineTotal = unitPrice * quantity
+  /// // Renders: ( "unit_price" * "quantity" )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the multiplication.
   public static func * <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, ExpressionValue>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "*")
   }
 
-  /// Division operator for numeric expressions.
+  /// Divides one numeric expression by another.
   ///
-  /// Example:
+  /// SQLite follows C semantics: dividing two integer expressions truncates,
+  /// and division by zero yields `NULL`.
+  ///
   /// ```swift
-  /// let price = ColumnExpression<Double>("price")
-  /// let divisor = ColumnExpression<Double>("divisor")
-  /// let result = price / divisor
-  /// // Generates: (price / divisor)
+  /// let total = ColumnExpression<Double>("total")
+  /// let count = ColumnExpression<Double>("count")
+  /// let average = total / count
+  /// // Renders: ( "total" / "count" )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the division.
   public static func / <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, ExpressionValue>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "/")
@@ -89,20 +70,16 @@ extension Expression where ExpressionValue: Numeric {
 }
 
 extension Expression where ExpressionValue: BinaryInteger {
-  /// Modulo operator for integer expressions.
+  /// Computes the remainder of integer division.
   ///
-  /// Example:
+  /// Restricted to `BinaryInteger` because SQLite's `%` operator coerces both
+  /// operands to integers; using it on floating-point columns silently truncates.
+  ///
   /// ```swift
-  /// let value = ColumnExpression<Int>("value")
-  /// let divisor = ColumnExpression<Int>("divisor")
-  /// let result = value % divisor
-  /// // Generates: (value % divisor)
+  /// let id = ColumnExpression<Int>("id")
+  /// let isEven = (id % 2) == 0
+  /// // Renders: ( ( "id" % ? ) = ? )
   /// ```
-  ///
-  /// - Parameters:
-  ///   - lhs: The left-hand side expression.
-  ///   - rhs: The right-hand side expression.
-  /// - Returns: A binary operation expression representing the modulo operation.
   public static func % <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, ExpressionValue>
   where R.ExpressionValue == ExpressionValue {
     BinaryOperation(left: lhs, right: rhs, sqlOperator: "%")
@@ -110,17 +87,13 @@ extension Expression where ExpressionValue: BinaryInteger {
 }
 
 extension Expression where ExpressionValue: SignedNumeric {
-  /// Unary negation operator for signed numeric expressions.
+  /// Negates a signed numeric expression.
   ///
-  /// Example:
   /// ```swift
-  /// let value = ColumnExpression<Int>("value")
-  /// let negatedValue = -value
-  /// // Generates: (-value)
+  /// let balance = ColumnExpression<Double>("balance")
+  /// let owed = -balance
+  /// // Renders: ( - "balance" )
   /// ```
-  ///
-  /// - Parameter operand: The expression to negate.
-  /// - Returns: A unary operation expression representing the negation.
   public static prefix func - (operand: Self) -> UnaryOperation<Self, ExpressionValue> {
     UnaryOperation(operand: operand, sqlOperator: "-", isPrefix: true)
   }

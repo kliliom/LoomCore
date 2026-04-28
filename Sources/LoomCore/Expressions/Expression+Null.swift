@@ -14,34 +14,28 @@
 // MARK: - Expression Extension
 
 extension Expression {
-  /// Checks if the expression evaluates to NULL.
+  /// Renders `<expr> IS NULL`, true when the expression evaluates to NULL.
   ///
-  /// This generates a SQL IS NULL check.
-  ///
-  /// Example:
   /// ```swift
-  /// let optionalAge = ColumnExpression<Int?>("age")
-  /// let condition = optionalAge.isNull()
-  /// // Generates: (age IS NULL)
+  /// let email = ColumnExpression<String?>("email")
+  /// let unverified = try await db.query(
+  ///   "SELECT id FROM users WHERE \(email.isNull())",
+  ///   as: Int64.self
+  /// )
   /// ```
-  ///
-  /// - Returns: A boolean expression that is true when the value is NULL.
   public func isNull() -> UnaryOperation<Self, Bool> {
     UnaryOperation(operand: self, sqlOperator: "IS NULL", isPrefix: false)
   }
 
-  /// Checks if the expression does not evaluate to NULL.
+  /// Renders `<expr> IS NOT NULL`, true when the expression evaluates to a non-NULL value.
   ///
-  /// This generates a SQL IS NOT NULL check.
-  ///
-  /// Example:
   /// ```swift
-  /// let optionalAge = ColumnExpression<Int?>("age")
-  /// let condition = optionalAge.isNotNull()
-  /// // Generates: (age IS NOT NULL)
+  /// let deletedAt = ColumnExpression<Date?>("deleted_at")
+  /// let activeIDs = try await db.query(
+  ///   "SELECT id FROM users WHERE \(deletedAt.isNotNull())",
+  ///   as: Int64.self
+  /// )
   /// ```
-  ///
-  /// - Returns: A boolean expression that is true when the value is not NULL.
   public func isNotNull() -> UnaryOperation<Self, Bool> {
     UnaryOperation(operand: self, sqlOperator: "IS NOT NULL", isPrefix: false)
   }

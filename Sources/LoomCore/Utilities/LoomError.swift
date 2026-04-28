@@ -1,20 +1,34 @@
 import Foundation
 import SQLite3
 
-/// A general error type for Loom, which can represent both core errors and SQLite errors.
+/// Error type used throughout LoomCore, pairing a typed error code with a human-readable message.
+///
+/// Each subsystem supplies its own `ErrorCode`-conforming enum so failures from different layers
+/// (parameter binding, statement preparation, raw SQLite results) can flow through a single
+/// `Error` type while remaining identifiable by their code.
+///
+/// ```swift
+/// do {
+///   try await database.execute("INSERT INTO users (name) VALUES (\(name))")
+/// } catch let error as LoomError {
+///   logger.error("\(error.message)")
+///   throw error
+/// }
+/// ```
 public struct LoomError: Error {
-  /// A protocol that all error codes used in `LoomError` must conform to.
+  /// Marker protocol that error code types must conform to in order to be carried by `LoomError`.
+  ///
+  /// Conforming types are typically subsystem-scoped enums. `Hashable` lets codes participate in
+  /// pattern matching and set membership; `Sendable` allows them to cross actor boundaries.
   public protocol ErrorCode: Hashable, Sendable {}
 
-  /// The specific error code associated with this error, which can be of any type conforming to `ErrorCode`.
+  /// Code identifying the kind of failure.
   public let code: any ErrorCode
-  /// A descriptive message providing more details about the error.
+
+  /// Human-readable description of the failure.
   public let message: String
 
-  /// Initializes a new `LoomError` with the given error code and message.
-  /// - Parameters:
-  ///   - code: The specific error code representing the type of error.
-  ///   - message: A descriptive message providing more details about the error.
+  /// Creates a `LoomError` with the given code and message.
   public init(code: any ErrorCode, message: String) {
     self.code = code
     self.message = message

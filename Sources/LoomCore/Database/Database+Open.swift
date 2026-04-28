@@ -5,17 +5,17 @@ extension Database {
   /// Opens a connection to an in-memory database.
   ///
   /// In-memory databases are not persisted to disk and exist only for the lifetime
-  /// of the connection. They are ideal for temporary data, testing, or caching scenarios.
+  /// of the connection. Each call creates an independent database — data is not
+  /// shared between instances. Suited to tests, ephemeral caches, and scratch
+  /// computation.
   ///
-  /// Each call to this method creates a completely independent database. Data is not
-  /// shared between different in-memory database instances.
+  /// ```swift
+  /// let db = try await Database.openInMemory()
+  /// try await db.exec("CREATE TABLE event (id INTEGER PRIMARY KEY, payload TEXT)")
+  /// try await db.exec("INSERT INTO event (payload) VALUES (?)", "login")
+  /// ```
   ///
-  /// The following example demonstrates its usage:
-  ///
-  ///     let db = try await Database.openInMemory()
-  ///
-  /// - Returns: A new ``Database`` instance backed by an in-memory SQLite database.
-  /// - Throws: `LoomError` if the SQLite connection cannot be established.
+  /// - Throws: ``LoomError`` if the SQLite connection cannot be established.
   public static func openInMemory() throws -> Database {
     var ptr: OpaquePointer?
     try check(sqlite3_open(":memory:", &ptr), is: SQLITE_OK)
@@ -27,25 +27,26 @@ extension Database {
 
   /// Opens a connection to a persistent on-disk database.
   ///
-  /// If the database file doesn't exist at the specified path, SQLite will create it
-  /// automatically. The file will persist across app launches until explicitly deleted.
+  /// SQLite creates the file at `url` if it does not already exist. The file
+  /// persists across launches until explicitly deleted.
   ///
-  /// The following example demonstrates opening a database from the documents directory:
+  /// ```swift
+  /// let documentsURL = FileManager.default
+  ///     .urls(for: .documentDirectory, in: .userDomainMask)
+  ///     .first!
+  /// let databaseURL = documentsURL.appending(path: "app.sqlite")
   ///
-  ///     // Get the URL of the documents directory.
-  ///     let documentsURL = FileManager.default
-  ///         .urls(for: .documentDirectory, in: .userDomainMask)
-  ///         .first!
+  /// let db = try await Database.open(url: databaseURL)
+  /// try await db.exec("""
+  ///     CREATE TABLE IF NOT EXISTS account (
+  ///         id INTEGER PRIMARY KEY,
+  ///         email TEXT NOT NULL UNIQUE
+  ///     )
+  ///     """)
+  /// ```
   ///
-  ///     // Append the database file name to the documents URL.
-  ///     let databaseURL = documentsURL.appending(path: "db.sqlite")
-  ///
-  ///     // Open the database.
-  ///     let db = try await Database.open(url: databaseURL)
-  ///
-  /// - Parameter url: File URL of the database to open. Must use the `file:` scheme.
-  /// - Returns: A new ``Database`` instance connected to the database at the given URL.
-  /// - Throws: `LoomError` if the URL is invalid or if the SQLite connection cannot be established.
+  /// - Parameter url: File URL pointing at the database. Must use the `file:` scheme.
+  /// - Throws: ``LoomError`` if `url` is not a file URL or the SQLite connection cannot be established.
   public static func open(url: URL) throws -> Database {
     guard url.isFileURL else {
       throw LoomError.core(.invalidDatabasePath, message: "Database URL must use the file: scheme.")

@@ -1,19 +1,21 @@
-/// An SQL aggregate function that returns the average of all values in a set.
+/// SQL `AVG()` aggregate that returns the arithmetic mean of values in a group.
 ///
-/// This function generates SQL's `AVG()` aggregate function, which calculates the arithmetic
-/// mean of all values in a group. The result is optional because the aggregate may be applied
-/// to an empty set, and is always returned as a `Double`.
+/// Result is `Double?` — SQLite returns `NULL` when the aggregate is applied to an empty
+/// set or a group containing only `NULL` values.
 ///
-/// Example SQL output: `AVG(column_name)`
+/// ```swift
+/// let orders = ColumnExpression<Int>("amount", in: "orders")
+/// let avgAmount = orders.avg()
+/// // SQL: AVG("orders"."amount")
+///
+/// let row = try db.queryOne(sql: "SELECT \(avgAmount) FROM orders")
+/// ```
 public struct Avg: Function {
   public typealias ExpressionValue = Double?
 
-  /// The expression to calculate the average of.
   let expression: any Expression
 
-  /// Creates a new average aggregate function.
-  ///
-  /// - Parameter expression: The expression to calculate the average of.
+  /// Creates an `AVG()` aggregate over `expression`.
   public init(_ expression: any Expression) {
     self.expression = expression
   }
@@ -26,9 +28,18 @@ public struct Avg: Function {
 }
 
 extension Expression {
-  /// Returns the average value of this expression across all rows.
+  /// Wraps this expression in an `AVG()` aggregate.
   ///
-  /// - Returns: An `Avg` aggregate function that computes the arithmetic mean as a `Double`.
+  /// ```swift
+  /// let salary = ColumnExpression<Int>("salary", in: "employees")
+  /// let department = ColumnExpression<String>("department", in: "employees")
+  ///
+  /// let stmt: SQLStatement = """
+  ///   SELECT \(department), \(salary.avg())
+  ///   FROM employees
+  ///   GROUP BY \(department)
+  ///   """
+  /// ```
   public func avg() -> Avg {
     Avg(self)
   }

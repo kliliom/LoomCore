@@ -1,24 +1,18 @@
-/// A builder for constructing SQL statements with safe parameter binding through string interpolation.
+/// String interpolation handler that builds ``SQLStatement`` values with safe parameter binding.
 ///
-/// `SQLBuilder` serves as the string interpolation handler for ``SQLStatement``, enabling type-safe
-/// SQL construction with automatic parameter binding. It collects SQL fragments and their associated
-/// binder closures during string interpolation, preventing SQL injection vulnerabilities.
-///
-/// ## String Interpolation
-///
-/// When you create a ``SQLStatement`` using string interpolation, this builder handles the interpolation:
+/// `SQLBuilder` collects SQL fragments and binder closures during string interpolation, producing
+/// statements where interpolated values become `?` placeholders bound at execution time. This is
+/// the mechanism that prevents SQL injection in interpolated statements.
 ///
 /// ```swift
 /// let name = "Alice"
 /// let age = 25
 /// let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(name) AND age = \(age)"
-/// // SQLBuilder creates: "SELECT * FROM users WHERE name = ? AND age = ?"
-/// // And stores binders for "Alice" and 25
+/// // SQL: SELECT * FROM users WHERE name = ? AND age = ?
+/// // Bound parameters: "Alice", 25
 /// ```
 ///
-/// ## Manual Usage
-///
-/// While typically used automatically through string interpolation, you can use it manually:
+/// Manual construction is supported for composing fragments programmatically:
 ///
 /// ```swift
 /// var builder = SQLBuilder()
@@ -27,6 +21,9 @@
 /// let stmt = builder.makeStatement()
 /// ```
 ///
+/// Use ``AppendMode/raw`` only for trusted identifiers — it bypasses parameter binding. Prefer
+/// ``ColumnExpression`` for column and table references, which always renders quoted identifiers.
+///
 /// ## See Also
 /// - ``SQLStatement``
 /// - ``Expression``
@@ -34,113 +31,85 @@
 public struct SQLBuilder: StringInterpolationProtocol {
   public typealias StringLiteralType = String
 
-  /// The SQL fragments that make up the statement.
-  ///
-  /// Each literal part of the SQL is stored as a separate string. These will be
-  /// joined with spaces when the final statement is created.
   private(set) var sql: [String] = []
 
-  /// The binder closures for parameter values.
-  ///
-  /// Each interpolated value in the SQL statement has a corresponding binder closure
-  /// that will bind the actual value to the prepared statement at execution time.
   private(set) var binders: [Database.ManagedBinder] = []
 
-  /// Creates a builder with reserved capacity for interpolation.
+  /// Creates a builder with capacity reserved for the given interpolation count.
   ///
-  /// This initializer is called automatically by the Swift compiler when using
-  /// string interpolation. The capacity hints allow pre-allocation for efficiency.
-  ///
-  /// - Parameters:
-  ///   - literalCapacity: Unused capacity hint for literal content.
-  ///   - interpolationCount: The number of interpolated values, used to reserve capacity.
+  /// Called automatically by the compiler when a ``SQLStatement`` is constructed from an
+  /// interpolated string literal.
   public init(literalCapacity: Int, interpolationCount: Int) {
     sql.reserveCapacity(interpolationCount * 2 + 1)
     binders.reserveCapacity(interpolationCount)
   }
 
-  /// Creates an empty SQL builder.
+  /// Creates an empty builder.
   public init() {}
 
-  /// Appends a literal SQL fragment to the builder.
+  /// Appends a literal SQL fragment.
   ///
-  /// This method is called automatically by the Swift compiler for each literal part
-  /// of an interpolated string. Literal parts are the non-interpolated text between
-  /// placeholders.
-  ///
-  /// ## Example
-  ///
-  /// In the statement `"SELECT * FROM \(table)"`, the literal "SELECT * FROM " is
-  /// appended via this method.
-  ///
-  /// - Parameter literal: The SQL text to append.
+  /// Called automatically by the compiler for each non-interpolated segment of an interpolated
+  /// string. In `"SELECT * FROM \(table)"`, the literal `"SELECT * FROM "` is appended via this
+  /// method.
   public mutating func appendLiteral(_ literal: StringLiteralType) {
     sql.append(literal)
   }
 
-  /// Appends a binder closure to the builder.
+  /// Registers a binder closure that binds a value at statement execution time.
   ///
-  /// This method is used internally to register a binder for each interpolated value
-  /// that should be bound as a parameter. The binder will be called with the prepared
-  /// statement and parameter index when the statement is executed.
+  /// Used by ``Bindable`` and ``Expression`` conformances to participate in interpolation.
+  /// Application code typically interpolates values directly rather than calling this method.
   ///
-  /// - Parameter binder: A closure that binds a value to a prepared statement parameter.
+  /// ```swift
+  /// var builder = SQLBuilder()
+  /// builder.appendLiteral("SELECT * FROM users WHERE name = ?")
+  /// builder.appendBinder { stmt, index in
+  ///   try String.bind("Alice", to: stmt, at: &index)
+  /// }
+  /// ```
   public mutating func appendBinder(_ binder: @escaping Database.ManagedBinder) {
     binders.append(binder)
   }
 
-  /// Specifies how an interpolated value should be appended to the SQL statement.
+  /// Controls how an interpolated value is rendered into the SQL.
   public enum AppendMode {
-    /// Append the value as a raw SQL fragment without parameter binding.
+    /// Renders the value as a raw SQL fragment with no parameter binding.
     ///
-    /// Use this for table names, column names, or SQL keywords that cannot be
-    /// parameterized. **Warning**: Only use with trusted values to prevent SQL injection.
+    /// Use only for trusted identifiers — table names, column names, or keywords from your own
+    /// configuration. Raw mode bypasses the binding that prevents SQL injection, so user input
+    /// must never reach this mode.
     case raw
 
-    /// Append the value as a bound parameter (default).
-    ///
-    /// This mode creates a `?` placeholder and registers a binder to safely
-    /// bind the value at execution time. This prevents SQL injection.
+    /// Renders the value as a `?` placeholder with a registered binder. The default mode.
     case bind
   }
 
-  /// Appends an interpolated value to the SQL statement.
-  ///
-  /// This method is called automatically by the Swift compiler for each interpolated
-  /// value in a string literal.
-  ///
-  /// ## Example
+  /// Interpolates an expression as a bound parameter.
   ///
   /// ```swift
   /// let name = "Alice"
   /// let stmt: SQLStatement = "SELECT * FROM users WHERE name = \(name)"
-  /// // Produces: "SELECT * FROM users WHERE name = ?"
+  /// // Produces: SELECT * FROM users WHERE name = ?
   /// ```
-  ///
-  /// - Parameters:
-  ///   - value: The expression value to interpolate.
   public mutating func appendInterpolation(_ value: some Expression) {
     value.append(to: &self)
   }
 
-  /// Appends an interpolated value to the SQL statement.
+  /// Interpolates an expression with control over binding versus raw rendering.
   ///
-  /// This method is called automatically by the Swift compiler for each interpolated
-  /// value in a string literal. By default, values are bound as parameters (`.bind` mode)
-  /// for safety. Use `.raw` mode only for SQL identifiers from trusted sources.
-  ///
-  /// ## Example
+  /// `.bind` inserts a `?` placeholder and registers a binder; `.raw` inlines the value's
+  /// `description`. Use `.raw` only for identifiers from trusted sources.
   ///
   /// ```swift
   /// let table = "users"
   /// let name = "Alice"
   /// let stmt: SQLStatement = "SELECT * FROM \(table, mode: .raw) WHERE name = \(name)"
-  /// // Produces: "SELECT * FROM users WHERE name = ?"
+  /// // Produces: SELECT * FROM users WHERE name = ?
   /// ```
   ///
-  /// - Parameters:
-  ///   - value: The expression value to interpolate.
-  ///   - mode: How to append the value (`.bind` for parameters, `.raw` for identifiers).
+  /// If a `.raw` value does not conform to `CustomStringConvertible`, the builder logs a warning
+  /// and falls back to `.bind` mode.
   public mutating func appendInterpolation(_ value: some Expression, mode: AppendMode) {
     switch mode {
     case .raw:
@@ -158,6 +127,13 @@ public struct SQLBuilder: StringInterpolationProtocol {
     }
   }
 
+  /// Interpolates an optional bindable value as a bound parameter, binding `NULL` when `nil`.
+  ///
+  /// ```swift
+  /// let nickname: String? = nil
+  /// let stmt: SQLStatement = "UPDATE users SET nickname = \(nickname) WHERE id = \(userId)"
+  /// // Binds NULL for the first parameter.
+  /// ```
   @inline(__always)
   public mutating func appendInterpolation(_ value: (some Bindable)?) {
     return appendInterpolation(value, mode: .bind)
@@ -167,12 +143,7 @@ public struct SQLBuilder: StringInterpolationProtocol {
 // MARK: - Statement Construction
 
 extension SQLBuilder {
-  /// Creates a ``SQLStatement`` from the builder's accumulated SQL and binders.
-  ///
-  /// This method combines the SQL fragments and binder closures into a complete
-  /// ``SQLStatement`` that can be executed against a database.
-  ///
-  /// ## Example
+  /// Builds a ``SQLStatement`` from the accumulated fragments and binders.
   ///
   /// ```swift
   /// var builder = SQLBuilder()
@@ -180,8 +151,6 @@ extension SQLBuilder {
   /// builder.appendInterpolation(userId)
   /// let statement = builder.makeStatement()
   /// ```
-  ///
-  /// - Returns: A complete SQL statement ready for execution.
   public func makeStatement() -> SQLStatement {
     SQLStatement(stringInterpolation: self)
   }

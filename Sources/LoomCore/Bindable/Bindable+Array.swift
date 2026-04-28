@@ -1,6 +1,21 @@
 import Foundation
 import SQLite3
 
+/// Stores arrays of `Bindable` elements as JSON-encoded BLOB columns.
+///
+/// The array is bound as a single parameter — its JSON representation — rather than
+/// expanded into a list of placeholders. For SQL `IN` lists, use `InExpression` instead.
+///
+/// ```swift
+/// struct Post: Codable {
+///   let id: Int
+///   let tags: [String]
+/// }
+///
+/// try db.execute(
+///   "INSERT INTO posts (id, tags) VALUES (\(post.id), \(post.tags))"
+/// )
+/// ```
 extension Array: Expression where Self: Codable, Element: Bindable {
   public typealias ExpressionValue = Self
 

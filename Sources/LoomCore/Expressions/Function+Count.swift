@@ -1,24 +1,27 @@
-/// An SQL aggregate function that counts the number of rows or non-NULL values.
+/// SQL `COUNT()` aggregate that counts rows or non-NULL values.
 ///
-/// This function generates SQL's `COUNT()` aggregate function, which counts the number
-/// of rows where the expression is not NULL. Can optionally count only distinct values
-/// by using `COUNT(DISTINCT ...)`.
+/// Counts rows where `expression` is not NULL, optionally restricted to distinct values
+/// via `COUNT(DISTINCT ...)`.
 ///
-/// Example SQL output: `COUNT(column_name)` or `COUNT(DISTINCT column_name)`
+/// ```swift
+/// let users = ColumnExpression<String>("users", "name")
+/// let total = Count(users)                    // COUNT("users"."name")
+/// let unique = Count(users, distinct: true)   // COUNT(DISTINCT "users"."name")
+///
+/// try await db.query("SELECT \(total) FROM users") { stmt in
+///   Int.column(of: stmt, at: 0)
+/// }
+/// ```
 public struct Count: Function {
   public typealias ExpressionValue = Int
 
-  /// The expression to count.
   let expression: any Expression
 
-  /// Whether to count only distinct values.
   let distinct: Bool
 
-  /// Creates a new count aggregate function.
+  /// Creates a `COUNT` aggregate over `expression`.
   ///
-  /// - Parameters:
-  ///   - expression: The expression to count.
-  ///   - distinct: Whether to count only distinct values. Defaults to `false`.
+  /// Pass `distinct: true` to emit `COUNT(DISTINCT ...)`.
   public init(_ expression: any Expression, distinct: Bool = false) {
     self.expression = expression
     self.distinct = distinct
@@ -35,10 +38,13 @@ public struct Count: Function {
 }
 
 extension Expression {
-  /// Counts the number of non-NULL values of this expression.
+  /// Wraps this expression in a `COUNT` aggregate.
   ///
-  /// - Parameter distinct: Whether to count only distinct values. Defaults to `false`.
-  /// - Returns: A `Count` aggregate function.
+  /// ```swift
+  /// let email = ColumnExpression<String>("users", "email")
+  /// let distinctEmails = email.count(distinct: true)
+  /// // SELECT COUNT(DISTINCT "users"."email") FROM users
+  /// ```
   public func count(distinct: Bool = false) -> Count {
     Count(self, distinct: distinct)
   }

@@ -1,19 +1,21 @@
-/// An SQL function that converts a string to lowercase.
+/// SQL `LOWER()` function — converts a string to lowercase.
 ///
-/// This function generates SQL's `LOWER()` function, which converts all uppercase
-/// characters in a string to lowercase. Non-alphabetic characters are not affected.
-/// Returns `nil` if the input expression is NULL.
+/// Wraps the SQLite `LOWER()` scalar function. Non-alphabetic characters pass through
+/// unchanged, and a NULL input produces NULL.
 ///
-/// Example SQL output: `LOWER(column_name)`
+/// ```swift
+/// let email = ColumnExpression<String>("email")
+/// let normalized = email.lower()
+/// // SQL: LOWER("email")
+///
+/// try await db.query("SELECT * FROM users WHERE \(email.lower()) = \("alice@example.com")")
+/// ```
 public struct Lower: Function {
   public typealias ExpressionValue = String?
 
-  /// The expression to convert to lowercase.
   let expression: any Expression
 
-  /// Creates a new lowercase function.
-  ///
-  /// - Parameter expression: The expression to convert to lowercase.
+  /// Creates a `LOWER()` expression wrapping `expression`.
   public init(_ expression: any Expression) {
     self.expression = expression
   }
@@ -26,9 +28,12 @@ public struct Lower: Function {
 }
 
 extension Expression {
-  /// Converts this expression to lowercase.
+  /// Returns a `Lower` expression that lowercases this expression's value.
   ///
-  /// - Returns: A `Lower` function that converts the string to lowercase, or `nil` if the input is NULL.
+  /// ```swift
+  /// let name = ColumnExpression<String>("name")
+  /// let rows = try await db.query("SELECT * FROM users WHERE \(name.lower()) LIKE \("a%")")
+  /// ```
   public func lower() -> Lower {
     Lower(self)
   }

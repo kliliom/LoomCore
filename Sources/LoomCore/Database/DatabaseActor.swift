@@ -1,18 +1,31 @@
-/// Global actor that serializes access to SQLite database operations.
+///  Global actor that serializes all SQLite access in LoomCore.
 ///
-/// This actor ensures thread-safe database operations by serializing all database
-/// access through a single actor instance. Functions and types marked with
-/// `@DatabaseActor` are isolated to this actor's execution context, preventing
-/// concurrent access issues with SQLite.
+/// SQLite's threading model requires careful synchronization. `DatabaseActor` provides this
+/// guarantee by isolating every database-touching operation to a single actor, so the compiler
+/// enforces serialization at call sites rather than relying on runtime locks.
 ///
-/// SQLite has limited thread-safety guarantees, so this actor provides safe
-/// concurrent access by ensuring operations are executed serially.
+/// Annotate types or methods with `@DatabaseActor` to opt into this isolation. Calls from
+/// non-isolated contexts must hop to the actor with `await`.
 ///
-/// The following types and functions are isolated to this actor:
-/// - ``Database`` and its methods (query, exec, transaction, etc.)
-/// - ``DatabaseHandle`` and ``StatementHandle`` (resource lifecycle)
-/// - ``Bindable`` bind/column operations
-/// - Internal helpers such as ``check(_:db:is:)``
+/// ```swift
+/// @DatabaseActor
+/// func loadActiveUsers(from db: Database) throws -> [User] {
+///   try db.query("SELECT id, name FROM users WHERE active = \(true)") { row in
+///     User(id: try row.column(at: 0), name: try row.column(at: 1))
+///   }
+/// }
+///
+/// Task {
+///   let users = try await loadActiveUsers(from: db)
+/// }
+/// ```
+///
+/// ## Isolated surface
+///
+/// - ``Database`` and its methods (query, exec, transaction, …)
+/// - ``DatabaseHandle`` and ``StatementHandle`` resource lifecycles
+/// - ``Bindable`` bind and column operations
+/// - Internal helpers such as `check(_:db:is:)`
 @globalActor public actor DatabaseActor: GlobalActor {
   public static let shared = DatabaseActor()
 }

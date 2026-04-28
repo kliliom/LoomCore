@@ -1,61 +1,42 @@
 import Foundation
 import SQLite3
 
-/// Wrapper type managing the lifecycle of a compiled SQLite statement.
+/// Owns a compiled SQLite statement and releases it when the handle goes out of scope.
 ///
-/// This type wraps an SQLite prepared statement (`sqlite3_stmt*` pointer) and handles
-/// its cleanup appropriately based on whether the statement is cached or temporary.
+/// Cleanup behavior depends on whether the statement came from the database's cache:
 ///
-/// Prepared statements can be either:
-/// - **Cached**: Retained in the database's statement cache for reuse. These are reset
-///   and have their bindings cleared on deinit, but not finalized.
-/// - **Temporary**: Created for one-time use. These are finalized (destroyed) on deinit.
+/// - **Cached** (`freeOnDeinit == false`): the statement is reset via `sqlite3_reset` and its bindings
+///   cleared via `sqlite3_clear_bindings`, leaving it ready for reuse on the next ``Database/prepare(sql:)``
+///   call with the same SQL string.
+/// - **Temporary** (`freeOnDeinit == true`): the statement is finalized via `sqlite3_finalize` and its
+///   resources released.
 ///
-/// The non-copyable constraint (`~Copyable`) ensures exclusive ownership and prevents
-/// use-after-free errors or double-finalization bugs.
+/// `~Copyable` enforces exclusive ownership; pass the handle with `consuming` or `borrowing` semantics
+/// to prevent double-finalization. Handles are obtained internally by the `Database` family of APIs and
+/// surface to callers as a parameter to `Bindable` binding and column-extraction methods:
 ///
-/// - Important: This type is not copyable to maintain exclusive ownership of the
-///              prepared statement. Pass it using `consuming` or `borrowing` semantics.
+/// ```swift
+/// try await db.transaction { db in
+///   let userID = 42
+///   let row = try db.fetchOne("SELECT name, age FROM users WHERE id = \(userID)") { stmt in
+///     (try String.column(of: stmt, at: 0), try Int.column(of: stmt, at: 1))
+///   }
+/// }
+/// ```
 @DatabaseActor
 public struct StatementHandle: ~Copyable, Sendable {
-  /// Raw SQLite database connection pointer.
   let dbPtr: OpaquePointer
 
-  /// Raw SQLite prepared statement pointer.
   let stmtPtr: OpaquePointer
 
-  /// Determines cleanup behavior when the handle is destroyed.
-  ///
-  /// - `true`: Statement is finalized (destroyed) via `sqlite3_finalize()`.
-  ///           Used for temporary statements not in the cache.
-  /// - `false`: Statement is reset and unbound via `sqlite3_reset()` and
-  ///            `sqlite3_clear_bindings()`. Used for cached statements that
-  ///            will be reused.
   let freeOnDeinit: Bool
 
-  /// Creates a new statement handle wrapping a compiled SQLite statement.
-  ///
-  /// - Parameters:
-  ///   - dbPtr: Raw SQLite database connection pointer.
-  ///   - stmtPtr: Raw SQLite prepared statement pointer from `sqlite3_prepare_v3()`.
-  ///   - freeOnDeinit: Whether to finalize (`true`) or reset (`false`) on deinit.
   init(dbPtr: OpaquePointer, stmtPtr: OpaquePointer, freeOnDeinit: Bool) {
     self.dbPtr = dbPtr
     self.stmtPtr = stmtPtr
     self.freeOnDeinit = freeOnDeinit
   }
 
-  /// Cleans up the SQLite statement when the handle is destroyed.
-  ///
-  /// For temporary statements (`freeOnDeinit == true`), calls `sqlite3_finalize()`
-  /// to completely destroy the statement and free its resources.
-  ///
-  /// For cached statements (`freeOnDeinit == false`), calls `sqlite3_reset()` to
-  /// return the statement to its initial state and `sqlite3_clear_bindings()` to
-  /// remove bound parameters, preparing it for reuse. The statement itself remains
-  /// alive in the cache.
-  ///
-  /// If cleanup fails, a warning is logged but the process continues.
   deinit {
     if freeOnDeinit {
       sqlite3_finalize(stmtPtr)
@@ -67,36 +48,6 @@ public struct StatementHandle: ~Copyable, Sendable {
 }
 
 extension Database {
-  /// Compiles an SQL statement into a prepared statement for execution.
-  ///
-  /// This method parses and compiles SQL into a prepared statement that can be
-  /// executed with bound parameters. Prepared statements offer significant performance
-  /// benefits over executing raw SQL repeatedly, as they only need to be parsed once.
-  ///
-  /// ## Statement Caching
-  ///
-  /// When the database has the ``DatabaseOptions/persistent`` option enabled, statements
-  /// are automatically cached. The first call compiles the statement and stores it in the
-  /// cache; subsequent calls with the same SQL string return the cached statement.
-  ///
-  /// Cached statements:
-  /// - Are compiled with `SQLITE_PREPARE_PERSISTENT` for optimization
-  /// - Are reset and have bindings cleared after use (not finalized)
-  /// - Remain in the cache until the database is closed
-  /// - Save parsing overhead for frequently executed queries
-  ///
-  /// Non-cached statements are finalized (destroyed) immediately after use.
-  ///
-  /// The following example demonstrates statement preparation:
-  ///
-  ///     let stmt = try db.prepare(sql: "SELECT * FROM users WHERE id = ?")
-  ///     // Bind parameters and execute the statement...
-  ///
-  /// - Parameter sql: The SQL statement to compile. Must be valid SQLite syntax.
-  ///
-  /// - Returns: A ``StatementHandle`` wrapping the compiled statement.
-  ///
-  /// - Throws: `LoomError` if the SQL is invalid or if SQLite fails to prepare the statement.
   func prepare(sql: String) throws -> StatementHandle {
     let useCache = options.contains(.persistent)
 

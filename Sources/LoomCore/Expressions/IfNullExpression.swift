@@ -1,12 +1,28 @@
-/// An IFNULL expression that provides a default value when an expression evaluates to NULL.
+/// SQL `IFNULL(operand, fallback)` expression that substitutes a fallback when the operand is NULL.
 ///
-/// This type represents the SQL IFNULL function for handling NULL values.
+/// Use ``Expression/ifNull(_:)`` or the convenience overloads on optional columns to construct values
+/// of this type. The `Result` type is non-optional because the fallback guarantees a non-NULL value.
 ///
-/// Example:
 /// ```swift
-/// let optionalAge = ColumnExpression<Int?>("age")
-/// let ageOrZero = optionalAge.ifNull(then: 0)
-/// // Generates: IFNULL(age, 0)
+/// struct UserRow {
+///   let name: String
+///   let displayName: String
+/// }
+///
+/// let name = ColumnExpression<String>("name")
+/// let nickname = ColumnExpression<String?>("nickname")
+///
+/// let rows = try database.query(
+///   """
+///   SELECT \(name), \(nickname.ifNull(name)) AS display_name FROM users
+///   """,
+///   rowMapper: { stmt, index in
+///     UserRow(
+///       name: try String.column(of: stmt, at: &index),
+///       displayName: try String.column(of: stmt, at: &index)
+///     )
+///   }
+/// )
 /// ```
 public struct IfNullExpression<Operand: Expression, Fallback: Expression, Result>: Expression {
   public typealias ExpressionValue = Result
@@ -31,21 +47,21 @@ public struct IfNullExpression<Operand: Expression, Fallback: Expression, Result
 // MARK: - Expression Extension
 
 extension Expression {
-  /// Provides a fallback expression when the expression evaluates to NULL.
+  /// Substitutes `fallbackExpr` when this expression evaluates to NULL, producing a non-optional result.
   ///
-  /// This generates a SQL IFNULL expression. The result is non-optional since
-  /// a fallback expression is always provided.
+  /// Available on optional expressions whose unwrapped type matches the fallback's value type.
+  /// The returned ``IfNullExpression`` renders as `IFNULL(self, fallbackExpr)`.
   ///
-  /// Example:
   /// ```swift
-  /// let optionalAge = ColumnExpression<Int?>("age")
-  /// let defaultAge = ColumnExpression<Int>("default_age")
-  /// let age = optionalAge.ifNull(defaultAge)
-  /// // Generates: IFNULL(age, default_age)
-  /// ```
+  /// let nickname = ColumnExpression<String?>("nickname")
+  /// let username = ColumnExpression<String>("username")
+  /// let displayName = nickname.ifNull(username)
   ///
-  /// - Parameter fallbackExpr: The expression to use when the first expression is NULL.
-  /// - Returns: An IFNULL expression with non-optional result type.
+  /// let names = try database.query(
+  ///   "SELECT \(displayName) FROM users ORDER BY \(username)",
+  ///   rowMapper: { stmt, index in try String.column(of: stmt, at: &index) }
+  /// )
+  /// ```
   public func ifNull<F: Expression, T>(_ fallbackExpr: F) -> IfNullExpression<Self, F, T>
   where ExpressionValue == T?, F.ExpressionValue == T {
     IfNullExpression(operand: self, fallback: fallbackExpr)

@@ -1,0 +1,177 @@
+@Tutorial(time: 25) {
+  @Intro(title: "Expressions and services") {
+    Build a small task tracker that uses ``ColumnExpression`` and the operator DSL for type-checked queries, stores per-task metadata as JSON via `Codable`, tunes SQLite for production with PRAGMA, and uses ``Database/Service`` to invalidate an in-process cache on commit.
+
+    By the end you will know how to combine expressions for non-trivial WHERE clauses, when to reach for ``ColumnExpression`` versus raw SQL, and how to wire long-lived state to transaction lifecycle events.
+  }
+
+  @Section(title: "Configure the database for production") {
+    @ContentAndMedia {
+      The default SQLite settings favour single-writer use. For an app with concurrent reads — even in a single process — WAL mode plus foreign-key enforcement is a better baseline. LoomCore exposes the relevant PRAGMAs as typed accessors so you do not need to remember their string forms.
+    }
+
+    @Steps {
+      @Step {
+        Open a file-backed database. Switch to WAL mode for concurrent reads, set `synchronous = NORMAL` (a safe default in WAL), and enable foreign-key enforcement.
+
+        @Code(name: "Database+Setup.swift", file: ex-01-setup.swift)
+      }
+
+      @Step {
+        Create three related tables. Foreign keys give us the integrity guarantees we need; storing freeform metadata as JSON keeps the schema small.
+
+        @Code(name: "Database+Setup.swift", file: ex-02-schema.swift, previousFile: ex-01-setup.swift)
+      }
+    }
+  }
+
+  @Section(title: "Model rows with Codable") {
+    @ContentAndMedia {
+      `Codable` types become ``Bindable`` with a one-line conformance. Their values are JSON-encoded and stored as BLOB. This is ideal for opaque payloads — fields you do not query into directly.
+    }
+
+    @Steps {
+      @Step {
+        Define a `TaskMetadata` value that holds a few optional fields. Conforming to ``Bindable`` is enough; LoomCore picks up the JSON encoder automatically via the protocol's default implementation.
+
+        @Code(name: "Models.swift", file: ex-03-metadata.swift)
+      }
+
+      @Step {
+        Define `Task` and `Category` models. Note that `Category.id` is `UUID` — LoomCore stores it as a 16-byte BLOB.
+
+        @Code(name: "Models.swift", file: ex-04-models.swift, previousFile: ex-03-metadata.swift)
+      }
+
+      @Step {
+        Insert a row. The interpolated `metadata` is JSON-encoded by `Bindable`'s `Codable` conformance and bound as a parameter — there is no manual `JSONEncoder` call.
+
+        @Code(name: "TaskStore.swift", file: ex-05-insert.swift, previousFile: ex-04-models.swift)
+      }
+    }
+  }
+
+  @Section(title: "Build queries with ColumnExpression") {
+    @ContentAndMedia {
+      ``ColumnExpression`` is the typed, properly-quoted way to refer to a column in expression-DSL code. Combined with operator overloads on ``Expression``, you can write `WHERE` clauses in Swift that the compiler checks for type compatibility.
+    }
+
+    @Steps {
+      @Step {
+        Declare the columns you will query against. A static struct keeps them in one place — and gives autocomplete.
+
+        @Code(name: "TaskStore+Columns.swift", file: ex-06-columns.swift)
+      }
+
+      @Step {
+        Find all open tasks in a category. The expression `tasks.categoryID == categoryID && tasks.completedAt.isNull()` is built in Swift, then interpolated into the SQL — the compiler ensures `categoryID` is a `UUID`, not a `String`.
+
+        @Code(name: "TaskStore.swift", file: ex-07-query.swift, previousFile: ex-06-columns.swift)
+      }
+
+      @Step {
+        Use an aggregate. `groupConcat` joins values across rows into a single string; the result type is `String?` because SQL `GROUP_CONCAT` returns NULL for an empty group.
+
+        @Code(name: "TaskStore.swift", file: ex-08-aggregate.swift, previousFile: ex-07-query.swift)
+      }
+
+      @Step {
+        Use `IN` with a set of UUIDs. An empty array is renders as an always-false expression rather than invalid SQL — so you do not have to special-case "the user picked no categories".
+
+        @Code(name: "TaskStore.swift", file: ex-09-in.swift, previousFile: ex-08-aggregate.swift)
+      }
+    }
+  }
+
+  @Section(title: "React to commits with services") {
+    @ContentAndMedia {
+      A ``Database/Service`` is a long-lived helper that receives transaction lifecycle callbacks. The classic use case is invalidating a cache when the data behind it changes. Services are singletons per `Database` and per type, so you do not have to manage their lifetime manually.
+    }
+
+    @Steps {
+      @Step {
+        Define a small in-process cache for category counts. It will be invalidated on every commit.
+
+        @Code(name: "TaskStore+Cache.swift", file: ex-10-cache.swift)
+      }
+
+      @Step {
+        Wire the cache to a service. `transactionDidCommit` is called after every committed transaction; `transactionDidRollback` is called on rollback. You can tighten this up by tracking which tables changed if you need finer-grained invalidation.
+
+        @Code(name: "TaskStore+Cache.swift", file: ex-11-service.swift, previousFile: ex-10-cache.swift)
+      }
+
+      @Step {
+        Use the cache from your store. Every committed write — single statement or transaction — goes through the service and refreshes the cache on the next read.
+
+        @Code(name: "TaskStore.swift", file: ex-12-cached-query.swift, previousFile: ex-09-in.swift)
+      }
+    }
+  }
+
+  @Assessments {
+    @MultipleChoice {
+      Why is `ColumnExpression` preferable to interpolating a column name in `.raw` mode?
+
+      @Choice(isCorrect: true) {
+        It always renders quoted identifiers and rejects empty/NUL names.
+
+        @Justification(reaction: "Correct!") {
+          Quoting makes reserved words and identifiers with spaces safe; validation closes off a class of programmer errors.
+        }
+      }
+      @Choice(isCorrect: false) {
+        It is faster.
+
+        @Justification(reaction: "Try again.") {
+          Speed is not the reason. Both produce the same SQL fragment.
+        }
+      }
+      @Choice(isCorrect: false) {
+        It binds the column name as a parameter.
+
+        @Justification(reaction: "Try again.") {
+          Column names cannot be parameters in SQLite. `ColumnExpression` renders them as literal SQL — but quoted and validated.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      What is the return type of `ColumnExpression<String>("body").groupConcat()`?
+
+      @Choice(isCorrect: true) {
+        `GroupConcat` whose `ExpressionValue` is `String?`
+
+        @Justification(reaction: "Correct!") {
+          `GROUP_CONCAT` returns NULL for empty groups, so the typealias is optional.
+        }
+      }
+      @Choice(isCorrect: false) {
+        `GroupConcat` whose `ExpressionValue` is `String`
+
+        @Justification(reaction: "Try again.") {
+          That would lose the empty-group case — `GROUP_CONCAT` is nullable.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      When does `transactionDidCommit` fire on a service?
+
+      @Choice(isCorrect: true) {
+        After every transaction opened via `db.transaction { … }` that completes successfully.
+
+        @Justification(reaction: "Correct!") {
+          Implicit per-statement transactions — a bare `exec` outside a `transaction` block — do not fire service callbacks.
+        }
+      }
+      @Choice(isCorrect: false) {
+        After every `exec` call.
+
+        @Justification(reaction: "Try again.") {
+          Only `transaction { … }` blocks notify services.
+        }
+      }
+    }
+  }
+}

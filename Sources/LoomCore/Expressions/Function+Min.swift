@@ -1,19 +1,18 @@
-/// An SQL aggregate function that returns the minimum value from a set of values.
+/// SQL `MIN()` aggregate, returning the smallest value in a group.
 ///
-/// This function generates SQL's `MIN()` aggregate function, which finds the smallest value
-/// in a group of values. The result is optional because the aggregate may be applied to an
-/// empty set.
+/// The result is optional because `MIN` over an empty set yields `NULL`.
 ///
-/// Example SQL output: `MIN(column_name)`
+/// ```swift
+/// let price = ColumnExpression<Double>("price")
+/// let cheapest = price.min()
+/// // SELECT MIN("price") FROM "products"
+/// ```
 public struct Min<T: Bindable>: Function {
   public typealias ExpressionValue = T?
 
-  /// The expression to find the minimum value of.
   let expression: any Expression<T>
 
-  /// Creates a new minimum aggregate function.
-  ///
-  /// - Parameter expression: The expression to find the minimum value of.
+  /// Wraps `expression` in a `MIN()` aggregate.
   public init(_ expression: any Expression<T>) {
     self.expression = expression
   }
@@ -26,9 +25,13 @@ public struct Min<T: Bindable>: Function {
 }
 
 extension Expression where ExpressionValue: Bindable {
-  /// Returns the minimum value of this expression across all rows.
+  /// Aggregates this expression with SQL `MIN()`, returning the smallest value across rows.
   ///
-  /// - Returns: A `Min` aggregate function that computes the minimum value.
+  /// ```swift
+  /// let temperature = ColumnExpression<Double>("temperature")
+  /// let coldest = temperature.min()
+  /// // MIN("temperature")
+  /// ```
   public func min() -> Min<ExpressionValue> {
     Min(self)
   }

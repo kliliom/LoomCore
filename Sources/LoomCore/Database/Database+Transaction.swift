@@ -3,74 +3,60 @@ import SQLite3
 
 /// SQLite transaction locking mode.
 ///
-/// These modes control when SQLite acquires locks on the database file, affecting
-/// concurrency and the potential for lock conflicts.
+/// Controls when SQLite acquires locks on the database file, trading concurrency
+/// against the chance of `SQLITE_BUSY` errors during execution.
 public enum TransactionKind: Hashable, Sendable {
-  /// Deferred transaction - acquires locks only when needed.
+  /// Defers lock acquisition until the first read or write inside the transaction.
   ///
-  /// Locks are not acquired until the first read or write operation within the transaction.
-  /// This allows multiple deferred transactions to coexist initially, but may lead to
-  /// `SQLITE_BUSY` errors if conflicts arise during execution.
-  ///
-  /// Use this mode (the default) for most transactions to maximize concurrency.
+  /// Multiple deferred transactions can coexist initially, but conflicts during
+  /// execution surface as `SQLITE_BUSY`. Suitable as the default for most workloads
+  /// where contention is rare.
   case deferred
 
-  /// Immediate transaction - acquires a write lock immediately.
+  /// Acquires a reserved write lock when the transaction begins.
   ///
-  /// A reserved lock is acquired on the database as soon as the transaction begins,
-  /// preventing other connections from writing (but allowing reads). This prevents
-  /// `SQLITE_BUSY` errors during the transaction, at the cost of reduced concurrency.
-  ///
-  /// Use this mode when you know the transaction will perform writes and want to
-  /// fail fast if the database is locked.
+  /// Other connections can still read but cannot write until commit or rollback.
+  /// Use when the transaction is known to write and you want to fail fast on
+  /// contention rather than partway through.
   case immediate
 
-  /// Exclusive transaction - acquires an exclusive lock immediately.
+  /// Acquires an exclusive lock when the transaction begins.
   ///
-  /// An exclusive lock is acquired immediately, preventing all other connections from
-  /// reading or writing. This provides maximum isolation but minimum concurrency.
-  ///
-  /// Use this mode sparingly, only when you need complete isolation from other connections,
-  /// such as during database migrations or schema changes.
+  /// Blocks all other readers and writers until commit or rollback. Reserve for
+  /// operations that genuinely require full isolation, such as migrations or
+  /// schema rewrites.
   case exclusive
 }
 
 extension Database {
-  /// Executes a block of database operations within a transaction.
+  /// Runs a block of operations atomically inside a transaction.
   ///
-  /// Transactions ensure that a group of database operations either all succeed (commit)
-  /// or all fail (rollback), maintaining database consistency. This is essential for
-  /// operations that must be atomic, such as transferring data between tables or
-  /// maintaining referential integrity across multiple inserts.
+  /// Commits if the block returns normally; rolls back and rethrows if it throws.
   ///
-  /// If the block completes successfully, the transaction is committed. If an error is thrown,
-  /// the transaction is automatically rolled back, reverting all changes made during the block.
+  /// ```swift
+  /// try db.transaction {
+  ///   let fromBalance: Int = try db.queryOne("SELECT balance FROM accounts WHERE id = \(fromID)")
+  ///   guard fromBalance >= amount else { throw TransferError.insufficientFunds }
+  ///   try db.exec("UPDATE accounts SET balance = balance - \(amount) WHERE id = \(fromID)")
+  ///   try db.exec("UPDATE accounts SET balance = balance + \(amount) WHERE id = \(toID)")
+  /// }
+  /// ```
   ///
-  /// The following example demonstrates executing multiple SQL statements in a transaction:
+  /// Registered services receive ``Service/transactionWillBegin()``,
+  /// ``Service/transactionDidCommit()``, and ``Service/transactionDidRollback()``
+  /// callbacks at the matching lifecycle points.
   ///
-  ///     try db.transaction {
-  ///       try db.exec("INSERT INTO users (name, age) VALUES ('Foo', 42)")
-  ///       try db.exec("INSERT INTO users (name, age) VALUES ('Bar', 24)")
-  ///     }
+  /// ## Nested calls
   ///
-  /// - Important: Nested transactions are not supported. If this method is called while a
-  ///              transaction is already active, a warning is logged and the block executes
-  ///              within the existing transaction instead of creating a new one.
+  /// Nested transactions are not supported. Calling `transaction` while one is
+  /// already active logs a warning and runs `block` inside the existing
+  /// transaction without issuing `SAVEPOINT`.
   ///
-  /// - Note: All registered services receive transaction lifecycle callbacks
-  ///         (``Service/transactionWillBegin()``, ``Service/transactionDidCommit()``,
-  ///         ``Service/transactionDidRollback()``) at appropriate points during execution.
-  ///
-  /// - Parameters:
-  ///   - kind: The transaction locking mode. Defaults to ``TransactionKind/deferred`` for
-  ///           maximum concurrency. See ``TransactionKind`` for details on each mode.
-  ///   - block: A closure containing the database operations to execute atomically.
-  ///            Must be isolated to ``DatabaseActor``.
-  ///
-  /// - Returns: The value returned by the block closure.
-  ///
-  /// - Throws: `LoomError` if an error occurs while executing the block or interacting with the database.
-  ///           If the block throws an error, the transaction is rolled back and the error is rethrown.
+  /// - Parameter kind: Locking mode for the `BEGIN` statement. Defaults to
+  ///   ``TransactionKind/deferred``.
+  /// - Throws: Rethrows any error from `block`; throws `LoomError` if the
+  ///   `BEGIN` or `COMMIT` itself fails. A failed rollback closes the underlying
+  ///   handle before rethrowing.
   public func transaction<T>(
     kind: TransactionKind = .deferred,
     _ block: @DatabaseActor () throws -> T

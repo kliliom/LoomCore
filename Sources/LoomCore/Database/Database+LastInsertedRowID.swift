@@ -4,35 +4,24 @@ import SQLite3
 extension Database {
   /// Captures the ROWID of the last row inserted by the given block.
   ///
-  /// This method executes a block of code and returns the ROWID of the last row inserted
-  /// during that block's execution. It's particularly useful for retrieving auto-generated
-  /// primary keys after INSERT operations.
+  /// Resets SQLite's last-insert ROWID to 0 before running `block`, so the returned value
+  /// only reflects inserts performed inside the closure. For tables with an
+  /// `INTEGER PRIMARY KEY`, the ROWID is that primary key; for other rowid tables, SQLite
+  /// assigns one automatically. `WITHOUT ROWID` tables do not generate a ROWID.
   ///
-  /// SQLite automatically assigns a unique ROWID to each row in tables without an
-  /// `INTEGER PRIMARY KEY` column, or uses the `INTEGER PRIMARY KEY` value if present.
-  /// This method captures that value immediately after the insert.
+  /// ```swift
+  /// let userID = try await db.lastInsertedRowID {
+  ///   try db.exec("INSERT INTO users (name, email) VALUES (?, ?)", "Alice", "alice@example.com")
+  ///   try db.exec("INSERT INTO audit_log (action, user) VALUES (?, ?)", "create", "Alice")
+  /// }
+  /// // userID is the ROWID of the audit_log insert — the last one in the block.
+  /// ```
   ///
-  /// The following example demonstrates capturing the last inserted row ID:
+  /// When the block performs multiple inserts, only the final insert's ROWID is returned.
+  /// Wrap each insert in its own call to track them individually.
   ///
-  ///     let rowID = try await db.lastInsertedRowID {
-  ///       try db.exec("INSERT INTO users (name, age) VALUES ('Foo', 42)")
-  ///     }
-  ///     if let rowID {
-  ///       print("Inserted row with ROWID: \(rowID)")
-  ///     }
-  ///
-  /// - Important: This method resets the last insert ROWID to 0 before executing the block
-  ///              to ensure you only capture ROWIDs from operations within the block, not
-  ///              from previous unrelated inserts.
-  ///
-  /// - Note: If multiple rows are inserted within the block, only the ROWID of the very
-  ///         last insert is returned. If you need to track multiple inserts, call this
-  ///         method separately for each INSERT statement.
-  ///
-  /// - Parameter block: A closure containing INSERT operations. Must be isolated to ``DatabaseActor``.
-  /// - Returns: The ROWID of the last inserted row, or `nil` if no row was inserted or
-  ///            the insert doesn't generate a ROWID (e.g., `WITHOUT ROWID` tables).
-  /// - Throws: `LoomError` if an error occurs while executing the block or interacting with the database.
+  /// - Returns: ROWID of the last insert, or `nil` if none occurred or the target table
+  ///            does not generate ROWIDs.
   public func lastInsertedRowID(_ block: @DatabaseActor () throws -> Void) throws -> Int64? {
     let dbPtr = try handle.ptr
     sqlite3_set_last_insert_rowid(dbPtr, 0)

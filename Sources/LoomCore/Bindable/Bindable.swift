@@ -1,107 +1,83 @@
-/// A type that can be bound to a SQLite statement as a parameter or extracted as a column value.
+/// Type that can be bound as a SQLite statement parameter or extracted from a result column.
 ///
-/// The `Bindable` protocol provides the core interface for type-safe interaction with SQLite
-/// prepared statements. Types conforming to this protocol can:
-/// - Be bound as parameters to prepared statements (SQL placeholders)
-/// - Be extracted as column values from query results
-/// - Be used in SQL expression building
-/// - Be converted to SQL literal representations
+/// Conforming types participate in the type-safe statement API: they can be bound to `?`
+/// placeholders, read out of result rows, and composed into `Expression` trees. Every
+/// `Bindable` is also an `Expression<Self>`, so literal values can appear directly in
+/// expression DSL code.
 ///
-/// ## Implementation Requirements
+/// ## Indexing
 ///
-/// Conforming types must implement:
-/// - ``bind(to:value:at:)-static`` - Bind a value to a statement parameter
-/// - ``column(of:at:)-static`` - Extract a value from a statement column
-/// - ``asSQLLiteral()`` - Convert the value to an SQL literal string
-/// - ``defaultSQLStorageType`` - Specify the SQL storage type for table definitions
+/// SQLite's indexing is asymmetric and `Bindable` preserves it:
+/// - **Parameters**: 1-based — the leftmost `?` is index `1`.
+/// - **Columns**: 0-based — the leftmost result column is index `0`.
 ///
-/// ## Parameter vs Column Indexing
+/// The `ManagedIndex` overloads handle this automatically: parameter binders increment
+/// *before* binding, column readers increment *after* reading.
 ///
-/// Note the different indexing conventions:
-/// - **Parameters**: 1-based indexing (leftmost parameter is index 1)
-/// - **Columns**: 0-based indexing (leftmost column is index 0)
+/// ## Conformance
 ///
-/// ## Example
+/// A conforming type implements four members:
 ///
 /// ```swift
-/// // Binding a parameter
-/// try String.bind(to: stmt, value: "Hello", at: 1)
+/// extension MyType: Bindable {
+///   static var defaultSQLStorageType: String { "TEXT" }
 ///
-/// // Extracting a column
-/// let value = try String.column(of: stmt, at: 0)
+///   static func bind(to stmt: borrowing StatementHandle, value: MyType, at index: Int32) throws {
+///     try value.rawValue.bind(to: stmt, at: index)
+///   }
+///
+///   static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> MyType {
+///     MyType(rawValue: try String.column(of: stmt, at: index))!
+///   }
+///
+///   func asSQLLiteral() throws -> String { try rawValue.asSQLLiteral() }
+/// }
 /// ```
 public protocol Bindable: Expression<Self> & Sendable {
-  /// Binds a value to a statement as a parameter.
+  /// Binds `value` to the parameter at a 1-based `index` in `stmt`.
   ///
-  /// This method binds a value to a SQL parameter placeholder (?) in a prepared statement.
-  /// It can be used inside ``Database/Binder`` closures.
-  ///
-  /// **Important**: SQLite uses 1-based indexing for parameters. The leftmost parameter is index 1.
-  ///
-  /// ## Example
+  /// Use inside a `Database.Binder` closure when binding parameters by explicit position.
   ///
   /// ```swift
-  /// // Bind "Hello, World!" to the first parameter
-  /// try String.bind(to: stmt, value: "Hello, World!", at: 1)
+  /// try database.execute("INSERT INTO users (name, age) VALUES (?, ?)") { stmt in
+  ///   try String.bind(to: stmt, value: "Alice", at: 1)
+  ///   try Int.bind(to: stmt, value: 30, at: 2)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The SQLite statement handle to bind the value to.
-  ///   - value: The value to bind to the parameter.
-  ///   - index: The 1-based index of the parameter placeholder.
-  /// - Throws: An error if the binding operation fails (e.g., invalid index, type conversion error).
   @DatabaseActor
   static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws
 
-  /// Extracts a column value from a statement's current row.
+  /// Reads the column at a 0-based `index` from the current row of `stmt`.
   ///
-  /// This method reads and converts a column value from the current row of a query result.
-  /// It can be used inside ``Database/Stepper`` closures.
-  ///
-  /// **Important**: SQLite uses 0-based indexing for columns. The leftmost column is index 0.
-  ///
-  /// ## Example
+  /// Use inside a `Database.Stepper` closure when reading columns by explicit position.
   ///
   /// ```swift
-  /// // Extract a string from the first column
-  /// let value = try String.column(of: stmt, at: 0)
+  /// let users = try database.query("SELECT name, age FROM users") { stmt in
+  ///   let name = try String.column(of: stmt, at: 0)
+  ///   let age = try Int.column(of: stmt, at: 1)
+  ///   return User(name: name, age: age)
+  /// }
   /// ```
   ///
-  /// - Parameters:
-  ///   - stmt: The SQLite statement handle to extract the value from.
-  ///   - index: The 0-based index of the column to read.
-  /// - Returns: The extracted and converted value.
-  /// - Throws: An error if the extraction fails (e.g., invalid index, type conversion error, NULL value for non-optional types).
+  /// - Throws: `LoomError` if the column is NULL and `Self` is non-optional, or if the
+  ///   stored value cannot be coerced to `Self`.
   @DatabaseActor
   static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self
 
-  /// Converts the value to its SQL literal representation.
+  /// Renders the value as a SQL literal — `'Alice'`, `42`, `NULL`, `x'deadbeef'`.
   ///
-  /// This method produces a SQL literal string that can be directly embedded in SQL statements.
-  /// For example, a string becomes `'Hello'`, an integer becomes `42`, and NULL becomes `NULL`.
-  ///
-  /// **Warning**: This method is primarily used for SQL generation and debugging.
-  /// Prefer using parameter binding (``bind(to:value:at:)``) instead of embedding literals
-  /// to prevent SQL injection vulnerabilities.
-  ///
-  /// - Returns: The SQL literal representation of the value.
-  /// - Throws: An error if the value cannot be converted to a SQL literal.
+  /// Intended for SQL generation, debugging, and migration tooling. Prefer parameter
+  /// binding for runtime queries; embedding literals built from untrusted input bypasses
+  /// the binding layer that prevents SQL injection.
   func asSQLLiteral() throws -> String
 
-  /// The default SQL storage type for this type when creating table columns.
-  ///
-  /// This property defines the SQL type that should be used in CREATE TABLE statements
-  /// for columns of this type. Common values include:
-  /// - `"TEXT"` for strings
-  /// - `"INTEGER"` for integers and booleans
-  /// - `"REAL"` for floating-point numbers
-  /// - `"BLOB"` for binary data
-  ///
-  /// ## Example
+  /// SQL storage type used for this Swift type in `CREATE TABLE` column definitions.
   ///
   /// ```swift
-  /// String.defaultSQLStorageType // Returns "TEXT"
-  /// Int.defaultSQLStorageType    // Returns "INTEGER"
+  /// String.defaultSQLStorageType  // "TEXT"
+  /// Int.defaultSQLStorageType     // "INTEGER"
+  /// Double.defaultSQLStorageType  // "REAL"
+  /// Data.defaultSQLStorageType    // "BLOB"
   /// ```
   static var defaultSQLStorageType: String { get }
 }
@@ -109,16 +85,10 @@ public protocol Bindable: Expression<Self> & Sendable {
 // MARK: - SQL Expression Building
 
 extension Bindable {
-  /// Appends this value to a SQL builder as a parameterized placeholder.
+  /// Appends `?` to `builder` and registers a binder that binds this value at execution time.
   ///
-  /// This method is part of the SQL expression building system. It adds a parameter
-  /// placeholder (`?`) to the SQL string and registers a binder closure to bind
-  /// the actual value when the statement is executed.
-  ///
-  /// This ensures values are safely bound as parameters rather than embedded as literals,
-  /// preventing SQL injection vulnerabilities.
-  ///
-  /// - Parameter builder: The SQL builder to append to.
+  /// Routes literal values through parameter binding rather than string interpolation,
+  /// keeping expression-built SQL injection-safe by construction.
   public func append(to builder: inout SQLBuilder) {
     builder.appendLiteral("?")
     builder.appendBinder(managedBinder)
@@ -128,21 +98,19 @@ extension Bindable {
 // MARK: - Managed Index Convenience (Static Methods)
 
 extension Bindable {
-  /// Binds a value to a statement as a parameter using a managed index.
+  /// Binds `value` at the next parameter position, advancing `index`.
   ///
-  /// This convenience method automatically increments the managed index after binding.
-  /// This method can be used inside ``Database/ManagedBinder`` closures.
-  ///
-  /// Here is an example of how to bind a value to a statement:
+  /// Increments `index` *before* binding, so the first call binds at position `1`.
+  /// Use inside a `Database.ManagedBinder` closure when binding a sequence of parameters
+  /// without tracking positions manually.
   ///
   /// ```swift
-  /// try String.bind(to: stmt, value: "Hello, World!", at: &index)
+  /// try database.execute("INSERT INTO users (name, age, email) VALUES (?, ?, ?)") { stmt, index in
+  ///   try String.bind(to: stmt, value: "Alice", at: &index)
+  ///   try Int.bind(to: stmt, value: 30, at: &index)
+  ///   try String.bind(to: stmt, value: "alice@example.com", at: &index)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The statement to bind the value to.
-  ///   - value: The value to bind.
-  ///   - index: Managed index of the parameter to bind the value to.
   @DatabaseActor
   @inline(__always)
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: inout ManagedIndex) throws {
@@ -150,21 +118,20 @@ extension Bindable {
     try bind(to: stmt, value: value, at: index.value)
   }
 
-  /// Extracts a column value from a statement using a managed index.
+  /// Reads the next column, advancing `index`.
   ///
-  /// This convenience method automatically increments the managed index after extraction.
-  /// This method can be used inside ``Database/ManagedStepper`` closures.
-  ///
-  /// Here is an example of how to extract a value from a statement:
+  /// Increments `index` *after* reading, so the first call reads column `0`.
+  /// Use inside a `Database.ManagedStepper` closure when reading a sequence of columns
+  /// without tracking positions manually.
   ///
   /// ```swift
-  /// let value = try String.column(of: stmt, at: &index)
+  /// let users = try database.query("SELECT name, age, email FROM users") { stmt, index in
+  ///   let name = try String.column(of: stmt, at: &index)
+  ///   let age = try Int.column(of: stmt, at: &index)
+  ///   let email = try String.column(of: stmt, at: &index)
+  ///   return User(name: name, age: age, email: email)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The statement to extract the value from.
-  ///   - index: Managed index of the column to extract the value from. Automatically incremented after extraction.
-  /// - Returns: The extracted value.
   @DatabaseActor
   @inline(__always)
   public static func column(of stmt: borrowing StatementHandle, at index: inout ManagedIndex) throws -> Self {
@@ -176,64 +143,50 @@ extension Bindable {
 // MARK: - Instance Method Conveniences
 
 extension Bindable {
-  /// Binds this value to a statement as a parameter.
+  /// Binds this value at the 1-based parameter `index` in `stmt`.
   ///
-  /// This instance method provides a convenient syntax for binding values.
-  /// This method can be used inside ``Database/Binder`` closures.
-  /// The leftmost SQL parameter has an index of 1.
-  ///
-  /// Here is an example of how to bind a value to a statement:
+  /// Instance-method form of the static `bind(to:value:at:)`.
   ///
   /// ```swift
-  /// try "Hello, World!".bind(to: stmt, at: 1)
+  /// try database.execute("UPDATE users SET name = ? WHERE id = ?") { stmt in
+  ///   try "Alice".bind(to: stmt, at: 1)
+  ///   try 42.bind(to: stmt, at: 2)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The statement to bind the value to.
-  ///   - index: The index of the parameter to bind the value to.
   @DatabaseActor
   @inline(__always)
   public func bind(to stmt: borrowing StatementHandle, at index: Int32) throws {
     try Self.bind(to: stmt, value: self, at: index)
   }
 
-  /// Extracts a column value from a statement and assigns it to this variable.
+  /// Reads the column at 0-based `index` from `stmt` and assigns it to `self`.
   ///
-  /// This instance method provides a convenient mutating syntax for extracting column values.
-  /// This method can be used inside ``Database/Stepper`` closures.
-  /// The leftmost SQL column has an index of 0.
-  ///
-  /// Here is an example of how to extract a value from a statement:
+  /// Mutating instance form useful when destination variables are already declared.
   ///
   /// ```swift
-  /// var value = ""
-  /// try value.column(of: stmt, at: 0)
-  /// // value now contains the column data
+  /// var name = ""
+  /// var age = 0
+  /// try database.query("SELECT name, age FROM users WHERE id = 1") { stmt in
+  ///   try name.column(of: stmt, at: 0)
+  ///   try age.column(of: stmt, at: 1)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The statement to extract the value from.
-  ///   - index: The 0-based index of the column to extract the value from.
   @DatabaseActor
   @inline(__always)
   public mutating func column(of stmt: borrowing StatementHandle, at index: Int32) throws {
     self = try Self.column(of: stmt, at: index)
   }
 
-  /// Binds this value to a statement as a parameter using a managed index.
+  /// Binds this value at the next parameter position, advancing `index`.
   ///
-  /// This instance method provides convenient syntax with automatic index management.
-  /// This method can be used inside ``Database/ManagedBinder`` closures.
-  ///
-  /// Here is an example of how to bind a value to a statement:
+  /// Instance-method form of the static managed-index `bind`.
   ///
   /// ```swift
-  /// try "Hello, World!".bind(to: stmt, at: &index)
+  /// try database.execute("INSERT INTO users (name, age) VALUES (?, ?)") { stmt, index in
+  ///   try "Alice".bind(to: stmt, at: &index)
+  ///   try 30.bind(to: stmt, at: &index)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The statement to bind the value to.
-  ///   - index: Managed index of the parameter. Automatically incremented after binding.
   @DatabaseActor
   @inline(__always)
   public func bind(to stmt: borrowing StatementHandle, at index: inout ManagedIndex) throws {
@@ -241,22 +194,18 @@ extension Bindable {
     try Self.bind(to: stmt, value: self, at: index.value)
   }
 
-  /// Extracts a column value from a statement and assigns it to this variable using a managed index.
+  /// Reads the next column from `stmt` into `self`, advancing `index`.
   ///
-  /// This instance method provides convenient mutating syntax with automatic index management.
-  /// This method can be used inside ``Database/ManagedStepper`` closures.
-  ///
-  /// Here is an example of how to extract a value from a statement:
+  /// Mutating instance form of the static managed-index `column`.
   ///
   /// ```swift
-  /// var value = ""
-  /// try value.column(of: stmt, at: &index)
-  /// // value now contains the column data, index is incremented
+  /// var name = ""
+  /// var age = 0
+  /// try database.query("SELECT name, age FROM users") { stmt, index in
+  ///   try name.column(of: stmt, at: &index)
+  ///   try age.column(of: stmt, at: &index)
+  /// }
   /// ```
-  ///
-  /// - Parameters:
-  ///   - stmt: The statement to extract the value from.
-  ///   - index: Managed index of the column. Automatically incremented after extraction.
   @DatabaseActor
   @inline(__always)
   public mutating func column(of stmt: borrowing StatementHandle, at index: inout ManagedIndex) throws {
@@ -268,16 +217,11 @@ extension Bindable {
 // MARK: - Managed Binder Creation
 
 extension Bindable {
-  /// Returns a managed binder closure for this value.
+  /// Closure that binds this value using a managed index, captured by value.
   ///
-  /// This property creates a closure that can be used to bind this value to a statement
-  /// with automatic index management. The returned binder is used internally by the
-  /// SQL expression building system.
-  ///
-  /// The binder closure captures this value and will bind it to the appropriate parameter
-  /// when the SQL builder executes the statement.
-  ///
-  /// - Returns: A closure that binds this value using a managed index.
+  /// Used by `SQLBuilder` to defer binding until the composed statement is executed.
+  /// Each interpolated value in an expression contributes one such closure to the
+  /// builder's binder list, alongside the `?` it appends to the SQL text.
   public var managedBinder: Database.ManagedBinder {
     { stmt, index in
       try Self.bind(to: stmt, value: self, at: &index)

@@ -1,29 +1,46 @@
-/// A protocol representing an SQL expression that can be used in queries.
+/// SQL expression that produces a typed value when evaluated by SQLite.
 ///
-/// Expressions are the building blocks of SQL queries, representing values, columns,
-/// functions, and other SQL constructs. Each expression has an associated value type
-/// that represents the type of data it produces.
+/// Expressions are the building blocks of the query DSL: columns, literals, operators,
+/// function calls, and aggregates all conform to `Expression`. The associated
+/// `ExpressionValue` type flows through the DSL so that comparisons, arithmetic, and
+/// projections stay type-checked at compile time.
 ///
-/// Types conforming to `Expression` must be `Sendable` to ensure thread safety across
-/// concurrent contexts.
+/// Every `Bindable` type is also an `Expression` of itself, which is what lets a
+/// literal participate in expression building:
+///
+/// ```swift
+/// let name = ColumnExpression<String>("name")
+/// let age = ColumnExpression<Int>("age")
+/// let predicate = (name == "Alice") && (age > 21)
+///
+/// var builder = SQLBuilder()
+/// predicate.append(to: &builder)
+/// // builder produces: ( ( "name" = ? ) AND ( "age" > ? ) )
+/// ```
+///
+/// Conformers must be `Sendable` because expressions are used from `@DatabaseActor`
+/// contexts and may be captured into binder closures.
 public protocol Expression<ExpressionValue>: Sendable {
-  /// The type of value this expression produces.
+  /// Value type produced when this expression is evaluated.
   associatedtype ExpressionValue
 
-  /// Appends the SQL representation of this expression to the builder.
-  ///
-  /// - Parameter builder: The SQL builder to append to.
+  /// Writes this expression's SQL fragment into `builder`, registering any parameter
+  /// binders required to supply its placeholder values.
   func append(to builder: inout SQLBuilder)
 }
 
 extension Expression {
-  /// Type-erases this expression to an existential type.
+  /// Wraps this expression as `any Expression<ExpressionValue>`.
   ///
-  /// This method allows you to convert a concrete expression type to the existential
-  /// `any Expression<ExpressionValue>` type, which can be useful when working with
-  /// heterogeneous collections of expressions.
+  /// Useful when assembling heterogeneous collections of expressions that share a
+  /// value type but differ in their concrete representation:
   ///
-  /// - Returns: The same expression wrapped as an existential type.
+  /// ```swift
+  /// let filters: [any Expression<Bool>] = [
+  ///   (ColumnExpression<Int>("age") > 21).eraseToAnyExpression(),
+  ///   ColumnExpression<Bool>("is_active").eraseToAnyExpression(),
+  /// ]
+  /// ```
   public func eraseToAnyExpression() -> any Expression<ExpressionValue> {
     self
   }

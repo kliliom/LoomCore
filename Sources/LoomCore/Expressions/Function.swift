@@ -1,7 +1,11 @@
-/// A protocol representing an SQL function expression.
+/// SQL function expression such as `COUNT(*)`, `SUM(price)`, or `UPPER(name)`.
 ///
-/// Functions are a specialized type of expression that represent SQL function calls
-/// such as `COUNT()`, `SUM()`, `UPPER()`, etc. This protocol inherits from `Expression`
-/// and serves as a marker protocol to distinguish function expressions from other types
-/// of expressions.
+/// Conforming types render as SQL function calls and participate in expression composition
+/// like any other `Expression`. The protocol is a marker that distinguishes function-call
+/// expressions from operators, literals, and column references.
+///
+/// ```swift
+/// let total = Sum(ColumnExpression<Int>("price"))
+/// let rows = try await db.query("SELECT \(total) FROM orders WHERE \(ColumnExpression<Int>("status") == 1)")
+/// ```
 public protocol Function<ExpressionValue>: Expression {}

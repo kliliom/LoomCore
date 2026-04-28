@@ -1,19 +1,18 @@
 /// Convenience methods for accessing SQLite PRAGMA statements.
 ///
-/// This extension provides type-safe, high-level access to commonly used SQLite PRAGMA
-/// statements for configuring database behavior, querying metadata, and performing
-/// maintenance operations.
+/// Provides type-safe, high-level access to commonly used SQLite PRAGMA statements for
+/// configuring database behavior, querying metadata, and performing maintenance operations.
 ///
 /// ## PRAGMA Categories
 ///
-/// - **Configuration**: Control database behavior (journal mode, synchronous, cache size, etc.)
-/// - **Maintenance**: Perform database maintenance (optimize, vacuum, integrity check)
-/// - **Introspection**: Query database schema and metadata (table info, indexes, foreign keys)
+/// - **Configuration**: journal mode, synchronous, cache size, foreign keys, etc.
+/// - **Maintenance**: optimize, vacuum, integrity check.
+/// - **Introspection**: table info, indexes, foreign keys.
 ///
 /// ## Thread Safety
 ///
-/// All PRAGMA methods are isolated to ``DatabaseActor``, ensuring thread-safe access to
-/// the database configuration.
+/// All PRAGMA methods are isolated to ``DatabaseActor``, ensuring thread-safe access to the
+/// database configuration.
 
 import Foundation
 import SQLite3
@@ -21,56 +20,51 @@ import SQLite3
 // MARK: - Journal Mode
 
 extension Database {
-  /// SQLite journal mode controls how the rollback journal is managed.
+  /// Journal mode controlling how the rollback journal is managed.
   ///
-  /// The journal mode affects durability, performance, and concurrency characteristics.
+  /// Affects durability, performance, and concurrency characteristics.
   public enum JournalMode: String, Sendable, CaseIterable {
-    /// DELETE mode (default) - Journal file deleted after each transaction.
+    /// Deletes the journal file after each transaction (default).
     ///
-    /// This is the traditional SQLite behavior. Good balance of safety and performance
-    /// for single-connection use.
+    /// Traditional SQLite behavior. Good balance of safety and performance for single-connection use.
     case delete = "DELETE"
 
-    /// TRUNCATE mode - Journal file truncated to zero length instead of deleted.
+    /// Truncates the journal file to zero length instead of deleting it.
     ///
-    /// Slightly faster than DELETE on some systems as it avoids directory changes.
+    /// Slightly faster than `.delete` on some systems by avoiding directory changes.
     case truncate = "TRUNCATE"
 
-    /// PERSIST mode - Journal file remains but header is overwritten with zeros.
+    /// Keeps the journal file but overwrites the header with zeros.
     ///
-    /// Prevents the overhead of deleting and recreating the journal file.
+    /// Avoids the overhead of deleting and recreating the journal file.
     case persist = "PERSIST"
 
-    /// MEMORY mode - Journal kept in memory rather than on disk.
+    /// Keeps the journal in memory rather than on disk.
     ///
-    /// Fastest mode but loses rollback capability if process crashes.
-    /// Not recommended for production use.
+    /// Fastest mode but loses rollback capability if the process crashes. Not recommended for production use.
     case memory = "MEMORY"
 
-    /// WAL mode (Write-Ahead Logging) - Changes written to separate WAL file.
+    /// Writes changes to a separate WAL file (Write-Ahead Logging).
     ///
-    /// Significantly better concurrency as readers don't block writers.
-    /// Recommended for most production applications.
+    /// Significantly better concurrency since readers don't block writers. Recommended for most production
+    /// applications.
     case wal = "WAL"
 
-    /// OFF mode - No rollback journal (dangerous!).
+    /// Disables the rollback journal entirely.
     ///
-    /// Disables rollback and atomic commit. Database may become corrupted
-    /// if a crash occurs mid-transaction. Only use for temporary databases.
+    /// Disables rollback and atomic commit. Database may become corrupted if a crash occurs mid-transaction.
+    /// Only use for temporary databases.
     case off = "OFF"
   }
 
-  /// Gets the current journal mode.
-  ///
-  /// ## Example
+  /// Returns the current journal mode.
   ///
   /// ```swift
   /// let mode = try db.getJournalMode()
-  /// print("Current journal mode: \(mode)")
+  /// if mode != .wal {
+  ///   try db.setJournalMode(.wal)
+  /// }
   /// ```
-  ///
-  /// - Returns: The current ``JournalMode``.
-  /// - Throws: `LoomError` if the PRAGMA query fails or returns an unexpected value.
   public func getJournalMode() throws -> JournalMode {
     let result = try query("PRAGMA journal_mode") { stmt, _ in
       try String.column(of: stmt, at: 0)
@@ -85,21 +79,15 @@ extension Database {
     return mode
   }
 
-  /// Sets the journal mode.
+  /// Sets the journal mode and returns the mode actually applied.
   ///
-  /// **Note**: Some journal mode changes may fail if incompatible with the current state.
-  /// For example, you cannot change to WAL mode if the database file is on a network
-  /// filesystem that doesn't support shared memory.
-  ///
-  /// ## Example
+  /// Some changes may not take effect — for example, switching to `.wal` fails on a network filesystem
+  /// that doesn't support shared memory. Inspect the returned value to confirm.
   ///
   /// ```swift
-  /// // Enable WAL mode for better concurrency
-  /// try db.setJournalMode(.wal)
+  /// let active = try db.setJournalMode(.wal)
+  /// precondition(active == .wal, "WAL mode unavailable on this filesystem")
   /// ```
-  ///
-  /// - Parameter mode: The ``JournalMode`` to set.
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   @discardableResult
   public func setJournalMode(_ mode: JournalMode) throws -> JournalMode {
     let result = try query("PRAGMA journal_mode = \(mode.rawValue, mode: .raw)") { stmt, _ in
@@ -119,39 +107,36 @@ extension Database {
 // MARK: - Synchronous Mode
 
 extension Database {
-  /// SQLite synchronous mode controls how aggressively SQLite syncs to disk.
+  /// Synchronous mode controlling how aggressively SQLite syncs to disk.
   ///
-  /// This affects the trade-off between durability (data safety) and performance.
+  /// Trades durability against write performance.
   public enum SynchronousMode: Int32, Sendable, CaseIterable {
-    /// OFF mode (0) - No syncing (fastest, most dangerous).
+    /// Skips syncing entirely (fastest, most dangerous).
     ///
-    /// SQLite does not pause to wait for data to reach disk. Database may become
-    /// corrupted if the OS crashes or loses power. Only use for temporary data.
+    /// SQLite does not pause to wait for data to reach disk. Database may become corrupted if the OS crashes
+    /// or loses power. Only use for temporary data.
     case off = 0
 
-    /// NORMAL mode (1) - Sync at critical moments.
+    /// Syncs at the most critical moments.
     ///
-    /// Syncs at most critical moments. Safe with WAL mode but can corrupt database
-    /// in rollback journal modes if OS crashes at wrong time. Good balance for WAL mode.
+    /// Safe with WAL mode but can corrupt the database in rollback journal modes if the OS crashes at the
+    /// wrong time. Good balance for WAL mode.
     case normal = 1
 
-    /// FULL mode (2) - Sync after every transaction (default).
+    /// Syncs after every transaction (default).
     ///
-    /// Ensures data reaches disk before transactions commit. Safest option but slower.
-    /// Recommended for important data in DELETE/TRUNCATE/PERSIST journal modes.
+    /// Ensures data reaches disk before transactions commit. Safest standard option but slower. Recommended
+    /// for important data in `.delete`/`.truncate`/`.persist` journal modes.
     case full = 2
 
-    /// EXTRA mode (3) - Maximum safety.
+    /// Goes beyond `.full` for maximum safety.
     ///
-    /// Goes beyond FULL to reduce risk of corruption in extremely rare scenarios.
-    /// Significantly slower than FULL with minimal additional safety benefit.
+    /// Reduces risk of corruption in extremely rare scenarios. Significantly slower than `.full` with minimal
+    /// additional safety benefit.
     case extra = 3
   }
 
-  /// Gets the current synchronous mode.
-  ///
-  /// - Returns: The current ``SynchronousMode``.
-  /// - Throws: `LoomError` if the PRAGMA query fails or returns an unexpected value.
+  /// Returns the current synchronous mode.
   public func getSynchronous() throws -> SynchronousMode {
     let result = try query("PRAGMA synchronous") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
@@ -170,19 +155,14 @@ extension Database {
   ///
   /// ## Recommended Settings
   ///
-  /// - WAL mode: Use `.normal` for good balance of safety and performance
-  /// - DELETE/TRUNCATE/PERSIST modes: Use `.full` for safety
-  /// - Temporary data only: Can use `.off` for maximum speed
-  ///
-  /// ## Example
+  /// - WAL mode: `.normal` — good balance of safety and performance.
+  /// - DELETE/TRUNCATE/PERSIST modes: `.full` — full durability.
+  /// - Temporary data only: `.off` — maximum speed, no crash safety.
   ///
   /// ```swift
   /// try db.setJournalMode(.wal)
-  /// try db.setSynchronous(.normal)  // Good balance for WAL mode
+  /// try db.setSynchronous(.normal)
   /// ```
-  ///
-  /// - Parameter mode: The ``SynchronousMode`` to set.
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   public func setSynchronous(_ mode: SynchronousMode) throws {
     try exec("PRAGMA synchronous = \(mode.rawValue, mode: .raw)")
   }
@@ -191,17 +171,16 @@ extension Database {
 // MARK: - Cache Size
 
 extension Database {
-  /// Cache size controls the amount of memory SQLite uses for caching database pages.
+  /// Cache size controlling the amount of memory SQLite uses for caching database pages.
   public enum CacheSize: Sendable, Hashable {
     /// Cache size specified in pages.
     case pages(Int32)
     /// Cache size specified in kibibytes.
     case kibibytes(Int32)
 
-    /// Initializes a `CacheSize` from a raw Int32 value returned by SQLite.
+    /// Creates a `CacheSize` from a raw `Int32` value as returned by SQLite.
     ///
-    /// A negative value indicates kibibytes, while a positive value indicates pages.
-    /// - Parameter raw: The raw cache size value from SQLite.
+    /// Negative values map to ``kibibytes(_:)``; positive values map to ``pages(_:)``.
     public init(raw: Int32) {
       if raw < 0 {
         self = .kibibytes(-raw)
@@ -211,13 +190,10 @@ extension Database {
     }
   }
 
-  /// Gets the suggested maximum number of database pages held in memory.
+  /// Returns the suggested maximum number of database pages held in memory.
   ///
-  /// The cache size is measured in pages (typically 4096 bytes each). A negative
-  /// value means the cache size is specified in kibibytes.
-  ///
-  /// - Returns: The cache size as a ``CacheSize`` value.
-  /// - Throws: `LoomError` if the PRAGMA query fails.
+  /// Pages are typically 4096 bytes each. A negative raw value means the cache size is specified in
+  /// kibibytes — ``CacheSize`` normalizes that for you.
   public func getCacheSize() throws -> CacheSize {
     let result = try query("PRAGMA cache_size") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
@@ -232,21 +208,16 @@ extension Database {
 
   /// Sets the suggested maximum number of database pages held in memory.
   ///
-  /// Larger cache sizes improve performance for read-heavy workloads but use more memory.
-  /// The default is usually -2000 (2MB).
-  ///
-  /// ## Example
+  /// Larger cache sizes improve performance for read-heavy workloads at the cost of memory. The default is
+  /// usually `-2000` (2 MiB).
   ///
   /// ```swift
-  /// // Set cache to 10MB
+  /// // Cap the cache at 10 MiB.
   /// try db.setCacheSize(.kibibytes(10240))
   ///
-  /// // Or set cache to 2560 pages (typically ~10MB with 4KB pages)
+  /// // Or 2560 pages (~10 MiB at 4 KiB pages).
   /// try db.setCacheSize(.pages(2560))
   /// ```
-  ///
-  /// - Parameter size: The cache size in pages (positive) or kibibytes (negative).
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   public func setCacheSize(_ size: CacheSize) throws {
     let rawValue: Int32
     switch size {
@@ -264,24 +235,21 @@ extension Database {
 extension Database {
   /// Location where temporary tables and indexes are stored.
   public enum TempStoreMode: Int32, Sendable, CaseIterable {
-    /// DEFAULT mode (0) - Use compile-time default (usually FILE).
+    /// Uses the compile-time default (usually `.file`).
     case `default` = 0
 
-    /// FILE mode (1) - Store temporary tables in files.
+    /// Stores temporary tables in files on disk.
     ///
-    /// Slower but doesn't use process memory.
+    /// Slower than memory-backed storage but doesn't consume process memory.
     case file = 1
 
-    /// MEMORY mode (2) - Store temporary tables in memory.
+    /// Stores temporary tables in memory.
     ///
     /// Faster but uses more memory. Recommended for most applications.
     case memory = 2
   }
 
-  /// Gets the current temp_store mode.
-  ///
-  /// - Returns: The current ``TempStoreMode``.
-  /// - Throws: `LoomError` if the PRAGMA query fails or returns an unexpected value.
+  /// Returns the current `temp_store` mode.
   public func getTempStore() throws -> TempStoreMode {
     let result = try query("PRAGMA temp_store") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
@@ -296,17 +264,12 @@ extension Database {
     return mode
   }
 
-  /// Sets the temp_store mode.
-  ///
-  /// ## Example
+  /// Sets the `temp_store` mode.
   ///
   /// ```swift
-  /// // Store temporary tables in memory for better performance
+  /// // Keep ephemeral B-trees in memory for hot query paths.
   /// try db.setTempStore(.memory)
   /// ```
-  ///
-  /// - Parameter mode: The ``TempStoreMode`` to set.
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   public func setTempStore(_ mode: TempStoreMode) throws {
     try exec("PRAGMA temp_store = \(mode.rawValue, mode: .raw)")
   }
@@ -315,12 +278,9 @@ extension Database {
 // MARK: - Memory-Mapped I/O
 
 extension Database {
-  /// Gets the maximum number of bytes used for memory-mapped I/O.
+  /// Returns the maximum number of bytes available for memory-mapped I/O.
   ///
-  /// A value of 0 means memory-mapped I/O is disabled.
-  ///
-  /// - Returns: The maximum mmap size in bytes.
-  /// - Throws: `LoomError` if the PRAGMA query fails.
+  /// A return value of `0` indicates memory-mapped I/O is disabled.
   public func getMmapSize() throws -> Int64 {
     let result = try query("PRAGMA mmap_size") { stmt, _ in
       try Int64.column(of: stmt, at: 0)
@@ -333,25 +293,22 @@ extension Database {
     return size
   }
 
-  /// Sets the maximum number of bytes used for memory-mapped I/O.
+  /// Sets the maximum number of bytes used for memory-mapped I/O and returns the value actually applied.
   ///
-  /// Memory-mapped I/O can improve performance by allowing SQLite to read database
-  /// pages directly from memory without system calls. However, it may cause issues
-  /// on some platforms or with very large databases.
-  ///
-  /// ## Example
+  /// Memory-mapped I/O can improve read performance by letting SQLite access pages directly without system
+  /// calls. It may misbehave on some platforms or with very large databases — verify the returned size if
+  /// you need to confirm the request succeeded.
   ///
   /// ```swift
-  /// // Enable 256MB of memory-mapped I/O
-  /// try db.setMmapSize(256 * 1024 * 1024)
+  /// // Map up to 256 MiB of the database.
+  /// _ = try db.setMmapSize(256 * 1024 * 1024)
   ///
-  /// // Disable memory-mapped I/O
-  /// try db.setMmapSize(0)
+  /// // Disable memory-mapped I/O.
+  /// _ = try db.setMmapSize(0)
   /// ```
   ///
-  /// - Parameter size: The maximum mmap size in bytes (0 to disable).
-  /// - Returns: The maximum mmap size in bytes.
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
+  /// - Parameter size: Maximum mmap size in bytes, or `0` to disable.
+  @discardableResult
   public func setMmapSize(_ size: Int64) throws -> Int64 {
     let result = try query("PRAGMA mmap_size = \(size, mode: .raw)") { stmt, _ in
       try Int64.column(of: stmt, at: 0)
@@ -368,12 +325,9 @@ extension Database {
 // MARK: - Foreign Keys
 
 extension Database {
-  /// Gets the foreign key constraints enforcement status.
+  /// Returns whether foreign key constraint enforcement is enabled.
   ///
-  /// Foreign keys are disabled by default for backwards compatibility.
-  ///
-  /// - Returns: `true` if foreign key constraints are enabled, `false` otherwise.
-  /// - Throws: `LoomError` if the PRAGMA query fails.
+  /// Foreign keys are disabled by default for backwards compatibility with legacy databases.
   public func getForeignKeys() throws -> Bool {
     let result = try query("PRAGMA foreign_keys") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
@@ -382,21 +336,15 @@ extension Database {
     return result.first == 1
   }
 
-  /// Sets the foreign key constraints enforcement status.
+  /// Enables or disables foreign key constraint enforcement.
   ///
-  /// **Important**: Foreign key enforcement can only be changed when there are no
-  /// active transactions. It's best to set this immediately after opening the database.
-  ///
-  /// ## Example
+  /// This setting can only be changed when no transaction is active — set it immediately after opening the
+  /// database.
   ///
   /// ```swift
   /// let db = try Database.openInMemory()
-  /// // Enable foreign key enforcement
   /// try db.setForeignKeys(true)
   /// ```
-  ///
-  /// - Parameter enabled: Whether to enable foreign key constraint enforcement.
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   public func setForeignKeys(_ enabled: Bool) throws {
     try exec("PRAGMA foreign_keys = \(enabled ? 1 : 0, mode: .raw)")
   }
@@ -405,30 +353,26 @@ extension Database {
 // MARK: - Auto Vacuum
 
 extension Database {
-  /// Auto-vacuum mode controls automatic database file size management.
+  /// Auto-vacuum mode controlling automatic database file size management.
   public enum AutoVacuumMode: Int32, Sendable, CaseIterable {
-    /// NONE mode (0) - No automatic vacuuming (default).
+    /// Disables automatic vacuuming (default).
     ///
-    /// Database file never shrinks. Use manual VACUUM to reclaim space.
+    /// Database file never shrinks. Use ``Database/vacuum()`` manually to reclaim space.
     case none = 0
 
-    /// FULL mode (1) - Automatically reclaim freed space after transactions.
+    /// Reclaims freed space automatically after each transaction.
     ///
-    /// Database file automatically shrinks when data is deleted. Adds overhead
-    /// to delete operations.
+    /// Database file shrinks when data is deleted, at the cost of additional overhead on delete operations.
     case full = 1
 
-    /// INCREMENTAL mode (2) - Allows manual incremental vacuum operations.
+    /// Marks freed pages for later manual reclamation.
     ///
-    /// Free pages are marked but not automatically removed. Use
-    /// ``incrementalVacuum(pages:)`` to reclaim space in controlled chunks.
+    /// Free pages accumulate but aren't returned to the filesystem until ``Database/incrementalVacuum(pages:)``
+    /// runs, giving you control over when reclamation work happens.
     case incremental = 2
   }
 
-  /// Gets the current auto-vacuum mode.
-  ///
-  /// - Returns: The current ``AutoVacuumMode``.
-  /// - Throws: `LoomError` if the PRAGMA query fails or returns an unexpected value.
+  /// Returns the current auto-vacuum mode.
   public func getAutoVacuum() throws -> AutoVacuumMode {
     let result = try query("PRAGMA auto_vacuum") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
@@ -445,20 +389,13 @@ extension Database {
 
   /// Sets the auto-vacuum mode.
   ///
-  /// **Important**: Changing auto_vacuum mode requires running VACUUM after setting.
-  /// The change only takes effect after the VACUUM completes. This cannot be changed
-  /// for attached databases or when transactions are active.
-  ///
-  /// ## Example
+  /// Changing this mode requires a subsequent `VACUUM` to take effect. It cannot be applied to attached
+  /// databases or while a transaction is active.
   ///
   /// ```swift
   /// try db.setAutoVacuum(.incremental)
-  /// // Must vacuum for change to take effect
-  /// try db.vacuum()
+  /// try db.vacuum()  // required for the change to take effect
   /// ```
-  ///
-  /// - Parameter mode: The ``AutoVacuumMode`` to set.
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   public func setAutoVacuum(_ mode: AutoVacuumMode) throws {
     try exec("PRAGMA auto_vacuum = \(mode.rawValue, mode: .raw)")
   }
@@ -467,34 +404,29 @@ extension Database {
 // MARK: - Maintenance Operations
 
 extension Database {
-  /// Performs an integrity check on the database.
+  /// Runs a comprehensive integrity check on the database.
   ///
-  /// This runs a comprehensive check of the database structure, verifying that
-  /// all B-tree pages are correctly structured and all content can be read.
-  ///
-  /// ## Example
+  /// Verifies that all B-tree pages are correctly structured and that all content can be read. Returns an
+  /// empty array when the database is healthy.
   ///
   /// ```swift
   /// let issues = try db.integrityCheck()
   /// if issues.isEmpty {
   ///   print("Database integrity OK")
   /// } else {
-  ///   print("Database issues found:")
   ///   for issue in issues {
   ///     print("  - \(issue)")
   ///   }
   /// }
   /// ```
   ///
-  /// - Parameter maxErrors: Maximum number of errors to return (default: 100).
-  /// - Returns: An array of error messages. Empty array means database is OK.
-  /// - Throws: `LoomError` if the PRAGMA query fails.
+  /// - Parameter maxErrors: Maximum number of errors to return before stopping.
+  /// - Returns: Error messages found, or an empty array if the database is healthy.
   public func integrityCheck(maxErrors: Int32 = 100) throws -> [String] {
     let results = try query("PRAGMA integrity_check(\(maxErrors, mode: .raw))") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
-    // "ok" means no errors found
     if results.count == 1 && results[0].lowercased() == "ok" {
       return []
     }
@@ -502,77 +434,55 @@ extension Database {
     return results
   }
 
-  /// Attempts to optimize the database.
+  /// Asks SQLite to opportunistically optimize the database.
   ///
-  /// This causes SQLite to analyze the database and potentially restructure internal
-  /// data to improve query performance. It's safe to run periodically and will only
-  /// make changes when they would be beneficial.
-  ///
-  /// ## Example
+  /// Analyzes the database and may restructure internal data to improve query performance. Safe to run
+  /// periodically — SQLite only acts when work would be beneficial.
   ///
   /// ```swift
-  /// // Run optimization (typically at app shutdown or during maintenance)
+  /// // Run during scheduled maintenance or at app shutdown.
   /// try db.optimize()
   /// ```
-  ///
-  /// - Throws: `LoomError` if the PRAGMA statement fails.
   public func optimize() throws {
     try exec("PRAGMA optimize")
   }
 
-  /// Performs a full vacuum operation on the database.
+  /// Performs a full `VACUUM` of the database.
   ///
-  /// VACUUM rebuilds the database file, repacking it into a minimal amount of disk space.
-  /// This operation:
-  /// - Reclaims freed space from deleted data
-  /// - Defragments the database for better performance
-  /// - Resets auto-increment counters
-  /// - Rebuilds indexes
+  /// Rebuilds the database file, repacking it into a minimal amount of disk space. This:
+  /// - reclaims freed space from deleted data,
+  /// - defragments the database for better locality,
+  /// - resets `AUTOINCREMENT` counters,
+  /// - rebuilds indexes.
   ///
-  /// **Important**: VACUUM requires exclusive access to the database and temporarily uses
-  /// up to twice the database size in disk space. It cannot be run inside a transaction
-  /// and cannot be used on attached databases.
-  ///
-  /// ## Example
+  /// Requires exclusive access and temporarily uses up to twice the database size on disk. Cannot run inside
+  /// a transaction or against attached databases.
   ///
   /// ```swift
-  /// // Reclaim space after deleting large amounts of data
   /// try db.exec("DELETE FROM old_logs WHERE created_at < ?", binding: cutoffDate)
   /// try db.vacuum()
   /// ```
   ///
   /// ## Performance Considerations
   ///
-  /// - VACUUM can be slow on large databases (gigabytes)
-  /// - Consider using ``AutoVacuumMode/incremental`` mode with ``incrementalVacuum(pages:)``
-  ///   for better control over when space is reclaimed
-  /// - For databases in WAL mode, consider ``walCheckpoint(mode:schema:)`` instead
-  ///
-  /// - Throws: `LoomError` if the vacuum operation fails or if called within a transaction.
+  /// - `VACUUM` can take a long time on multi-gigabyte databases.
+  /// - Prefer ``AutoVacuumMode/incremental`` with ``incrementalVacuum(pages:)`` for finer-grained control.
+  /// - For WAL-mode databases, ``walCheckpoint(mode:schema:)`` may be the better tool.
   public func vacuum() throws {
     try exec("VACUUM")
   }
 
-  /// Performs an incremental vacuum operation.
-  ///
-  /// Only works when the database is in ``AutoVacuumMode/incremental`` mode.
-  /// Reclaims up to the specified number of free pages, shrinking the database file.
-  ///
-  /// ## Example
+  /// Reclaims pages from the free list when in ``AutoVacuumMode/incremental`` mode.
   ///
   /// ```swift
-  /// // Ensure database is in incremental vacuum mode first
   /// try db.setAutoVacuum(.incremental)
-  /// try db.vacuum()  // Apply the setting
+  /// try db.vacuum()  // apply the new mode
   ///
-  /// // Later, reclaim freed space
+  /// // Later, in a maintenance window, reclaim freed pages a chunk at a time.
   /// try db.incrementalVacuum(pages: 100)
   /// ```
   ///
-  /// - Parameter pages: Maximum number of pages to remove from the free list.
-  ///                    If `nil`, removes all free pages.
-  /// - Throws: `LoomError` if the database is not in incremental vacuum mode or
-  ///           if the operation fails.
+  /// - Parameter pages: Maximum number of pages to remove. Pass `nil` to remove all free pages.
   public func incrementalVacuum(pages: Int32? = nil) throws {
     let statement: SQLStatement =
       if let pages {
@@ -587,64 +497,57 @@ extension Database {
 // MARK: - WAL Checkpoint
 
 extension Database {
-  /// WAL checkpoint mode determines how aggressively to checkpoint.
+  /// WAL checkpoint mode determining how aggressively to checkpoint.
   public enum WALCheckpointMode: String, Sendable, CaseIterable {
-    /// PASSIVE mode - Checkpoint as much as possible without blocking.
+    /// Checkpoints as much as possible without blocking.
     ///
-    /// Does not wait for readers or writers. Checkpoints whatever can be
-    /// checkpointed immediately. Recommended for background checkpointing.
+    /// Doesn't wait for readers or writers — checkpoints whatever is immediately available. Recommended for
+    /// background checkpointing.
     case passive = "PASSIVE"
 
-    /// FULL mode - Block until all pages are checkpointed.
+    /// Blocks until all pages are checkpointed.
     ///
-    /// Waits for readers to finish, then checkpoints entire WAL. May block
-    /// for some time if there are active readers.
+    /// Waits for active readers to finish, then checkpoints the entire WAL. May block for some time under
+    /// concurrent read load.
     case full = "FULL"
 
-    /// RESTART mode - Full checkpoint then restart WAL.
+    /// Performs a full checkpoint then restarts the WAL.
     ///
-    /// Like FULL, but also resets the WAL file to the beginning.
+    /// Like `.full`, but additionally resets the WAL file to the beginning.
     case restart = "RESTART"
 
-    /// TRUNCATE mode - Full checkpoint then truncate WAL to zero bytes.
+    /// Performs a full checkpoint then truncates the WAL to zero bytes.
     ///
-    /// Most aggressive checkpointing. Ensures WAL file is removed/emptied.
+    /// Most aggressive option — guarantees the WAL file is emptied.
     case truncate = "TRUNCATE"
   }
 
-  /// Information about a WAL checkpoint operation.
+  /// Result of a WAL checkpoint operation.
   public struct WALCheckpointInfo: Sendable {
-    /// Whether the checkpoint was busy (unable to complete).
+    /// Whether the checkpoint was unable to complete due to busy readers/writers.
     public let busy: Bool
 
-    /// Number of modified pages in the WAL before checkpoint.
+    /// Number of modified pages in the WAL before the checkpoint.
     public let logPages: Int32
 
-    /// Number of pages checkpointed.
+    /// Number of pages successfully checkpointed.
     public let checkpointedPages: Int32
   }
 
-  /// Performs a WAL checkpoint operation.
+  /// Performs a WAL checkpoint, transferring pages from the WAL back into the main database file.
   ///
-  /// Only applicable when the database is in ``JournalMode/wal`` mode. This operation
-  /// transfers data from the WAL file back into the main database file.
-  ///
-  /// ## Example
+  /// Only meaningful when the database is in ``JournalMode/wal`` mode.
   ///
   /// ```swift
-  /// // Ensure database is in WAL mode
   /// try db.setJournalMode(.wal)
   ///
-  /// // Perform a passive checkpoint (non-blocking)
   /// let info = try db.walCheckpoint(mode: .passive)
   /// print("Checkpointed \(info.checkpointedPages) of \(info.logPages) pages")
   /// ```
   ///
   /// - Parameters:
-  ///   - mode: The ``WALCheckpointMode`` to use (default: `.passive`).
-  ///   - schema: The schema name to checkpoint (default: `"main"`).
-  /// - Returns: ``WALCheckpointInfo`` with details about the checkpoint operation.
-  /// - Throws: `LoomError` if the database is not in WAL mode or if the operation fails.
+  ///   - mode: Checkpoint mode controlling blocking behavior and WAL truncation.
+  ///   - schema: Schema name to checkpoint (e.g. `"main"`, `"temp"`, or an attached database name).
   public func walCheckpoint(
     mode: WALCheckpointMode = .passive,
     schema: String = "main"
@@ -674,7 +577,7 @@ extension Database {
 // MARK: - Schema Introspection
 
 extension Database {
-  /// Information about a table column.
+  /// Information about a single column in a table.
   public struct ColumnInfo: Sendable {
     /// Column index (0-based).
     public let cid: Int32
@@ -682,33 +585,27 @@ extension Database {
     /// Column name.
     public let name: String
 
-    /// Column type (e.g., "INTEGER", "TEXT", "REAL", "BLOB").
+    /// Declared column type (e.g. `"INTEGER"`, `"TEXT"`, `"REAL"`, `"BLOB"`).
     public let type: String
 
-    /// Whether the column can be NULL.
+    /// Whether the column has a `NOT NULL` constraint.
     public let notNull: Bool
 
-    /// Default value for the column, if any.
+    /// Default value expression for the column, if any.
     public let defaultValue: String?
 
-    /// Whether this column is part of the primary key (1-based position, or 0 if not).
+    /// Position within the primary key (1-based), or `0` if not part of the primary key.
     public let pk: Int32
   }
 
-  /// Gets information about the columns in a table.
-  ///
-  /// ## Example
+  /// Returns the column metadata for a table.
   ///
   /// ```swift
-  /// let columns = try db.tableInfo("users")
-  /// for column in columns {
-  ///   print("\(column.name): \(column.type)" + (column.notNull ? " NOT NULL" : ""))
+  /// for column in try db.tableInfo("users") {
+  ///   let nullability = column.notNull ? " NOT NULL" : ""
+  ///   print("\(column.name): \(column.type)\(nullability)")
   /// }
   /// ```
-  ///
-  /// - Parameter tableName: The name of the table to inspect.
-  /// - Returns: An array of ``ColumnInfo`` describing each column.
-  /// - Throws: `LoomError` if the table doesn't exist or the query fails.
   public func tableInfo(_ tableName: String) throws -> [ColumnInfo] {
     try query("PRAGMA table_info(\(tableName, mode: .raw))") { stmt, _ in
       ColumnInfo(
@@ -722,41 +619,36 @@ extension Database {
     }
   }
 
-  /// Information about a table in the database.
+  /// Information about a table or view in the database.
   public struct TableInfo: Sendable {
-    /// The schema containing the table (e.g., "main", "temp").
+    /// Schema containing the table (e.g. `"main"`, `"temp"`).
     public let schema: String
 
-    /// The table name.
+    /// Table name.
     public let name: String
 
-    /// The type (usually "table" or "view").
+    /// Object type — typically `"table"` or `"view"`.
     public let type: String
 
     /// Number of columns in the table.
     public let ncol: Int32
 
-    /// Whether this is a WITHOUT ROWID table.
+    /// Whether this is a `WITHOUT ROWID` table.
     public let withoutRowid: Bool
 
-    /// Whether this table is strict.
+    /// Whether this is a `STRICT` table (column types are enforced).
     public let strict: Bool
   }
 
-  /// Lists all tables in the database.
-  ///
-  /// ## Example
+  /// Lists all tables and views in a schema.
   ///
   /// ```swift
-  /// let tables = try db.tableList()
-  /// for table in tables {
-  ///   print("Table: \(table.name) (\(table.ncol) columns)")
+  /// for table in try db.tableList() where table.type == "table" {
+  ///   print("\(table.name): \(table.ncol) columns")
   /// }
   /// ```
   ///
-  /// - Parameter schema: The schema to list tables from (default: `"main"`).
-  /// - Returns: An array of ``TableInfo`` describing each table.
-  /// - Throws: `LoomError` if the query fails.
+  /// - Parameter schema: Schema to list tables from (e.g. `"main"`, `"temp"`, or an attached database name).
   public func tableList(schema: String = "main") throws -> [TableInfo] {
     try query("PRAGMA \(schema, mode: .raw).table_list") { stmt, _ in
       TableInfo(
@@ -770,7 +662,7 @@ extension Database {
     }
   }
 
-  /// Information about an index.
+  /// Information about an index attached to a table.
   public struct IndexListInfo: Sendable {
     /// Index sequence number.
     public let seq: Int32
@@ -781,27 +673,21 @@ extension Database {
     /// Whether this is a unique index.
     public let unique: Bool
 
-    /// How the index was created ("c" = CREATE INDEX, "u" = UNIQUE, "pk" = PRIMARY KEY).
+    /// How the index was created — `"c"` (CREATE INDEX), `"u"` (UNIQUE), or `"pk"` (PRIMARY KEY).
     public let origin: String
 
-    /// Whether this is a partial index.
+    /// Whether this is a partial index (defined with a `WHERE` clause).
     public let partial: Bool
   }
 
-  /// Lists all indexes on a table.
-  ///
-  /// ## Example
+  /// Lists all indexes attached to a table.
   ///
   /// ```swift
-  /// let indexes = try db.indexList("users")
-  /// for index in indexes {
-  ///   print("Index: \(index.name)" + (index.unique ? " (UNIQUE)" : ""))
+  /// for index in try db.indexList("users") {
+  ///   let kind = index.unique ? " (UNIQUE)" : ""
+  ///   print("\(index.name)\(kind)")
   /// }
   /// ```
-  ///
-  /// - Parameter tableName: The name of the table to list indexes for.
-  /// - Returns: An array of ``IndexListInfo`` describing each index.
-  /// - Throws: `LoomError` if the table doesn't exist or the query fails.
   public func indexList(_ tableName: String) throws -> [IndexListInfo] {
     try query("PRAGMA index_list(\(tableName, mode: .raw))") { stmt, _ in
       IndexListInfo(
@@ -814,43 +700,36 @@ extension Database {
     }
   }
 
-  /// Information about a column in an index.
+  /// Information about a single column within an index.
   public struct IndexColumnInfo: Sendable {
-    /// Rank of column within index (0-based).
+    /// Rank of the column within the index (0-based).
     public let seqno: Int32
 
-    /// Rank of column within table (-1 for rowid, -2 for expression).
+    /// Rank of the column within the table — `-1` for rowid, `-2` for an expression.
     public let cid: Int32
 
-    /// Column name (nil for expressions).
+    /// Column name, or `nil` for an indexed expression.
     public let name: String?
 
-    /// Sort order (0 = ASC, 1 = DESC).
+    /// Sort order — `false` for `ASC`, `true` for `DESC`.
     public let desc: Bool
 
-    /// Collation name (e.g., "BINARY", "NOCASE").
+    /// Collation name (e.g. `"BINARY"`, `"NOCASE"`).
     public let coll: String
 
-    /// Whether column is a key (part of index, not just INCLUDE).
+    /// Whether the column is part of the index key as opposed to an `INCLUDE`d column.
     public let key: Bool
   }
 
-  /// Gets information about the columns in an index.
-  ///
-  /// ## Example
+  /// Returns the column composition of an index.
   ///
   /// ```swift
-  /// let columns = try db.indexInfo("idx_users_email")
-  /// for column in columns {
+  /// for column in try db.indexInfo("idx_users_email") {
   ///   if let name = column.name {
-  ///     print("\(name) \(column.desc ? "DESC" : "ASC")")
+  ///     print("\(name) \(column.desc ? "DESC" : "ASC") COLLATE \(column.coll)")
   ///   }
   /// }
   /// ```
-  ///
-  /// - Parameter indexName: The name of the index to inspect.
-  /// - Returns: An array of ``IndexColumnInfo`` describing each column in the index.
-  /// - Throws: `LoomError` if the index doesn't exist or the query fails.
   public func indexInfo(_ indexName: String) throws -> [IndexColumnInfo] {
     try query("PRAGMA index_xinfo(\(indexName, mode: .raw))") { stmt, _ in
       IndexColumnInfo(
@@ -869,7 +748,7 @@ extension Database {
     /// Foreign key sequence number.
     public let id: Int32
 
-    /// Sequence number within the foreign key.
+    /// Sequence number of this column within the foreign key.
     public let seq: Int32
 
     /// Referenced table name.
@@ -881,32 +760,25 @@ extension Database {
     /// Column name in the referenced table.
     public let to: String
 
-    /// Action on UPDATE (e.g., "CASCADE", "SET NULL", "RESTRICT").
+    /// Action on `UPDATE` (e.g. `"CASCADE"`, `"SET NULL"`, `"RESTRICT"`).
     public let onUpdate: String
 
-    /// Action on DELETE (e.g., "CASCADE", "SET NULL", "RESTRICT").
+    /// Action on `DELETE` (e.g. `"CASCADE"`, `"SET NULL"`, `"RESTRICT"`).
     public let onDelete: String
 
-    /// Match type (usually "NONE").
+    /// Match type — usually `"NONE"`.
     public let match: String
   }
 
-  /// Lists all foreign key constraints on a table.
-  ///
-  /// ## Example
+  /// Lists all foreign key constraints declared on a table.
   ///
   /// ```swift
-  /// let foreignKeys = try db.foreignKeyList("posts")
-  /// for fk in foreignKeys {
+  /// for fk in try db.foreignKeyList("posts") {
   ///   print("\(fk.from) -> \(fk.table).\(fk.to)")
   ///   print("  ON UPDATE \(fk.onUpdate)")
   ///   print("  ON DELETE \(fk.onDelete)")
   /// }
   /// ```
-  ///
-  /// - Parameter tableName: The name of the table to list foreign keys for.
-  /// - Returns: An array of ``ForeignKeyInfo`` describing each foreign key constraint.
-  /// - Throws: `LoomError` if the table doesn't exist or the query fails.
   public func foreignKeyList(_ tableName: String) throws -> [ForeignKeyInfo] {
     try query("PRAGMA foreign_key_list(\(tableName, mode: .raw))") { stmt, _ in
       ForeignKeyInfo(

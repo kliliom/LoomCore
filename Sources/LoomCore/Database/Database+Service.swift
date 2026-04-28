@@ -2,91 +2,82 @@ import Foundation
 import SQLite3
 
 extension Database {
-  /// Base class for database services that respond to transaction lifecycle events.
+  /// Base class for cross-cutting database services that hook into transaction lifecycle events.
   ///
-  /// Services provide a modular way to add cross-cutting functionality to database operations,
-  /// such as caching, change tracking, or validation. They receive callbacks at key points
-  /// in the transaction lifecycle, allowing them to maintain state or perform side effects.
+  /// Services receive callbacks before a transaction begins, after a successful commit, and after
+  /// a rollback, plus a final ``shutdown()`` when removed from the database. Each subclass is a
+  /// singleton per ``Database`` — repeated calls to ``Database/getService(_:)`` for the same type
+  /// return the same instance.
   ///
-  /// Subclass this class to create custom services that need to coordinate with database
-  /// transactions. Services are singleton per type within a database instance - calling
-  /// ``Database/getService(_:)`` with the same type always returns the same instance.
+  /// ```swift
+  /// final class ChangeTracker: Database.Service {
+  ///   private(set) var pendingChanges: [TableChange] = []
+  ///   private var snapshot: [TableChange] = []
   ///
-  /// The following example demonstrates a simple logging service:
+  ///   override func transactionWillBegin() {
+  ///     snapshot = pendingChanges
+  ///   }
   ///
-  ///     class LoggingService: Database.Service {
-  ///       override func transactionDidCommit() {
-  ///         print("Transaction committed successfully")
-  ///       }
-  ///     }
+  ///   override func transactionDidCommit() {
+  ///     NotificationCenter.default.post(name: .databaseDidChange, object: pendingChanges)
+  ///     pendingChanges.removeAll()
+  ///   }
   ///
-  ///     let logger = db.getService(LoggingService.self)
+  ///   override func transactionDidRollback() {
+  ///     pendingChanges = snapshot
+  ///   }
+  /// }
   ///
-  /// - Important: All service methods are called on ``DatabaseActor``, ensuring thread-safe
-  ///              access to the database and service state.
+  /// let tracker = db.getService(ChangeTracker.self)
+  /// ```
+  ///
+  /// All callbacks run on ``DatabaseActor``, so service state is serialized with database access
+  /// without additional locking.
   @DatabaseActor
   open class Service {
-    /// The database instance managing this service.
+    /// Owning database, weakly held to avoid a retain cycle with the service registry.
     ///
-    /// This is a weak reference to prevent retain cycles. The database owns the service,
-    /// so this reference becomes `nil` when the database is deallocated.
+    /// Becomes `nil` once the ``Database`` is deallocated. Lifecycle callbacks other than
+    /// ``shutdown()`` are guaranteed to fire while this reference is still alive.
     public private(set) weak var database: Database?
 
-    /// Creates a new service instance attached to the specified database.
-    ///
-    /// - Parameter database: The database instance that will manage this service's lifecycle.
+    /// Creates a service bound to `database` and registered as its singleton for this type.
     public required init(database: Database) {
       self.database = database
     }
 
-    /// Called immediately before a transaction begins.
+    /// Invoked before each transaction body executes.
     ///
-    /// Override this method to perform setup or validation before transaction execution.
-    /// For example, you might initialize temporary state or validate preconditions.
-    ///
-    /// - Note: The ``database`` property is guaranteed to be non-nil when this is called.
+    /// Override to capture preconditions or seed per-transaction state that
+    /// ``transactionDidRollback()`` can later restore.
     open func transactionWillBegin() {}
 
-    /// Called immediately after a transaction commits successfully.
+    /// Invoked after a transaction commits successfully.
     ///
-    /// Override this method to perform post-commit actions like cache updates, event
-    /// notifications, or persistence of transaction metadata. This is only called if
-    /// the transaction commits - it won't be called if the transaction rolls back.
-    ///
-    /// - Note: The ``database`` property is guaranteed to be non-nil when this is called.
+    /// Override to publish accumulated changes, refresh caches, or notify listeners. Not called
+    /// when the transaction rolls back.
     open func transactionDidCommit() {}
 
-    /// Called immediately after a transaction rolls back.
+    /// Invoked after a transaction rolls back, whether explicitly or because the body threw.
     ///
-    /// Override this method to clean up state or revert changes that were made during
-    /// the failed transaction. This is called for both explicit rollbacks and rollbacks
-    /// triggered by errors.
-    ///
-    /// - Note: The ``database`` property is guaranteed to be non-nil when this is called.
+    /// Override to discard tentative state captured during ``transactionWillBegin()``.
     open func transactionDidRollback() {}
 
-    /// Called when the service is being shut down and removed from the database.
+    /// Invoked once when ``Database/shutdownService(_:)`` removes the service.
     ///
-    /// Override this method to perform cleanup, release resources, or persist final state.
-    /// This is called when ``Database/shutdownService(_:)`` is invoked.
-    ///
-    /// - Note: The ``database`` property may be `nil` if the database has already been closed.
+    /// ``database`` may already be `nil` if the owning ``Database`` has been deallocated, so
+    /// avoid issuing further queries from this method.
     open func shutdown() {}
   }
 
-  /// Retrieves or creates a singleton instance of the specified service type.
+  /// Returns the singleton instance of `type` for this database, creating it on first access.
   ///
-  /// Services follow a singleton pattern per type within each database instance. The first
-  /// call to this method for a given service type creates and registers the service. Subsequent
-  /// calls return the same instance.
+  /// ```swift
+  /// final class QueryCache: Database.Service { /* ... */ }
   ///
-  /// The following example demonstrates service retrieval:
-  ///
-  ///     let cache = db.getService(CacheService.self)
-  ///     let sameCache = db.getService(CacheService.self)  // Returns the same instance
-  ///
-  /// - Parameter type: The service class type to retrieve or instantiate.
-  /// - Returns: The singleton service instance for the specified type.
+  /// let cache = db.getService(QueryCache.self)
+  /// let same = db.getService(QueryCache.self)  // identical instance
+  /// ```
   public func getService<T: Service>(_ type: T.Type) -> T {
     guard let service = services[ObjectIdentifier(type)] as? T else {
       let service = T(database: self)
@@ -97,13 +88,9 @@ extension Database {
     return service
   }
 
-  /// Shuts down and removes the specified service from the database.
+  /// Removes `type` from the database after invoking its ``Service/shutdown()`` callback.
   ///
-  /// This method calls the service's ``Service/shutdown()`` method and then removes it
-  /// from the service registry. After shutdown, calling ``getService(_:)`` with the same
-  /// type will create a fresh service instance.
-  ///
-  /// - Parameter type: The service class type to shut down.
+  /// A subsequent call to ``getService(_:)`` for the same type allocates a fresh instance.
   public func shutdownService(_ type: Service.Type) {
     let removed = services.removeValue(forKey: ObjectIdentifier(type))
     removed?.shutdown()
