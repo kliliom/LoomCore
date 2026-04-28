@@ -46,7 +46,7 @@ struct IfNullExpressionTests {
   func testIfNullWithNonNullValues() throws {
     try run(
       price.ifNull(0.0),
-      expectedExpression: "IFNULL( price , ? )",
+      expectedExpression: "IFNULL( \"price\" , ? )",
       expectedValues: [10.0, 20.0, 0.0, 0.0]
     )
   }

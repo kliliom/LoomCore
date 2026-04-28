@@ -105,7 +105,7 @@ struct InExpressionTests {
 
     var builder = SQLBuilder()
     expr.append(to: &builder)
-    #expect(builder.makeStatement().sql == "( category_id IN (NULL) AND 0 )")
+    #expect(builder.makeStatement().sql == "( \"category_id\" IN (NULL) AND 0 )")
 
     let result = try db.query(
       "SELECT category_id FROM products WHERE \(expr)",
@@ -122,7 +122,7 @@ struct InExpressionTests {
 
     var builder = SQLBuilder()
     expr.append(to: &builder)
-    #expect(builder.makeStatement().sql == "( category_id NOT IN (NULL) OR 1 )")
+    #expect(builder.makeStatement().sql == "( \"category_id\" NOT IN (NULL) OR 1 )")
 
     let result = try db.query(
       "SELECT category_id FROM products ORDER BY category_id",

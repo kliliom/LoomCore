@@ -48,7 +48,7 @@ struct ExpressionLogicalTests {
   func testLogicalANDSQL() throws {
     try run(
       (age > 25) && (active == 1),
-      expectedExpression: "( ( age > ? ) AND ( active = ? ) )",
+      expectedExpression: "( ( \"age\" > ? ) AND ( \"active\" = ? ) )",
       expectedValues: [false, false, false, true]
     )
   }
@@ -57,7 +57,7 @@ struct ExpressionLogicalTests {
   func testLogicalORSQL() throws {
     try run(
       (age < 25) || (active == 0),
-      expectedExpression: "( ( age < ? ) OR ( active = ? ) )",
+      expectedExpression: "( ( \"age\" < ? ) OR ( \"active\" = ? ) )",
       expectedValues: [false, true, true, false]
     )
   }
@@ -66,7 +66,7 @@ struct ExpressionLogicalTests {
   func testLogicalNOTSQL() throws {
     try run(
       !(active == 1),
-      expectedExpression: "( NOT ( active = ? ) )",
+      expectedExpression: "( NOT ( \"active\" = ? ) )",
       expectedValues: [false, true, false, false]
     )
   }

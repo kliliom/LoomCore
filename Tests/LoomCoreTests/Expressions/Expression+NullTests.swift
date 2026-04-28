@@ -46,7 +46,7 @@ struct ExpressionNullTests {
   func testIsNull() throws {
     try run(
       price.isNull(),
-      expectedExpression: "( price IS NULL )",
+      expectedExpression: "( \"price\" IS NULL )",
       expectedValues: [false, false, true, true]
     )
   }
@@ -55,7 +55,7 @@ struct ExpressionNullTests {
   func testIsNotNull() throws {
     try run(
       price.isNotNull(),
-      expectedExpression: "( price IS NOT NULL )",
+      expectedExpression: "( \"price\" IS NOT NULL )",
       expectedValues: [true, true, false, false]
     )
   }

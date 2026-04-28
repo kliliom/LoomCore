@@ -48,7 +48,7 @@ struct ExpressionComparisonTests {
   func testStringEqualitySQL() throws {
     try run(
       name == "Alice",
-      expectedExpression: "( name = ? )",
+      expectedExpression: "( \"name\" = ? )",
       expectedValues: [true, false, false, false]
     )
   }
@@ -57,7 +57,7 @@ struct ExpressionComparisonTests {
   func testIntegerEqualitySQL() throws {
     try run(
       age == 25,
-      expectedExpression: "( age = ? )",
+      expectedExpression: "( \"age\" = ? )",
       expectedValues: [true, false, false, true]
     )
   }
@@ -66,7 +66,7 @@ struct ExpressionComparisonTests {
   func testRealEqualitySQL() throws {
     try run(
       score == 85.5,
-      expectedExpression: "( score = ? )",
+      expectedExpression: "( \"score\" = ? )",
       expectedValues: [true, false, false, false]
     )
   }
@@ -75,7 +75,7 @@ struct ExpressionComparisonTests {
   func testStringInequalitySQL() throws {
     try run(
       name != "Alice",
-      expectedExpression: "( name <> ? )",
+      expectedExpression: "( \"name\" <> ? )",
       expectedValues: [false, true, true, true]
     )
   }
@@ -84,7 +84,7 @@ struct ExpressionComparisonTests {
   func testIntegerInequalitySQL() throws {
     try run(
       age != 25,
-      expectedExpression: "( age <> ? )",
+      expectedExpression: "( \"age\" <> ? )",
       expectedValues: [false, true, true, false]
     )
   }
@@ -93,7 +93,7 @@ struct ExpressionComparisonTests {
   func testRealInequalitySQL() throws {
     try run(
       score != 85.5,
-      expectedExpression: "( score <> ? )",
+      expectedExpression: "( \"score\" <> ? )",
       expectedValues: [false, true, true, true]
     )
   }
@@ -102,7 +102,7 @@ struct ExpressionComparisonTests {
   func testStringLessThanSQL() throws {
     try run(
       name < "Charlie",
-      expectedExpression: "( name < ? )",
+      expectedExpression: "( \"name\" < ? )",
       expectedValues: [true, true, false, false]
     )
   }
@@ -111,7 +111,7 @@ struct ExpressionComparisonTests {
   func testIntegerLessThanSQL() throws {
     try run(
       age < 25,
-      expectedExpression: "( age < ? )",
+      expectedExpression: "( \"age\" < ? )",
       expectedValues: [false, false, true, false]
     )
   }
@@ -120,7 +120,7 @@ struct ExpressionComparisonTests {
   func testRealLessThanSQL() throws {
     try run(
       score < 85.5,
-      expectedExpression: "( score < ? )",
+      expectedExpression: "( \"score\" < ? )",
       expectedValues: [false, false, true, false]
     )
   }
@@ -129,7 +129,7 @@ struct ExpressionComparisonTests {
   func testStringLessThanEqualSQL() throws {
     try run(
       name <= "Charlie",
-      expectedExpression: "( name <= ? )",
+      expectedExpression: "( \"name\" <= ? )",
       expectedValues: [true, true, true, false]
     )
   }
@@ -138,7 +138,7 @@ struct ExpressionComparisonTests {
   func testIntegerLessThanEqualSQL() throws {
     try run(
       age <= 25,
-      expectedExpression: "( age <= ? )",
+      expectedExpression: "( \"age\" <= ? )",
       expectedValues: [true, false, true, true]
     )
   }
@@ -147,7 +147,7 @@ struct ExpressionComparisonTests {
   func testRealLessThanEqualSQL() throws {
     try run(
       score <= 85.5,
-      expectedExpression: "( score <= ? )",
+      expectedExpression: "( \"score\" <= ? )",
       expectedValues: [true, false, true, false]
     )
   }
@@ -156,7 +156,7 @@ struct ExpressionComparisonTests {
   func testStringGreaterThanSQL() throws {
     try run(
       name > "Charlie",
-      expectedExpression: "( name > ? )",
+      expectedExpression: "( \"name\" > ? )",
       expectedValues: [false, false, false, true]
     )
   }
@@ -165,7 +165,7 @@ struct ExpressionComparisonTests {
   func testIntegerGreaterThanSQL() throws {
     try run(
       age > 25,
-      expectedExpression: "( age > ? )",
+      expectedExpression: "( \"age\" > ? )",
       expectedValues: [false, true, false, false]
     )
   }
@@ -174,7 +174,7 @@ struct ExpressionComparisonTests {
   func testRealGreaterThanSQL() throws {
     try run(
       score > 85.5,
-      expectedExpression: "( score > ? )",
+      expectedExpression: "( \"score\" > ? )",
       expectedValues: [false, true, false, true]
     )
   }
@@ -183,7 +183,7 @@ struct ExpressionComparisonTests {
   func testStringGreaterThanEqualSQL() throws {
     try run(
       name >= "Charlie",
-      expectedExpression: "( name >= ? )",
+      expectedExpression: "( \"name\" >= ? )",
       expectedValues: [false, false, true, true]
     )
   }
@@ -192,7 +192,7 @@ struct ExpressionComparisonTests {
   func testIntegerGreaterThanEqualSQL() throws {
     try run(
       age >= 25,
-      expectedExpression: "( age >= ? )",
+      expectedExpression: "( \"age\" >= ? )",
       expectedValues: [true, true, false, true]
     )
   }
@@ -201,7 +201,7 @@ struct ExpressionComparisonTests {
   func testRealGreaterThanEqualSQL() throws {
     try run(
       score >= 85.5,
-      expectedExpression: "( score >= ? )",
+      expectedExpression: "( \"score\" >= ? )",
       expectedValues: [true, true, false, true]
     )
   }

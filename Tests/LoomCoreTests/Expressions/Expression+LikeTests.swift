@@ -47,7 +47,7 @@ struct ExpressionStringTests {
   func testLikeWithWildcard() throws {
     try run(
       username.like("%user%"),
-      expectedExpression: "( username LIKE ? )",
+      expectedExpression: "( \"username\" LIKE ? )",
       expectedValues: [false, true, true, false]
     )
   }
@@ -56,7 +56,7 @@ struct ExpressionStringTests {
   func testLikeWithSingleCharacterWildcard() throws {
     try run(
       username.like("u_er%"),
-      expectedExpression: "( username LIKE ? )",
+      expectedExpression: "( \"username\" LIKE ? )",
       expectedValues: [false, true, true, false]
     )
   }
@@ -65,7 +65,7 @@ struct ExpressionStringTests {
   func testLikeWithNoWildcard() throws {
     try run(
       username.like("admin"),
-      expectedExpression: "( username LIKE ? )",
+      expectedExpression: "( \"username\" LIKE ? )",
       expectedValues: [true, false, false, false]
     )
   }
@@ -74,7 +74,7 @@ struct ExpressionStringTests {
   func testLikeWithSpecialCharacters() throws {
     try run(
       email.like("%@example.com"),
-      expectedExpression: "( email LIKE ? )",
+      expectedExpression: "( \"email\" LIKE ? )",
       expectedValues: [true, true, false, true]
     )
   }
@@ -83,7 +83,7 @@ struct ExpressionStringTests {
   func testLikeWithEscapeCharacter() throws {
     try run(
       username.like("user\\_%", escape: "\\"),
-      expectedExpression: "( username LIKE ? ESCAPE '\\' )",
+      expectedExpression: "( \"username\" LIKE ? ESCAPE '\\' )",
       expectedValues: [false, true, false, false]
     )
   }
@@ -92,7 +92,7 @@ struct ExpressionStringTests {
   func testNotLikeWithWildcard() throws {
     try run(
       username.notLike("%user%"),
-      expectedExpression: "( username NOT LIKE ? )",
+      expectedExpression: "( \"username\" NOT LIKE ? )",
       expectedValues: [true, false, false, true]
     )
   }
@@ -101,7 +101,7 @@ struct ExpressionStringTests {
   func testNotLikeWithSingleCharacterWildcard() throws {
     try run(
       username.notLike("u_er%"),
-      expectedExpression: "( username NOT LIKE ? )",
+      expectedExpression: "( \"username\" NOT LIKE ? )",
       expectedValues: [true, false, false, true]
     )
   }
@@ -110,7 +110,7 @@ struct ExpressionStringTests {
   func testNotLikeWithNoWildcard() throws {
     try run(
       username.notLike("admin"),
-      expectedExpression: "( username NOT LIKE ? )",
+      expectedExpression: "( \"username\" NOT LIKE ? )",
       expectedValues: [false, true, true, true]
     )
   }
@@ -119,7 +119,7 @@ struct ExpressionStringTests {
   func testNotLikeWithSpecialCharacters() throws {
     try run(
       email.notLike("%@example.com"),
-      expectedExpression: "( email NOT LIKE ? )",
+      expectedExpression: "( \"email\" NOT LIKE ? )",
       expectedValues: [false, false, true, false]
     )
   }
@@ -128,7 +128,7 @@ struct ExpressionStringTests {
   func testNotLikeWithEscapeCharacter() throws {
     try run(
       username.notLike("user\\_%", escape: "\\"),
-      expectedExpression: "( username NOT LIKE ? ESCAPE '\\' )",
+      expectedExpression: "( \"username\" NOT LIKE ? ESCAPE '\\' )",
       expectedValues: [true, false, true, true]
     )
   }

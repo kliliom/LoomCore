@@ -47,7 +47,7 @@ struct CastExpressionTests {
   func testCastTextToInteger() throws {
     try run(
       textValue.cast(to: Int.self),
-      expectedExpression: "CAST( text_value AS INTEGER)",
+      expectedExpression: "CAST( \"text_value\" AS INTEGER)",
       expectedValues: [123, 456, 0]
     )
   }
@@ -56,7 +56,7 @@ struct CastExpressionTests {
   func testCastTextToReal() throws {
     try run(
       textValue.cast(to: Double.self),
-      expectedExpression: "CAST( text_value AS DOUBLE)",
+      expectedExpression: "CAST( \"text_value\" AS DOUBLE)",
       expectedValues: [123.0, 456.0, 0.0]
     )
   }
@@ -65,7 +65,7 @@ struct CastExpressionTests {
   func testCastIntegerToText() throws {
     try run(
       intValue.cast(to: String.self),
-      expectedExpression: "CAST( int_value AS TEXT)",
+      expectedExpression: "CAST( \"int_value\" AS TEXT)",
       expectedValues: ["123", "456", "789"]
     )
   }
@@ -74,7 +74,7 @@ struct CastExpressionTests {
   func testCastRealToInteger() throws {
     try run(
       realValue.cast(to: Int.self),
-      expectedExpression: "CAST( real_value AS INTEGER)",
+      expectedExpression: "CAST( \"real_value\" AS INTEGER)",
       expectedValues: [123, 456, 789]
     )
   }

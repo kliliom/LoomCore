@@ -59,7 +59,7 @@ struct ExpressionArithmeticTests {
   func testIntegerAdditionSQL() throws {
     try run(
       quantity + stock,
-      expectedExpression: "( quantity + stock )",
+      expectedExpression: "( \"quantity\" + \"stock\" )",
       expectedValues: [52, 31, 23, 44]
     )
   }
@@ -68,7 +68,7 @@ struct ExpressionArithmeticTests {
   func testRealAdditionSQL() throws {
     try run(
       price + discount,
-      expectedExpression: "( price + discount )",
+      expectedExpression: "( \"price\" + \"discount\" )",
       expectedValues: [110.0, 220.0, 165.0, 125.0]
     )
   }
@@ -77,7 +77,7 @@ struct ExpressionArithmeticTests {
   func testIntegerSubtractionSQL() throws {
     try run(
       stock - quantity,
-      expectedExpression: "( stock - quantity )",
+      expectedExpression: "( \"stock\" - \"quantity\" )",
       expectedValues: [48, 29, 17, 36]
     )
   }
@@ -86,7 +86,7 @@ struct ExpressionArithmeticTests {
   func testRealSubtractionSQL() throws {
     try run(
       price - discount,
-      expectedExpression: "( price - discount )",
+      expectedExpression: "( \"price\" - \"discount\" )",
       expectedValues: [90.0, 180.0, 135.0, 115.0]
     )
   }
@@ -95,7 +95,7 @@ struct ExpressionArithmeticTests {
   func testIntegerMultiplicationSQL() throws {
     try run(
       quantity * stock,
-      expectedExpression: "( quantity * stock )",
+      expectedExpression: "( \"quantity\" * \"stock\" )",
       expectedValues: [100, 30, 60, 160]
     )
   }
@@ -104,7 +104,7 @@ struct ExpressionArithmeticTests {
   func testRealMultiplicationSQL() throws {
     try run(
       price * discount,
-      expectedExpression: "( price * discount )",
+      expectedExpression: "( \"price\" * \"discount\" )",
       expectedValues: [1000.0, 4000.0, 2250.0, 600.0]
     )
   }
@@ -113,7 +113,7 @@ struct ExpressionArithmeticTests {
   func testIntegerDivisionSQL() throws {
     try run(
       stock / quantity,
-      expectedExpression: "( stock / quantity )",
+      expectedExpression: "( \"stock\" / \"quantity\" )",
       expectedValues: [25, 30, 6, 10]
     )
   }
@@ -122,7 +122,7 @@ struct ExpressionArithmeticTests {
   func testRealDivisionSQL() throws {
     try run(
       price / discount,
-      expectedExpression: "( price / discount )",
+      expectedExpression: "( \"price\" / \"discount\" )",
       expectedValues: [10.0, 10.0, 10.0, 24.0]
     )
   }
@@ -131,7 +131,7 @@ struct ExpressionArithmeticTests {
   func testIntegerModuloSQL() throws {
     try run(
       stock % quantity,
-      expectedExpression: "( stock % quantity )",
+      expectedExpression: "( \"stock\" % \"quantity\" )",
       expectedValues: [0, 0, 2, 0]
     )
   }
@@ -140,7 +140,7 @@ struct ExpressionArithmeticTests {
   func testIntegerNegationSQL() throws {
     try run(
       -quantity,
-      expectedExpression: "( - quantity )",
+      expectedExpression: "( - \"quantity\" )",
       expectedValues: [-2, -1, -3, -4]
     )
   }
@@ -149,7 +149,7 @@ struct ExpressionArithmeticTests {
   func testRealNegationSQL() throws {
     try run(
       -price,
-      expectedExpression: "( - price )",
+      expectedExpression: "( - \"price\" )",
       expectedValues: [-100.0, -200.0, -150.0, -120.0]
     )
   }
@@ -158,7 +158,7 @@ struct ExpressionArithmeticTests {
   func testIntegerComplexExpressionSQL() throws {
     try run(
       (quantity + -stock) * 2 - 10,
-      expectedExpression: "( ( ( quantity + ( - stock ) ) * ? ) - ? )",
+      expectedExpression: "( ( ( \"quantity\" + ( - \"stock\" ) ) * ? ) - ? )",
       expectedValues: [-106, -68, -44, -82]
     )
   }
@@ -167,7 +167,7 @@ struct ExpressionArithmeticTests {
   func testRealComplexExpressionSQL() throws {
     try run(
       (price + -discount) * 2 - 10,
-      expectedExpression: "( ( ( price + ( - discount ) ) * ? ) - ? )",
+      expectedExpression: "( ( ( \"price\" + ( - \"discount\" ) ) * ? ) - ? )",
       expectedValues: [170.0, 350.0, 260.0, 220.0]
     )
   }
