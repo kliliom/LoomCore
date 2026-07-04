@@ -3,9 +3,48 @@ import Testing
 
 @testable import LoomCore
 
+/// Mutable state shared into a `@Sendable` stepper closure. `@DatabaseActor`
+/// isolation makes it `Sendable` while allowing the closure to mutate it.
+@DatabaseActor
+private final class ReentryProbe {
+  var stepperCalls = 0
+  var innerResult: [Int] = []
+}
+
 @Suite("Database Cached Tests")
 @DatabaseActor
 struct DatabaseCachedTests {
+  @Test("Reentrant query on the same SQL inside a cached block does not corrupt the outer cursor")
+  func testReentrantSameSQLInsideCachedBlock() async throws {
+    let db = try Database.openInMemory()
+    try db.exec("CREATE TABLE t (value INTEGER)")
+    try db.exec("INSERT INTO t (value) VALUES (10)")
+    try db.exec("INSERT INTO t (value) VALUES (20)")
+
+    let sql: SQLStatement = "SELECT value FROM t ORDER BY value"
+    let probe = ReentryProbe()
+
+    let outer = try db.cached {
+      try db.query(sql) { stmt, _ in
+        let value = try Int.column(of: stmt, at: 0)
+        probe.stepperCalls += 1
+        // On the first row, run a query with the IDENTICAL SQL string. With a
+        // shared cached statement this aliases the outer cursor; the fix must
+        // keep each query iterating its own statement.
+        if probe.stepperCalls == 1 {
+          probe.innerResult = try db.query(sql) { inner, _ in
+            try Int.column(of: inner, at: 0)
+          }
+        }
+        return value
+      }
+    }
+
+    // Both queries must see every row exactly once.
+    #expect(outer == [10, 20])
+    #expect(probe.innerResult == [10, 20])
+  }
+
   @Test("Cached block enables statement caching")
   func testCachedBlockEnablesCaching() async throws {
     let db = try Database.openInMemory()

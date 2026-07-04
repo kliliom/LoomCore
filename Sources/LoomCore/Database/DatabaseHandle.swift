@@ -55,6 +55,28 @@ extension DatabaseHandle {
   final class ResourceStore: Sendable {
     var statementCache: [String: OpaquePointer] = [:]
 
+    // Cached statements currently borrowed by a live `StatementHandle`. A
+    // borrowed statement must not be handed out again — two live handles over
+    // one `sqlite3_stmt` would share a single cursor, so the inner handle's
+    // reset would corrupt the outer handle's in-flight iteration.
+    //
+    // `nonisolated(unsafe)`: mutated from `Database/prepare(sql:)` (actor
+    // isolated) and from `StatementHandle.deinit`, which the compiler models as
+    // nonisolated. Both run on ``DatabaseActor`` at runtime — the deinit already
+    // relies on this to call `sqlite3_reset` — so access is serialized in fact.
+    nonisolated(unsafe) var checkedOut: Set<OpaquePointer> = []
+
+    // Marks a cached statement as borrowed; returns `false` if it was already
+    // checked out, signalling that the caller must not reuse it.
+    nonisolated func checkOut(_ stmtPtr: OpaquePointer) -> Bool {
+      checkedOut.insert(stmtPtr).inserted
+    }
+
+    // Releases a borrowed cached statement so it can be reused.
+    nonisolated func checkIn(_ stmtPtr: OpaquePointer) {
+      checkedOut.remove(stmtPtr)
+    }
+
     // Finalizes every cached statement, clears the cache, and closes the
     // SQLite connection. A failed `sqlite3_close` is logged as a warning.
     consuming func close(dbPtr: OpaquePointer?) {
@@ -62,6 +84,7 @@ extension DatabaseHandle {
         sqlite3_finalize(stmtPtr)
       }
       statementCache = [:]
+      checkedOut = []
 
       if let dbPtr {
         let rc = sqlite3_close(dbPtr)
