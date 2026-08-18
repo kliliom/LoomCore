@@ -85,7 +85,7 @@ try await db.transaction { db in
 
 - **`Database`** — Main interface for all database operations. Actor-isolated, methods include `query()`, `exec()`, `transaction()`.
 - **`SQLStatement`** — SQL string with bound parameters. Created via string interpolation or `SQLStatement.raw()` for static SQL.
-- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date) and supports JSON encoding via `Codable` conformance.
+- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date, plus the TextDate wrapper for datetime-TEXT columns) and supports JSON encoding via `Codable` conformance.
 - **`Expression`** — Protocol for SQL expressions. Bindable types automatically conform. Used for building complex SQL expressions with operators.
 - **`DatabaseActor`** — Global actor that serializes all database access. Applied automatically to `Database` and binding operations.
 
@@ -223,6 +223,43 @@ let result = try await db.query("SELECT email FROM users") { stmt, _ in
 }
 ```
 
+Column decoding is strict: reading a NULL into a non-optional type throws `LoomError.core(.nullValue, …)` (use `Optional` for nullable columns), and a value whose SQLite storage class doesn't match the requested type throws `LoomError.core(.typeMappingFailed, …)`. Numeric types accept INTEGER (Double/Float also accept REAL); `Date` binds as epoch REAL and reads only REAL/INTEGER epoch seconds — TEXT storage throws; for datetime TEXT columns (such as `CURRENT_TIMESTAMP` output) use `TextDate`, which binds and reads `YYYY-MM-DD HH:MM:SS.SSS` UTC datetime TEXT (`TextDate(date)` or `date.textDate`). `UUID` accepts a 16-byte BLOB or a textual UUID.
+
+### Dates: `Date` vs `TextDate`
+
+Two ways to store a moment in time — pick by the column's declared type:
+
+- **`Date`** — binds as `REAL` epoch seconds (default storage type `DOUBLE`). Reading accepts
+  only `REAL`/`INTEGER` epoch seconds; `TEXT` storage throws `typeMappingFailed`. Use for
+  columns declared `DOUBLE`/`REAL`/`INTEGER`.
+- **`TextDate`** — wraps a `Date` and binds/reads SQLite datetime TEXT, `YYYY-MM-DD HH:MM:SS.SSS`
+  in UTC (default storage type `TEXT`). Stored values compare and sort lexicographically against
+  `CURRENT_TIMESTAMP` output and work with SQLite's `date()`/`datetime()`/`strftime()` functions.
+  Use for columns declared `TEXT` (such as `TEXT DEFAULT CURRENT_TIMESTAMP`).
+
+```swift
+try await db.exec("CREATE TABLE events (name TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+
+// Bind: TextDate(date) or date.textDate
+try await db.exec("INSERT INTO events (name, created_at) VALUES (\("deploy"), \(Date().textDate))")
+
+// Compare against CURRENT_TIMESTAMP-written values
+let recent = try await db.query("SELECT name FROM events WHERE created_at > \(TextDate(cutoff))") { stmt, _ in
+    try String.column(of: stmt, at: 0)
+}
+
+// Read back: accessor is .date
+let createdAt = try await db.query("SELECT created_at FROM events") { stmt, _ in
+    try TextDate.column(of: stmt, at: 0).date
+}
+```
+
+Details shared by both: text without a timezone offset is read as UTC (matching SQLite's own
+datetime functions); optional fractional seconds, `T` separator, and `Z`/`±HH:MM` offsets are
+accepted; precision is milliseconds — finer digits are truncated on bind and on read. `TextDate`
+reading is strict: it throws `.typeMappingFailed` for any non-`TEXT` storage class or unparseable
+text, and `.nullValue` for NULL (use `TextDate?` for nullable columns).
+
 ### Codable types (automatic JSON encoding)
 
 ```swift
@@ -233,7 +270,7 @@ struct Metadata: Codable {
 
 let meta = Metadata(createdAt: Date(), tags: ["swift", "database"])
 try await db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
-// Automatically encoded as JSON and stored as TEXT
+// Automatically encoded as JSON and stored as TEXT (works with json_extract, ->, ->>)
 
 let retrieved = try await db.query("SELECT metadata FROM items") { stmt, _ in
     try Metadata.column(of: stmt, at: 0)  // Automatically decoded from JSON
@@ -295,9 +332,10 @@ let service = db.getService(CacheInvalidationService.self)
 - `Sources/Bindable/Bindable+String.swift` — String binding, TEXT storage, SQL escaping
 - `Sources/Bindable/Bindable+Numbers.swift` — Int, Double, Float, Bool bindings, INTEGER/REAL storage
 - `Sources/Bindable/Bindable+Optional.swift` — NULL handling, optional value binding/extraction
-- `Sources/Bindable/Bindable+Codable.swift` — JSON encoding/decoding for Codable types stored as TEXT
-- `Sources/Bindable/Bindable+Date.swift` — Date storage (Unix timestamp as REAL), time zone handling
-- `Sources/Bindable/Bindable+UUID.swift` — UUID storage (as TEXT), string conversion
+- `Sources/Bindable/Bindable+Codable.swift` — JSON encoding/decoding for Codable types stored as TEXT (reads legacy BLOB too)
+- `Sources/Bindable/Bindable+Date.swift` — Date storage (Unix timestamp as REAL), datetime TEXT parsing, time zone handling
+- `Sources/Bindable/Bindable+TextDate.swift` — TextDate wrapper: datetime TEXT storage (`YYYY-MM-DD HH:MM:SS.SSS` UTC) for TEXT-affinity columns
+- `Sources/Bindable/Bindable+UUID.swift` — UUID storage (16-byte BLOB, reads textual UUIDs too)
 - `Sources/Bindable/Bindable+Data.swift` — Binary data (BLOB) binding and extraction
 
 ### Expression building

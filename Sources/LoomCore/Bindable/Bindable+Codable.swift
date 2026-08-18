@@ -2,7 +2,10 @@ import Foundation
 import SQLite3
 
 extension Bindable where Self: Codable {
-  /// JSON-encodes `value` and binds it as a BLOB parameter at the 1-based `index`.
+  /// JSON-encodes `value` and binds it as a `TEXT` parameter at the 1-based `index`.
+  ///
+  /// Storing JSON as `TEXT` keeps the value directly usable with SQLite's JSON functions
+  /// (`json_extract`, `->`, `->>`, `json_set`, …) on every SQLite version.
   ///
   /// ```swift
   /// struct Profile: Codable, Bindable {
@@ -20,40 +23,45 @@ extension Bindable where Self: Codable {
     let data = try encoder.encode(value)
     try data.withUnsafeBytes {
       try check(
-        sqlite3_bind_blob(stmt.stmtPtr, index, $0.baseAddress, Int32($0.count), sqliteTransient),
+        sqlite3_bind_text(stmt.stmtPtr, index, $0.baseAddress, Int32($0.count), sqliteTransient),
         db: stmt.dbPtr,
         is: SQLITE_OK
       )
     }
   }
 
-  /// Reads the BLOB at the 0-based `index` and JSON-decodes it.
+  /// Reads the TEXT (or BLOB, written by earlier LoomCore versions) at the 0-based `index`
+  /// and JSON-decodes it.
   ///
   /// Throws `LoomError.core(.nullValue, …)` when the column is NULL — wrap the type in
-  /// `Optional` to read nullable columns.
+  /// `Optional` to read nullable columns — and `LoomError.core(.typeMappingFailed, …)`
+  /// for `INTEGER` or `REAL` storage or an empty payload. Malformed JSON propagates the
+  /// decoder's `DecodingError`.
   @DatabaseActor
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    if let blob = sqlite3_column_blob(stmt.stmtPtr, index) {
-      let count = sqlite3_column_bytes(stmt.stmtPtr, index)
-      let data = Data(bytes: blob, count: Int(count))
-      let decoder = JSONDecoder()
-      return try decoder.decode(Self.self, from: data)
-    } else {
-      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL, cannot decode to \(Self.self).")
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: [.blob, .text], for: Self.self)
+    guard let blob = sqlite3_column_blob(stmt.stmtPtr, index) else {
+      try checkColumnAllocation(of: stmt)
+      throw LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index \(index) is empty, which is not valid JSON, cannot return \(Self.self)."
+      )
     }
+    let data = Data(bytes: blob, count: Int(sqlite3_column_bytes(stmt.stmtPtr, index)))
+    let decoder = JSONDecoder()
+    return try decoder.decode(Self.self, from: data)
   }
 
-  /// Renders the value as a hexadecimal BLOB literal of the form `X'…'`.
+  /// Renders the value as a single-quoted SQL string literal holding its JSON encoding.
   ///
   /// Used when emitting SQL that embeds the value inline rather than via a bound parameter.
   /// Prefer parameter binding (`bind(to:value:at:)`) for anything user-supplied.
   public func asSQLLiteral() throws -> String {
     let encoder = JSONEncoder()
     let data = try encoder.encode(self)
-    let hex = data.map { String(format: "%02x", $0) }.joined()
-    return "X'\(hex)'"
+    return try String(decoding: data, as: UTF8.self).asSQLLiteral()
   }
 
-  /// `"BLOB"` — Codable values are stored as JSON-encoded blobs, not TEXT.
-  public static var defaultSQLStorageType: String { "BLOB" }
+  /// `"TEXT"` — Codable values are stored as JSON text, ready for SQLite's JSON functions.
+  public static var defaultSQLStorageType: String { "TEXT" }
 }

@@ -82,14 +82,13 @@ struct BindableDictionaryTests {
     let dict = ["key": "value"]
     let literal = try dict.asSQLLiteral()
 
-    #expect(literal.hasPrefix("X'"))
-    #expect(literal.hasSuffix("'"))
+    #expect(literal == #"'{"key":"value"}'"#)
   }
 
   @Test("Dictionary defaultSQLStorageType")
   func testDictionaryDefaultSQLStorageType() {
-    #expect([String: String].defaultSQLStorageType == "BLOB")
-    #expect([String: Int].defaultSQLStorageType == "BLOB")
+    #expect([String: String].defaultSQLStorageType == "TEXT")
+    #expect([String: Int].defaultSQLStorageType == "TEXT")
   }
 
   @Test("Large dictionary")

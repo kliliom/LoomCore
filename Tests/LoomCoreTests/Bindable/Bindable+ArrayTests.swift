@@ -83,14 +83,13 @@ struct BindableArrayTests {
     let tags = ["swift", "database"]
     let literal = try tags.asSQLLiteral()
 
-    #expect(literal.hasPrefix("X'"))
-    #expect(literal.hasSuffix("'"))
+    #expect(literal == #"'["swift","database"]'"#)
   }
 
   @Test("Array defaultSQLStorageType")
   func testArrayDefaultSQLStorageType() {
-    #expect([String].defaultSQLStorageType == "BLOB")
-    #expect([Int].defaultSQLStorageType == "BLOB")
+    #expect([String].defaultSQLStorageType == "TEXT")
+    #expect([Int].defaultSQLStorageType == "TEXT")
   }
 
   @Test("Large array")

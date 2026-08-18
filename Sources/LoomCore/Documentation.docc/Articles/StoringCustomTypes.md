@@ -22,11 +22,12 @@ The ``Bindable`` protocol is the single extension point for type-safe parameter 
 | `Bool` | INTEGER (0/1) | Literal renders as `TRUE`/`FALSE` |
 | `Data` | BLOB | Hex literals (`X'…'`) |
 | `Date` | DOUBLE | Unix timestamp seconds since 1970, UTC |
+| `TextDate` | TEXT | SQLite datetime text `YYYY-MM-DD HH:MM:SS.SSS`, UTC — for `CURRENT_TIMESTAMP`-style columns |
 | `UUID` | BLOB | 16-byte raw bytes, **not** a TEXT string |
 | `Optional<T>` | underlying or NULL | Reads NULL via column type check |
 | `RawRepresentable` | derived from `RawValue` | The enum's raw type's storage |
-| `Array`, `Dictionary` | BLOB (JSON) | JSON-encoded |
-| `Codable` | BLOB (JSON) | JSON-encoded; you opt in by conforming to ``Bindable`` |
+| `Array`, `Dictionary` | TEXT (JSON) | JSON-encoded |
+| `Codable` | TEXT (JSON) | JSON-encoded; you opt in by conforming to ``Bindable`` |
 
 ## Custom Codable types
 
@@ -51,7 +52,7 @@ let profile = Profile(
 try await db.exec("INSERT INTO accounts (profile) VALUES (\(profile))")
 ```
 
-Encoding uses `JSONEncoder` and stores BLOB. The trade-off is that you cannot query into the JSON with SQL (no `json_extract` integration), so this is best for opaque payloads, not for fields you filter on.
+Encoding uses `JSONEncoder` and stores JSON TEXT, so stored values work directly with SQLite's JSON functions — `json_extract(profile, '$.displayName')`, the `->`/`->>` operators, `json_set`, and friends.
 
 ## NULL handling
 

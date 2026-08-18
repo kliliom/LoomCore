@@ -161,12 +161,13 @@ Nested `transaction` calls open a `SAVEPOINT` scope: a normal return releases th
 
 - `String`, `Int`, `Double`, `Float`, `Bool`
 - `Data` (BLOB)
-- `UUID` (stored as TEXT)
+- `UUID` (stored as a 16-byte BLOB)
 - `Date` (stored as Unix timestamp REAL)
+- `TextDate` (stored as SQLite datetime TEXT — for `DEFAULT CURRENT_TIMESTAMP`-style columns)
 - `Optional<T>` (NULL handling)
 - `RawRepresentable` enums
 - `Array`, `Dictionary` (JSON-encoded)
-- `Codable` types (JSON-encoded as TEXT)
+- `Codable` types (JSON-encoded as TEXT — queryable with SQLite's JSON functions)
 
 ### Optional / NULL
 

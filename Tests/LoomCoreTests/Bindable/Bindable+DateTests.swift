@@ -139,4 +139,73 @@ struct BindableDateTests {
     #expect(futureEvents.count == 1)
     #expect(futureEvents.first == "future")
   }
+
+  @Test("Date throws typeMappingFailed for TEXT storage — even parseable datetime text")
+  func testDateRejectsCurrentTimestampText() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE events (created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+    try await db.exec(raw: "INSERT INTO events DEFAULT VALUES")
+
+    await #expect(
+      throws: LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index 0 has storage class TEXT, cannot return Date."
+      )
+    ) {
+      try await db.query("SELECT created_at FROM events") { stmt, _ in
+        try Date.column(of: stmt, at: 0)
+      }
+    }
+  }
+
+  @Test("Date bound into a TEXT-affinity column is rejected on read — use TextDate")
+  func testDateBoundIntoTextColumnThrows() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE events (created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+
+    let date = Date(timeIntervalSince1970: 1_786_786_200.5)
+    try await db.exec("INSERT INTO events (created_at) VALUES (\(date))")
+
+    // TEXT affinity stores the bound epoch REAL as the numeric string "1786786200.5".
+    await #expect(
+      throws: LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index 0 has storage class TEXT, cannot return Date."
+      )
+    ) {
+      try await db.query("SELECT created_at FROM events") { stmt, _ in
+        try Date.column(of: stmt, at: 0)
+      }
+    }
+  }
+
+  @Test("Date decodes INTEGER epoch seconds")
+  func testDateDecodesIntegerEpoch() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec(raw: "INSERT INTO test (value) VALUES (1700000000)")
+
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
+      try Date.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == Date(timeIntervalSince1970: 1_700_000_000))
+  }
+
+  @Test("Date throws nullValue for NULL")
+  func testDateNull() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (value DOUBLE)")
+    try await db.exec(raw: "INSERT INTO test (value) VALUES (NULL)")
+
+    await #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot return Date.")) {
+      try await db.query("SELECT value FROM test") { stmt, _ in
+        try Date.column(of: stmt, at: 0)
+      }
+    }
+  }
 }

@@ -29,15 +29,19 @@ extension String: Bindable {
     }
   }
 
-  /// Reads the column as UTF-8 `TEXT`.
+  /// Reads the column as UTF-8 `TEXT`, using the column's byte count so embedded NUL bytes round-trip.
   ///
-  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `String?` for nullable columns.
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `String?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` when the storage class is not `TEXT`.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    if let cString = sqlite3_column_text(stmt.stmtPtr, index) {
-      return String(cString: cString)
-    } else {
-      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL, cannot return String.")
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: .text, for: Self.self)
+    // SQLite requires calling sqlite3_column_text before sqlite3_column_bytes.
+    guard let text = sqlite3_column_text(stmt.stmtPtr, index) else {
+      try checkColumnAllocation(of: stmt)
+      return ""
     }
+    let count = Int(sqlite3_column_bytes(stmt.stmtPtr, index))
+    return String(decoding: UnsafeBufferPointer(start: text, count: count), as: UTF8.self)
   }
 
   /// Renders the value as a single-quoted SQL string literal, doubling embedded single quotes.

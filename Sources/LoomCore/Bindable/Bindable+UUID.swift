@@ -9,17 +9,32 @@ extension UUID: Bindable {
     }
   }
 
-  /// Reads the column as a 16-byte BLOB and reconstructs a `UUID`.
+  /// Reads the column as a 16-byte BLOB — or a textual `8-4-4-4-12` UUID — and reconstructs a `UUID`.
   ///
-  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` or its byte length is not exactly 16 — use
-  /// `UUID?` for nullable columns, and avoid mixing this representation with text-encoded UUIDs in the same column.
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `UUID?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` when the BLOB is not exactly 16 bytes,
+  /// the TEXT is not a valid UUID string, or the storage class is `INTEGER` or `REAL`.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    if let blob = sqlite3_column_blob(stmt.stmtPtr, index), sqlite3_column_bytes(stmt.stmtPtr, index) == 16 {
-      let mem = blob.bindMemory(to: uuid_t.self, capacity: 1)
-      return UUID(uuid: mem.pointee)
-    } else {
-      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL or not 16 bytes, cannot return UUID.")
+    let storageClass = try requireStorageClass(of: stmt, at: index, oneOf: [.blob, .text], for: Self.self)
+    if storageClass == SQLITE_TEXT {
+      let text = try String.column(of: stmt, at: index)
+      guard let uuid = UUID(uuidString: text) else {
+        throw LoomError.core(
+          .typeMappingFailed,
+          message: "Column at index \(index) holds \"\(text)\", which is not a UUID string, cannot return UUID."
+        )
+      }
+      return uuid
     }
+    guard let blob = sqlite3_column_blob(stmt.stmtPtr, index), sqlite3_column_bytes(stmt.stmtPtr, index) == 16 else {
+      try checkColumnAllocation(of: stmt)
+      throw LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index \(index) is a BLOB that is not 16 bytes, cannot return UUID."
+      )
+    }
+    let mem = blob.bindMemory(to: uuid_t.self, capacity: 1)
+    return UUID(uuid: mem.pointee)
   }
 
   /// Renders the UUID as a 16-byte SQLite hexadecimal BLOB literal of the form `X'…'`.

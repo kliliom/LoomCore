@@ -13,19 +13,19 @@ extension Data: Bindable {
     }
   }
 
-  /// Reads the column as a BLOB.
+  /// Reads the column as a BLOB. `TEXT` is also accepted — its UTF-8 bytes read back unchanged.
   ///
-  /// A zero-length BLOB returns empty `Data`. Throws `LoomError.core(.nullValue, …)` when the column is `NULL` —
-  /// use `Data?` if the column is nullable.
+  /// A zero-length value returns empty `Data`. Throws `LoomError.core(.nullValue, …)` when the column
+  /// is `NULL` — use `Data?` if the column is nullable — and `LoomError.core(.typeMappingFailed, …)`
+  /// for `INTEGER` or `REAL` storage.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    if let blob = sqlite3_column_blob(stmt.stmtPtr, index) {
-      let count = sqlite3_column_bytes(stmt.stmtPtr, index)
-      return Data(bytes: blob, count: Int(count))
-    } else if sqlite3_column_type(stmt.stmtPtr, index) == SQLITE_NULL {
-      throw LoomError.core(.nullValue, message: "Column at index \(index) is NULL, cannot return Data.")
-    } else {
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: [.blob, .text], for: Self.self)
+    guard let blob = sqlite3_column_blob(stmt.stmtPtr, index) else {
+      try checkColumnAllocation(of: stmt)
       return Data()
     }
+    let count = sqlite3_column_bytes(stmt.stmtPtr, index)
+    return Data(bytes: blob, count: Int(count))
   }
 
   /// Renders the bytes as an SQLite hexadecimal BLOB literal of the form `X'…'`.

@@ -14,7 +14,7 @@ struct BindableCodableTests {
   func testCodableStructBinding() async throws {
     let db = try Database.openInMemory()
 
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
 
     let person = Person(name: "Alice", age: 25)
     try await db.exec("INSERT INTO test (data) VALUES (\(person))")
@@ -30,7 +30,7 @@ struct BindableCodableTests {
   func testMultipleCodableValues() async throws {
     let db = try Database.openInMemory()
 
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
 
     let people = [
       Person(name: "Alice", age: 25),
@@ -64,7 +64,7 @@ struct BindableCodableTests {
 
     let db = try Database.openInMemory()
 
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
 
     let employee = Employee(
       name: "Alice",
@@ -84,13 +84,59 @@ struct BindableCodableTests {
     let person = Person(name: "Alice", age: 25)
     let literal = try person.asSQLLiteral()
 
-    #expect(literal.hasPrefix("X'"))
-    #expect(literal.hasSuffix("'"))
+    #expect(literal.hasPrefix("'{"))
+    #expect(literal.hasSuffix("}'"))
+    #expect(literal.contains(#""name":"Alice""#))
+    #expect(literal.contains(#""age":25"#))
   }
 
   @Test("Codable defaultSQLStorageType")
   func testCodableDefaultSQLStorageType() {
-    #expect(Person.defaultSQLStorageType == "BLOB")
+    #expect(Person.defaultSQLStorageType == "TEXT")
+  }
+
+  @Test("Codable binds as TEXT storage")
+  func testCodableBindsAsText() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data TEXT)")
+    try await db.exec("INSERT INTO test (data) VALUES (\(Person(name: "Alice", age: 25)))")
+
+    let storage = try await db.query("SELECT typeof(data) FROM test") { stmt, _ in
+      try String.column(of: stmt, at: 0)
+    }
+
+    #expect(storage.first == "text")
+  }
+
+  @Test("Codable works with SQLite JSON functions")
+  func testCodableWithJSONFunctions() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data TEXT)")
+    try await db.exec("INSERT INTO test (data) VALUES (\(Person(name: "Alice", age: 25)))")
+
+    let result = try await db.query("SELECT json_extract(data, '$.name'), data ->> '$.age' FROM test") { stmt, _ in
+      (try String.column(of: stmt, at: 0), try Int.column(of: stmt, at: 1))
+    }
+
+    #expect(result.first?.0 == "Alice")
+    #expect(result.first?.1 == 25)
+  }
+
+  @Test("Codable reads legacy BLOB storage")
+  func testCodableReadsLegacyBlobStorage() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec(raw: #"INSERT INTO test (data) VALUES (CAST('{"name":"Alice","age":25}' AS BLOB))"#)
+
+    let result = try await db.query("SELECT typeof(data), data FROM test") { stmt, _ in
+      (try String.column(of: stmt, at: 0), try Person.column(of: stmt, at: 1))
+    }
+
+    #expect(result.first?.0 == "blob")
+    #expect(result.first?.1 == Person(name: "Alice", age: 25))
   }
 
   @Test("Codable with optional fields")
@@ -102,7 +148,7 @@ struct BindableCodableTests {
 
     let db = try Database.openInMemory()
 
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
 
     let profile1 = Profile(name: "Alice", email: "alice@example.com")
     let profile2 = Profile(name: "Bob", email: nil)
@@ -128,7 +174,7 @@ struct BindableCodableTests {
 
     let db = try Database.openInMemory()
 
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
 
     let team = Team(name: "Dev Team", members: ["Alice", "Bob", "Charlie"])
     try await db.exec("INSERT INTO test (data) VALUES (\(team))")
@@ -144,10 +190,90 @@ struct BindableCodableTests {
   func testCodableUnexpectedNullValue() async throws {
     let db = try Database.openInMemory()
 
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
     try await db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
 
-    await #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot decode to Person.")) {
+    await #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot return Person.")) {
+      try await db.query("SELECT data FROM test") { stmt, _ in
+        try Person.column(of: stmt, at: 0)
+      }
+    }
+  }
+
+  @Test("Codable decodes from TEXT storage")
+  func testCodableFromText() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data TEXT)")
+    try await db.exec(raw: #"INSERT INTO test (data) VALUES ('{"name":"Alice","age":25}')"#)
+
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
+      try Person.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == Person(name: "Alice", age: 25))
+  }
+
+  @Test("Codable throws typeMappingFailed for INTEGER and REAL storage")
+  func testCodableRejectsNumericStorage() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data)")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES (42)")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES (1.5)")
+
+    await #expect(
+      throws: LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index 0 has storage class INTEGER, cannot return Person."
+      )
+    ) {
+      try await db.query("SELECT data FROM test WHERE typeof(data) = 'integer'") { stmt, _ in
+        try Person.column(of: stmt, at: 0)
+      }
+    }
+    await #expect(
+      throws: LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index 0 has storage class REAL, cannot return Person."
+      )
+    ) {
+      try await db.query("SELECT data FROM test WHERE typeof(data) = 'real'") { stmt, _ in
+        try Person.column(of: stmt, at: 0)
+      }
+    }
+  }
+
+  @Test("Codable throws typeMappingFailed for an empty payload")
+  func testCodableEmptyPayload() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data)")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES ('')")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES (X'')")
+
+    for storage in ["text", "blob"] {
+      await #expect(
+        throws: LoomError.core(
+          .typeMappingFailed,
+          message: "Column at index 0 is empty, which is not valid JSON, cannot return Person."
+        )
+      ) {
+        try await db.query("SELECT data FROM test WHERE typeof(data) = \(storage)") { stmt, _ in
+          try Person.column(of: stmt, at: 0)
+        }
+      }
+    }
+  }
+
+  @Test("Codable propagates DecodingError for malformed JSON")
+  func testCodableMalformedJSON() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (data TEXT)")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES ('not json')")
+
+    await #expect(throws: DecodingError.self) {
       try await db.query("SELECT data FROM test") { stmt, _ in
         try Person.column(of: stmt, at: 0)
       }
@@ -157,7 +283,7 @@ struct BindableCodableTests {
   @Test("Codable bind throws with connection error message on out-of-range index")
   func testCodableBindOutOfRangeIndex() async throws {
     let db = try Database.openInMemory()
-    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data TEXT)")
 
     let error = await #expect(throws: LoomError.self) {
       try await db.exec(

@@ -138,6 +138,23 @@ struct BindableStringTests {
     #expect(result.first == unicodeString)
   }
 
+  @Test("String with embedded NUL bytes round-trips intact")
+  func testStringWithEmbeddedNulBytes() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (value TEXT)")
+
+    let value = "abc\0def"
+    try await db.exec("INSERT INTO test (value) VALUES (\(value))")
+
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
+      try String.column(of: stmt, at: 0)
+    }
+
+    #expect(result.first == value)
+    #expect(result.first?.utf8.count == 7)
+  }
+
   @Test("String bind throws with connection error message on out-of-range index")
   func testStringBindOutOfRangeIndex() async throws {
     let db = try Database.openInMemory()

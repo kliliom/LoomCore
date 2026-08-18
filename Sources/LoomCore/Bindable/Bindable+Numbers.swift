@@ -7,9 +7,21 @@ extension Int: Bindable {
     try Int64.bind(to: stmt, value: Int64(value), at: index)
   }
 
-  /// Reads the column as an `Int64` and narrows it to `Int`.
+  /// Reads the column as an `INTEGER` and narrows it to `Int`.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `Int?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` when the storage class is not `INTEGER`
+  /// or the value does not fit in `Int`.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Int {
-    try Int(Int64.column(of: stmt, at: index))
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: .integer, for: Self.self)
+    let wide = sqlite3_column_int64(stmt.stmtPtr, index)
+    guard let value = Int(exactly: wide) else {
+      throw LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index \(index) holds \(wide), which is out of range for Int."
+      )
+    }
+    return value
   }
 
   /// Renders the value as a base-10 integer literal.
@@ -31,9 +43,21 @@ extension Int32: Bindable {
     try check(sqlite3_bind_int(stmt.stmtPtr, index, value), db: stmt.dbPtr, is: SQLITE_OK)
   }
 
-  /// Reads the column via `sqlite3_column_int`. Values outside the `Int32` range are truncated by SQLite.
+  /// Reads the column as an `INTEGER` and narrows it to `Int32`.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `Int32?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` when the storage class is not `INTEGER`
+  /// or the value does not fit in `Int32`.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    sqlite3_column_int(stmt.stmtPtr, index)
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: .integer, for: Self.self)
+    let wide = sqlite3_column_int64(stmt.stmtPtr, index)
+    guard let value = Int32(exactly: wide) else {
+      throw LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index \(index) holds \(wide), which is out of range for Int32."
+      )
+    }
+    return value
   }
 
   /// Renders the value as a base-10 integer literal.
@@ -51,9 +75,13 @@ extension Int64: Bindable {
     try check(sqlite3_bind_int64(stmt.stmtPtr, index, value), db: stmt.dbPtr, is: SQLITE_OK)
   }
 
-  /// Reads the column via `sqlite3_column_int64`.
+  /// Reads the column as an `INTEGER` via `sqlite3_column_int64`.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `Int64?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` when the storage class is not `INTEGER`.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    sqlite3_column_int64(stmt.stmtPtr, index)
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: .integer, for: Self.self)
+    return sqlite3_column_int64(stmt.stmtPtr, index)
   }
 
   /// Renders the value as a base-10 integer literal.
@@ -71,9 +99,13 @@ extension Bool: Bindable {
     try Int.bind(to: stmt, value: value ? 1 : 0, at: index)
   }
 
-  /// Reads the column as an integer; any non-zero value is treated as `true`.
+  /// Reads the column as an `INTEGER`; any non-zero value is treated as `true`.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `Bool?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` when the storage class is not `INTEGER`.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    try Int.column(of: stmt, at: index) != 0
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: .integer, for: Self.self)
+    return sqlite3_column_int64(stmt.stmtPtr, index) != 0
   }
 
   /// Renders the value as `TRUE` or `FALSE`, which SQLite recognizes as `1` and `0`.
@@ -96,14 +128,33 @@ extension Float: Bindable {
     try check(sqlite3_bind_double(stmt.stmtPtr, index, Double(value)), db: stmt.dbPtr, is: SQLITE_OK)
   }
 
-  /// Reads the column as a `Double` and narrows it to `Float`. Round-tripping may lose precision.
+  /// Reads the column as a `REAL` (or `INTEGER`) and narrows it to `Float`. Round-tripping may lose precision.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `Float?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` for `TEXT` or `BLOB` storage or a finite
+  /// value whose magnitude exceeds the `Float` range. Stored infinities read back as infinities.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    Float(sqlite3_column_double(stmt.stmtPtr, index))
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: [.real, .integer], for: Self.self)
+    let wide = sqlite3_column_double(stmt.stmtPtr, index)
+    let value = Float(wide)
+    guard value.isFinite || !wide.isFinite else {
+      throw LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index \(index) holds \(wide), which is out of range for Float."
+      )
+    }
+    return value
   }
 
   /// Renders the value using Swift's default floating-point description.
+  ///
+  /// SQLite has no literal syntax for non-finite values, so infinities render as `9.0e999` /
+  /// `-9.0e999` (which SQLite parses back to ±infinity) and NaN renders as `NULL` — the same
+  /// value `sqlite3_bind_double` stores for NaN.
   public func asSQLLiteral() throws -> String {
-    "\(self)"
+    if isNaN { return "NULL" }
+    if isInfinite { return self > 0 ? "9.0e999" : "-9.0e999" }
+    return "\(self)"
   }
 
   /// SQLite storage type for `Float` columns: `DOUBLE`.
@@ -116,14 +167,24 @@ extension Double: Bindable {
     try check(sqlite3_bind_double(stmt.stmtPtr, index, value), db: stmt.dbPtr, is: SQLITE_OK)
   }
 
-  /// Reads the column via `sqlite3_column_double`.
+  /// Reads the column as a `REAL` (or `INTEGER`, widened) via `sqlite3_column_double`.
+  ///
+  /// Throws `LoomError.core(.nullValue, …)` when the column is `NULL` — use `Double?` for nullable
+  /// columns — and `LoomError.core(.typeMappingFailed, …)` for `TEXT` or `BLOB` storage.
   public static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Self {
-    sqlite3_column_double(stmt.stmtPtr, index)
+    _ = try requireStorageClass(of: stmt, at: index, oneOf: [.real, .integer], for: Self.self)
+    return sqlite3_column_double(stmt.stmtPtr, index)
   }
 
   /// Renders the value using Swift's default floating-point description.
+  ///
+  /// SQLite has no literal syntax for non-finite values, so infinities render as `9.0e999` /
+  /// `-9.0e999` (which SQLite parses back to ±infinity) and NaN renders as `NULL` — the same
+  /// value `sqlite3_bind_double` stores for NaN.
   public func asSQLLiteral() throws -> String {
-    "\(self)"
+    if isNaN { return "NULL" }
+    if isInfinite { return self > 0 ? "9.0e999" : "-9.0e999" }
+    return "\(self)"
   }
 
   /// SQLite storage type for `Double` columns: `DOUBLE`.

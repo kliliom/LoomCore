@@ -183,4 +183,51 @@ struct BindableNumbersTests {
     #expect(result.count == 5)
     #expect(result == values)
   }
+
+  @Test("Non-finite floating-point SQL literals")
+  func testNonFiniteLiterals() async throws {
+    #expect(try Double.infinity.asSQLLiteral() == "9.0e999")
+    #expect(try (-Double.infinity).asSQLLiteral() == "-9.0e999")
+    #expect(try Double.nan.asSQLLiteral() == "NULL")
+    #expect(try Float.infinity.asSQLLiteral() == "9.0e999")
+    #expect(try (-Float.infinity).asSQLLiteral() == "-9.0e999")
+    #expect(try Float.nan.asSQLLiteral() == "NULL")
+  }
+
+  @Test("REAL out of Float range throws typeMappingFailed, stored infinity reads back")
+  func testFloatOverflow() async throws {
+    let db = try Database.openInMemory()
+
+    try await db.exec("CREATE TABLE test (value DOUBLE)")
+    try await db.exec("INSERT INTO test (value) VALUES (\(1e300))")
+
+    await #expect(
+      throws: LoomError.core(
+        .typeMappingFailed,
+        message: "Column at index 0 holds 1e+300, which is out of range for Float."
+      )
+    ) {
+      try await db.query("SELECT value FROM test") { stmt, _ in try Float.column(of: stmt, at: 0) }
+    }
+
+    let infinite = try await db.query("SELECT 9e999") { stmt, _ in try Float.column(of: stmt, at: 0) }
+    #expect(infinite.first == .infinity)
+  }
+
+  @Test("Non-finite literals round-trip through SELECT")
+  func testNonFiniteLiteralRoundTrip() async throws {
+    let db = try Database.openInMemory()
+
+    let infinity = try Double.infinity.asSQLLiteral()
+    let infinityResult = try await db.query("SELECT \(infinity, mode: .raw)") { stmt, _ in
+      try Double.column(of: stmt, at: 0)
+    }
+    #expect(infinityResult.first == .infinity)
+
+    let nan = try Double.nan.asSQLLiteral()
+    let nanResult = try await db.query("SELECT \(nan, mode: .raw)") { stmt, _ in
+      try Double?.column(of: stmt, at: 0)
+    }
+    #expect(nanResult.first == .some(nil))
+  }
 }
