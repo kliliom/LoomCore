@@ -63,6 +63,7 @@ Concept-level explanations of how LoomCore is put together.
 ### Bindings and Indices
 
 - ``Bindable``
+- ``JSONBindable``
 - ``TextDate``
 - ``ManagedIndex``
 

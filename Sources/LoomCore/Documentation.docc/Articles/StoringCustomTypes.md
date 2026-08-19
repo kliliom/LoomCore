@@ -27,14 +27,14 @@ The ``Bindable`` protocol is the single extension point for type-safe parameter 
 | `Optional<T>` | underlying or NULL | Reads NULL via column type check |
 | `RawRepresentable` | derived from `RawValue` | The enum's raw type's storage |
 | `Array`, `Dictionary` | TEXT (JSON) | JSON-encoded |
-| `Codable` | TEXT (JSON) | JSON-encoded; you opt in by conforming to ``Bindable`` |
+| `Codable` | TEXT (JSON) | JSON-encoded; you opt in by conforming to ``JSONBindable`` |
 
 ## Custom Codable types
 
-Any `Codable` type can become ``Bindable`` with a single conformance — no implementation needed:
+Any `Codable` type can become ``Bindable`` by conforming to ``JSONBindable`` — no implementation needed:
 
 ```swift
-struct Profile: Codable, Bindable {
+struct Profile: Codable, JSONBindable {
   let displayName: String
   let avatarURL: URL?
   let preferences: [String: String]
@@ -53,6 +53,8 @@ try await db.exec("INSERT INTO accounts (profile) VALUES (\(profile))")
 ```
 
 Encoding uses `JSONEncoder` and stores JSON TEXT, so stored values work directly with SQLite's JSON functions — `json_extract(profile, '$.displayName')`, the `->`/`->>` operators, `json_set`, and friends.
+
+JSON storage is opt-in so it never competes with other storage strategies: a raw-value enum declared `enum Role: String, Codable, Bindable` keeps its raw-value storage (`'admin'`, not `'"admin"'`). Don't combine ``JSONBindable`` with a `RawRepresentable`-based ``Bindable`` conformance on one type.
 
 ## NULL handling
 
@@ -97,5 +99,6 @@ For types that don't fit Codable (e.g. you want to control storage layout), conf
 ## Topics
 
 - ``Bindable``
+- ``JSONBindable``
 - ``LoomError``
 - ``LoomCoreErrorCode``

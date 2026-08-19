@@ -69,7 +69,7 @@ public protocol Bindable: Expression<Self> & Sendable {
   ///   stored value cannot be coerced to `Self`.
   ///
   /// - Note: Read each result column with a single type. Readers validate the column's storage
-  ///   class, and reading a column as `Data` or a `Codable` type converts the underlying value
+  ///   class, and reading a column as `Data` or a ``JSONBindable`` type converts the underlying value
   ///   to a BLOB in place, so reading the same index again as another type can throw
   ///   `LoomError.core(.typeMappingFailed, …)`. To read one value as two types, select the
   ///   column twice.

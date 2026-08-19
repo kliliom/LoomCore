@@ -55,7 +55,7 @@ struct BindableArrayTests {
 
   @Test("Array with Codable elements")
   func testArrayWithCodableElements() async throws {
-    struct Point: Codable, Bindable, Equatable {
+    struct Point: Codable, JSONBindable, Equatable {
       let x: Int
       let y: Int
     }

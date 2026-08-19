@@ -174,7 +174,7 @@ Nested `transaction` calls open a `SAVEPOINT` scope: a normal return releases th
 - `Optional<T>` (NULL handling)
 - `RawRepresentable` enums
 - `Array`, `Dictionary` (JSON-encoded)
-- `Codable` types (declare `Codable, Bindable` — JSON-encoded as TEXT, queryable with SQLite's JSON functions)
+- `Codable` types (declare `Codable, JSONBindable` — JSON-encoded as TEXT, queryable with SQLite's JSON functions)
 
 ### Optional / NULL
 
@@ -191,7 +191,7 @@ let result = try await db.query("SELECT email FROM users") { stmt, _ in
 ### Codable
 
 ```swift
-struct Metadata: Codable, Bindable {
+struct Metadata: Codable, JSONBindable {
     let createdAt: Date
     let tags: [String]
 }

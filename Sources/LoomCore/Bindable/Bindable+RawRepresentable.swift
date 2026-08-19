@@ -4,6 +4,10 @@ import SQLite3
 extension Bindable where Self: RawRepresentable, RawValue: Bindable {
   /// Binds `value.rawValue` at the 1-based `index`, delegating to the raw value's `Bindable` conformance.
   ///
+  /// Raw-value enums store their raw value even when they are also `Codable` — do not
+  /// additionally declare ``JSONBindable`` on such a type, or the two sets of default
+  /// witnesses collide.
+  ///
   /// ```swift
   /// enum Role: String, Bindable {
   ///   case admin, member, guest

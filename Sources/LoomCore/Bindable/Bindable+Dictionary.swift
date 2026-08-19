@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 
-/// Stores dictionaries with `Bindable` keys and values as JSON-encoded BLOB columns.
+/// Stores dictionaries with `Bindable` keys and values as JSON-encoded TEXT columns.
 ///
 /// The dictionary is bound as a single parameter — its JSON representation — rather than
 /// expanded into separate columns or rows.
@@ -26,4 +26,4 @@ extension Dictionary: Expression where Self: Codable, Key: Bindable, Value: Bind
   }
 }
 
-extension Dictionary: Bindable where Self: Codable, Key: Bindable, Value: Bindable {}
+extension Dictionary: Bindable, JSONBindable where Self: Codable, Key: Bindable, Value: Bindable {}

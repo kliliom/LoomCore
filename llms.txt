@@ -23,7 +23,7 @@ Add to your `Package.swift`:
 <!-- doc-check: skip -->
 ```swift
 dependencies: [
-    .package(url: "https://github.com/kliliom/loom-core.git", from: "1.0.0")
+    .package(url: "https://github.com/kliliom/loom-core.git", from: "0.1.0")
 ]
 ```
 
@@ -86,7 +86,7 @@ try await db.transaction { db in
 
 - **`Database`** — Main interface for all database operations. Actor-isolated, methods include `query()`, `exec()`, `transaction()`.
 - **`SQLStatement`** — SQL string with bound parameters. Created via string interpolation or `SQLStatement.raw()` for static SQL.
-- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date, plus the TextDate wrapper for datetime-TEXT columns); your own types get JSON-as-TEXT storage by declaring `Codable, Bindable`.
+- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date, plus the TextDate wrapper for datetime-TEXT columns); your own types get JSON-as-TEXT storage by declaring `Codable, JSONBindable`.
 - **`Expression`** — Protocol for SQL expressions. Bindable types automatically conform. Used for building complex SQL expressions with operators.
 - **`ColumnExpression<T>`** — Typed column reference for the expression DSL: `ColumnExpression<String>("email")` or `ColumnExpression<String>("email", of: "users")`. Renders as a quoted identifier (`"email"` / `"users"."email"`), conforms to `Expression`, and combines with operators, predicates, and functions.
 - **`DatabaseActor`** — Global actor that serializes all database access. Applied automatically to `Database` and binding operations.
@@ -297,7 +297,7 @@ text, and `.nullValue` for NULL (use `TextDate?` for nullable columns).
 ### Codable types (automatic JSON encoding)
 
 ```swift
-struct Metadata: Codable, Bindable {
+struct Metadata: Codable, JSONBindable {
     let createdAt: Date
     let tags: [String]
 }
@@ -368,7 +368,7 @@ let service = await db.getService(CacheInvalidationService.self)
 - `Sources/LoomCore/Bindable/Bindable+String.swift` — String binding, TEXT storage, SQL escaping
 - `Sources/LoomCore/Bindable/Bindable+Numbers.swift` — Int, Double, Float, Bool bindings, INTEGER/REAL storage
 - `Sources/LoomCore/Bindable/Bindable+Optional.swift` — NULL handling, optional value binding/extraction
-- `Sources/LoomCore/Bindable/Bindable+Codable.swift` — JSON encoding/decoding for Codable types stored as TEXT (reads legacy BLOB too)
+- `Sources/LoomCore/Bindable/JSONBindable.swift` — `JSONBindable` opt-in protocol: JSON encoding/decoding for Codable types stored as TEXT (reads legacy BLOB too)
 - `Sources/LoomCore/Bindable/Bindable+Date.swift` — Date storage (Unix timestamp as REAL), datetime TEXT parsing, time zone handling
 - `Sources/LoomCore/Bindable/Bindable+TextDate.swift` — TextDate wrapper: datetime TEXT storage (`YYYY-MM-DD HH:MM:SS.SSS` UTC) for TEXT-affinity columns
 - `Sources/LoomCore/Bindable/Bindable+UUID.swift` — UUID storage (16-byte BLOB, reads textual UUIDs too)

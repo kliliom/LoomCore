@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 
-/// Stores arrays of `Bindable` elements as JSON-encoded BLOB columns.
+/// Stores arrays of `Bindable` elements as JSON-encoded TEXT columns.
 ///
 /// The array is bound as a single parameter — its JSON representation — rather than
 /// expanded into a list of placeholders. For SQL `IN` lists, use `InExpression` instead.
@@ -26,4 +26,4 @@ extension Array: Expression where Self: Codable, Element: Bindable {
   }
 }
 
-extension Array: Bindable where Self: Codable, Element: Bindable {}
+extension Array: Bindable, JSONBindable where Self: Codable, Element: Bindable {}

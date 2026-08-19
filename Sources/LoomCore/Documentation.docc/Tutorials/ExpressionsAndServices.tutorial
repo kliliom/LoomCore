@@ -1,6 +1,6 @@
 @Tutorial(time: 25) {
   @Intro(title: "Expressions and services") {
-    Build a small task tracker that uses ``ColumnExpression`` and the operator DSL for type-checked queries, stores per-task metadata as JSON via `Codable`, tunes SQLite for production with PRAGMA, and uses ``Database/Service`` to invalidate an in-process cache on commit.
+    Build a small task tracker that uses ``ColumnExpression`` and the operator DSL for type-checked queries, stores per-task metadata as JSON via ``JSONBindable``, tunes SQLite for production with PRAGMA, and uses ``Database/Service`` to invalidate an in-process cache on commit.
 
     By the end you will know how to combine expressions for non-trivial WHERE clauses, when to reach for ``ColumnExpression`` versus raw SQL, and how to wire long-lived state to transaction lifecycle events.
   }
@@ -27,7 +27,7 @@
 
   @Section(title: "Model rows with Codable") {
     @ContentAndMedia {
-      `Codable` types become ``Bindable`` with a one-line conformance. Their values are JSON-encoded and stored as TEXT — precisely so SQLite's JSON functions (`json_extract`, `->`, `->>`) can query into them directly when you need to.
+      `Codable` types become ``Bindable`` by conforming to ``JSONBindable``. Their values are JSON-encoded and stored as TEXT — precisely so SQLite's JSON functions (`json_extract`, `->`, `->>`) can query into them directly when you need to.
     }
 
     @Steps {
@@ -44,7 +44,7 @@
       }
 
       @Step {
-        Insert a row. The interpolated `metadata` is JSON-encoded by `Bindable`'s `Codable` conformance and bound as a parameter — there is no manual `JSONEncoder` call. The write is wrapped in `db.transaction` so that the commit notifies the services we build at the end of this tutorial.
+        Insert a row. The interpolated `metadata` is JSON-encoded by its ``JSONBindable`` conformance and bound as a parameter — there is no manual `JSONEncoder` call. The write is wrapped in `db.transaction` so that the commit notifies the services we build at the end of this tutorial.
 
         @Code(name: "TaskStore.swift", file: ex-05-insert.swift, previousFile: ex-04-models.swift)
       }

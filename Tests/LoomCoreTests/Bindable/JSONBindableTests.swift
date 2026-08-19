@@ -2,10 +2,10 @@ import Foundation
 import LoomCore
 import Testing
 
-@Suite("Codable Bindable Tests")
+@Suite("JSONBindable Tests")
 @DatabaseActor
-struct BindableCodableTests {
-  struct Person: Codable, Bindable, Equatable {
+struct JSONBindableTests {
+  struct Person: Codable, JSONBindable, Equatable {
     let name: String
     let age: Int
   }
@@ -57,7 +57,7 @@ struct BindableCodableTests {
       let city: String
     }
 
-    struct Employee: Codable, Bindable, Equatable {
+    struct Employee: Codable, JSONBindable, Equatable {
       let name: String
       let address: Address
     }
@@ -141,7 +141,7 @@ struct BindableCodableTests {
 
   @Test("Codable with optional fields")
   func testCodableWithOptionalFields() async throws {
-    struct Profile: Codable, Bindable, Equatable {
+    struct Profile: Codable, JSONBindable, Equatable {
       let name: String
       let email: String?
     }
@@ -167,7 +167,7 @@ struct BindableCodableTests {
 
   @Test("Codable with arrays")
   func testCodableWithArrays() async throws {
-    struct Team: Codable, Bindable, Equatable {
+    struct Team: Codable, JSONBindable, Equatable {
       let name: String
       let members: [String]
     }

@@ -17,6 +17,19 @@ struct BindableRawRepresentableTests {
     case high = 3
   }
 
+  // Regression: a Codable raw-value enum used to hit "ambiguous witness" because
+  // JSON storage was a default for every Codable Bindable. With JSON storage
+  // opt-in via JSONBindable, this declaration compiles and stores the raw value.
+  enum Role: String, Codable, Bindable {
+    case admin
+    case member
+  }
+
+  enum Level: Int, Codable, Bindable {
+    case debug = 0
+    case info = 1
+  }
+
   @Test("String-based enum binding and extraction")
   func testStringEnumBinding() async throws {
     let db = try Database.openInMemory()
@@ -156,5 +169,28 @@ struct BindableRawRepresentableTests {
         try Status.column(of: stmt, at: 0)
       }
     }
+  }
+
+  @Test("Codable raw-value enums conform without ambiguity and store the raw value")
+  func testCodableRawValueEnums() async throws {
+    #expect(Role.defaultSQLStorageType == "TEXT")
+    #expect(Level.defaultSQLStorageType == "INTEGER")
+
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (role TEXT, level INTEGER)")
+    try await db.exec("INSERT INTO test (role, level) VALUES (\(Role.admin), \(Level.info))")
+
+    // Raw-value storage, not JSON: 'admin', not '"admin"'.
+    let raw = try await db.query("SELECT role, level FROM test") { stmt, _ in
+      (try String.column(of: stmt, at: 0), try Int.column(of: stmt, at: 1))
+    }
+    #expect(raw.first?.0 == "admin")
+    #expect(raw.first?.1 == 1)
+
+    let typed = try await db.query("SELECT role, level FROM test") { stmt, _ in
+      (try Role.column(of: stmt, at: 0), try Level.column(of: stmt, at: 1))
+    }
+    #expect(typed.first?.0 == .admin)
+    #expect(typed.first?.1 == .info)
   }
 }

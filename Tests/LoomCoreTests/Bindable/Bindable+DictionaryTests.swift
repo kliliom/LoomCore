@@ -55,7 +55,7 @@ struct BindableDictionaryTests {
 
   @Test("Dictionary with Codable values")
   func testDictionaryWithCodableValues() async throws {
-    struct Config: Codable, Bindable, Equatable {
+    struct Config: Codable, JSONBindable, Equatable {
       let enabled: Bool
       let timeout: Int
     }
@@ -154,7 +154,7 @@ struct BindableDictionaryTests {
 
   @Test("Nested dictionary structure")
   func testNestedDictionaryStructure() async throws {
-    struct Metadata: Codable, Bindable, Equatable {
+    struct Metadata: Codable, JSONBindable, Equatable {
       let tags: [String]
       let version: Int
     }

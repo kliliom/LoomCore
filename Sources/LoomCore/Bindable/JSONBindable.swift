@@ -1,24 +1,34 @@
 import Foundation
 import SQLite3
 
-extension Bindable where Self: Codable {
+/// Opt-in JSON-as-`TEXT` storage for `Codable` types.
+///
+/// Conforming a `Codable` type gives it a complete ``Bindable`` implementation with no
+/// members to write: values are JSON-encoded on bind and JSON-decoded on column reads.
+///
+/// ```swift
+/// struct Profile: Codable, JSONBindable {
+///   let displayName: String
+///   let avatarURL: URL?
+/// }
+///
+/// let userID = 1
+/// let profile = Profile(displayName: "Alice", avatarURL: nil)
+/// try await db.exec("INSERT INTO users (id, profile) VALUES (\(userID), \(profile))")
+/// ```
+///
+/// JSON storage is opt-in rather than automatic for every `Codable` ``Bindable`` so the
+/// two never compete: a raw-value enum declared `enum Role: String, Codable, Bindable`
+/// keeps its raw-value storage (`'admin'`, not `'"admin"'`) with no ambiguity. For the
+/// same reason, never combine `JSONBindable` with a `RawRepresentable`-based `Bindable`
+/// conformance on one type — the two sets of default witnesses collide.
+public protocol JSONBindable: Bindable, Codable {}
+
+extension JSONBindable {
   /// JSON-encodes `value` and binds it as a `TEXT` parameter at the 1-based `index`.
   ///
   /// Storing JSON as `TEXT` keeps the value directly usable with SQLite's JSON functions
   /// (`json_extract`, `->`, `->>`, `json_set`, …) on every SQLite version.
-  ///
-  /// ```swift
-  /// struct Profile: Codable, Bindable {
-  ///   let displayName: String
-  ///   let avatarURL: URL?
-  /// }
-  ///
-  /// let userID = 1
-  /// let profile = Profile(displayName: "Alice", avatarURL: nil)
-  /// try await db.exec(
-  ///   "INSERT INTO users (id, profile) VALUES (\(userID), \(profile))"
-  /// )
-  /// ```
   @DatabaseActor
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {
     let encoder = JSONEncoder()
