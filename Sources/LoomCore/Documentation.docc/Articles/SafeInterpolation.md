@@ -44,6 +44,10 @@ try await db.query("SELECT \(nameColumn) FROM users") { stmt, _ in
 
 `ColumnExpression` always renders quoted identifiers (`"name"`, `"users"."email"`), escapes embedded double quotes by doubling, and rejects empty or NUL-containing names at construction. This makes reserved words like `order` and identifiers with spaces safe to use without special handling.
 
+### JSON paths — literal by design
+
+``JSONPath`` values (the `"$.name"` arguments of the JSON expressions) render as single-quoted, quote-doubled literals rather than bound parameters — the same treatment as `LIKE`'s `ESCAPE` operand. SQLite matches an expression index on `json_extract("col", '$.a')` only when the path is a literal token, so binding it would silently disable indexed JSON lookups. The doubling makes breaking out of the literal impossible, but a path still selects which node is read — treat it like a column name, not user input.
+
 ### Composing statements
 
 ``SQLStatement`` values can be combined while preserving parameter ordering:

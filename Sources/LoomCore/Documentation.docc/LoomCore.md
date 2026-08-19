@@ -45,6 +45,7 @@ Concept-level explanations of how LoomCore is put together.
 - <doc:SafeInterpolation>
 - <doc:ConcurrencyModel>
 - <doc:StoringCustomTypes>
+- <doc:QueryingJSON>
 - <doc:TransactionsAndServices>
 
 ### Database
@@ -94,6 +95,34 @@ Concept-level explanations of how LoomCore is put together.
 - ``Count``
 - ``Min``
 - ``Max``
+
+### JSON
+
+- ``JSONPath``
+- ``JSONExtract``
+- ``JSONAccessExpression``
+- ``JSONType``
+- ``JSONValid``
+- ``JSONErrorPosition``
+- ``JSONArrayLength``
+- ``JSONAssignment``
+- ``JSONModify``
+- ``JSONRemove``
+- ``JSONPatch``
+- ``JSONConversion``
+- ``JSONArray``
+- ``JSONObject``
+- ``JSONGroupArray``
+- ``JSONGroupObject``
+- ``TableValuedFunction``
+- ``JSONEach``
+- ``JSONTree``
+- ``jsonArray(_:)``
+- ``jsonbArray(_:)``
+- ``jsonObject(_:)``
+- ``jsonbObject(_:)``
+- ``jsonGroupObject(name:value:)``
+- ``jsonbGroupObject(name:value:)``
 
 ### Errors
 

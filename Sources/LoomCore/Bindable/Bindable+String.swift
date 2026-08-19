@@ -51,8 +51,7 @@ extension String: Bindable {
   /// try "O'Brien".asSQLLiteral()  // "'O''Brien'"
   /// ```
   public func asSQLLiteral() throws -> String {
-    let escaped = replacingOccurrences(of: "'", with: "''")
-    return "'\(escaped)'"
+    "'\(doublingOccurrences(of: "'"))'"
   }
 
   /// SQLite storage type for `String` columns: `TEXT`.

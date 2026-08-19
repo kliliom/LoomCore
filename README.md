@@ -11,6 +11,7 @@ A type-safe SQLite wrapper for Swift 6+ using actor isolation for thread safety.
 - 🚦 **Transaction Gating** - Operations outside an in-flight transaction wait until it commits or rolls back — transaction bodies can suspend freely
 - 🧮 **Expressions** - Operator overloading for building SQL expressions in Swift
 - 🗂️ **Codable Support** - Automatic JSON encoding/decoding for `Codable` types
+- 🌳 **JSON Querying** - Typed expressions over SQLite's JSON functions: extract, modify, aggregate, and iterate documents (JSONB included)
 - 🪝 **Service Hooks** - Transaction lifecycle callbacks for cache invalidation and side effects
 - 🗃️ **Statement Caching** - Prepared statements cached automatically inside `cached { }` scopes (per task tree)
 
@@ -278,6 +279,8 @@ let names = try await db.query("SELECT name FROM users WHERE \(predicate)") { st
 ```
 
 Predicates: `like`, `isNull` / `isNotNull`, `in(array:)` / `notIn(array:)`. Aggregate and scalar functions: `count`, `sum`, `avg`, `min`, `max`, `length`, `upper`, `lower`, `trim`, `substring`, `concat`, `groupConcat`, `locate`, `ifNull`, `cast`.
+
+JSON functions: `jsonExtract`, `jsonValue` (`->>`), `jsonFragment` (`->`), `jsonType`, `jsonValid`, `jsonErrorPosition`, `jsonArrayLength`, `jsonSet` / `jsonInsert` / `jsonReplace`, `jsonRemove`, `jsonPatch`, `json`, `jsonArray`, `jsonObject`, `jsonGroupArray`, `jsonGroupObject`, plus `JSONEach` / `JSONTree` for iterating documents in FROM clauses and `@available`-gated `jsonb*` variants (SQLite 3.45+). The JSON surface needs the system SQLite to be 3.38+, which every supported OS version ships; APIs needing a newer SQLite (`jsonErrorPosition` — 3.42, everything `jsonb*` — 3.45) are gated with `@available` on the OS versions that carry it. See the *Querying JSON* documentation article.
 
 ## Services
 

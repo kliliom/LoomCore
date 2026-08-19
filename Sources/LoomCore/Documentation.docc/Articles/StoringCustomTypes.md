@@ -52,7 +52,18 @@ let profile = Profile(
 try await db.exec("INSERT INTO accounts (profile) VALUES (\(profile))")
 ```
 
-Encoding uses `JSONEncoder` and stores JSON TEXT, so stored values work directly with SQLite's JSON functions — `json_extract(profile, '$.displayName')`, the `->`/`->>` operators, `json_set`, and friends.
+Encoding uses `JSONEncoder` and stores JSON TEXT, so stored values work directly with SQLite's JSON functions — `json_extract(profile, '$.displayName')`, the `->`/`->>` operators, `json_set`, and friends. LoomCore exposes those functions as typed expressions:
+
+```swift
+let profile = ColumnExpression<String>("profile")
+let names = try await db.query(
+  "SELECT \(profile.jsonValue("$.displayName", as: String.self)) FROM accounts"
+) { stmt, _ in
+  try String?.column(of: stmt, at: 0)
+}
+```
+
+See <doc:QueryingJSON> for the full JSON querying, modification, and iteration API.
 
 JSON storage is opt-in so it never competes with other storage strategies: a raw-value enum declared `enum Role: String, Codable, Bindable` keeps its raw-value storage (`'admin'`, not `'"admin"'`). Don't combine ``JSONBindable`` with a `RawRepresentable`-based ``Bindable`` conformance on one type.
 

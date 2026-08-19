@@ -55,7 +55,7 @@ where Left.ExpressionValue == String, Right.ExpressionValue == String {
       // Rendered as a quote-doubled literal, not a bound parameter: SQLite applies the
       // LIKE prefix-index optimization only when the ESCAPE operand is a literal token,
       // so binding it would silently turn every indexed LIKE into a full-table scan.
-      builder.appendLiteral("ESCAPE '\(String(escape).replacingOccurrences(of: "'", with: "''"))'")
+      builder.appendLiteral("ESCAPE '\(String(escape).doublingOccurrences(of: "'"))'")
     }
     builder.appendLiteral(")")
   }

@@ -144,6 +144,17 @@ struct ExpressionStringTests {
     )
   }
 
+  @Test("LIKE escape character with a combining scalar cannot break out of its literal")
+  func testLikeEscapeCombiningScalar() throws {
+    // A Character can be `'` + U+0301 (one grapheme, two scalars); grapheme-level search
+    // would miss the quote and leave the literal unterminated. SQLite still rejects a
+    // multi-scalar ESCAPE at execution, but the literal itself must stay intact.
+    var builder = SQLBuilder()
+    username.like("x%", escape: "'\u{301}").append(to: &builder)
+
+    #expect(builder.makeStatement().sql.contains("ESCAPE '''\u{301}'"))
+  }
+
   @Test("Escaped LIKE keeps the prefix-index optimization")
   func testEscapedLikeUsesIndex() async throws {
     // SQLite applies the LIKE prefix-index optimization only when the ESCAPE operand is a

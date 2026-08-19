@@ -214,6 +214,8 @@ let names = try await db.query("SELECT name FROM users WHERE \(expr)") { stmt, _
 
 Predicates: `.like(_:escape:)` / `.notLike(_:escape:)` (SQL `LIKE`), `.isNull()` / `.isNotNull()`, and `.in(array:)` / `.notIn(array:)` / `.in(values:)` / `.in(subquery:)` (render `IN (…)` via `InExpression`). Aggregate functions: `Count`, `Sum`, `Avg`, `Min`, `Max` (also as `.count()`, `.sum()`, `.avg()`, `.min()`, `.max()` on expressions). Scalar functions include `Locate` (`.locate(_:)`, SQLite `instr()`), `Length`, `Upper`, `Lower`, `Trim`, `Substring`, `Concat`, `GroupConcat`, `IfNull`, and `CAST` via `CastExpression`.
 
+JSON functions: `.jsonExtract(_:as:)` (`JSON_EXTRACT`), `.jsonValue(_:as:)` (`->>`), `.jsonFragment(_:)` (`->`), `.jsonType(_:)`, `.jsonValid()` (+ a flags form for JSONB), `.jsonErrorPosition()` (iOS 17/macOS 14+), `.jsonArrayLength(_:)`; modification via `.jsonSet(_:_:)` / `.jsonInsert(_:_:)` / `.jsonReplace(_:_:)` (taking `JSONAssignment.value`/`.json` pairs), `.jsonRemove(_:_:)`, `.jsonPatch(_:)`; construction/aggregation via `jsonArray(_:)`, `jsonObject(_:)`, `.jsonGroupArray()`, `jsonGroupObject(name:value:)`; iteration via `JSONEach` / `JSONTree` interpolated in FROM position. Paths (`JSONPath`, e.g. `"$.a[0]"`) render as SQL literals so expression indexes still match. `jsonb`-prefixed variants (SQLite 3.45+) are `@available(iOS 18, macOS 15, …)` and return `Data`.
+
 ## Examples
 
 ### Managed indices (recommended for multi-column operations)
@@ -317,6 +319,39 @@ try await db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
 
 let retrieved = try await db.query("SELECT metadata FROM items") { stmt, _ in
     try Metadata.column(of: stmt, at: 0)  // Automatically decoded from JSON
+}
+```
+
+### JSON querying and modification
+
+```swift
+let profile = ColumnExpression<String>("profile")
+
+// Extract typed values; paths are literals, results are optional
+let age = profile.jsonValue("$.age", as: Int.self)  // ("profile"->>'$.age')
+let adults = try await db.query("SELECT id FROM users WHERE \(age >= 18)") { stmt, _ in
+    try Int64.column(of: stmt, at: 0)
+}
+
+// Modify in place: .value binds scalars, .json nests documents (wraps in JSON(?))
+struct Address: Codable, JSONBindable { let city: String }
+try await db.exec(
+    """
+    UPDATE users SET profile = \(profile.jsonSet(
+      .value("$.displayName", "Alice"),
+      .json("$.address", Address(city: "Vienna"))
+    ))
+    """
+)
+
+// Iterate a JSON array in FROM position
+let userID = ColumnExpression<Int64>("id", of: "users")
+let data = ColumnExpression<String>("profile", of: "users")
+let tag = JSONEach(data, "$.tags")
+let tagged = try await db.query(
+    "SELECT \(userID) FROM users, \(tag) WHERE \(tag.value(as: String.self) == "swift")"
+) { stmt, _ in
+    try Int64.column(of: stmt, at: 0)
 }
 ```
 
@@ -447,4 +482,24 @@ let service = await db.getService(CacheInvalidationService.self)
 - `Sources/LoomCore/Expressions/Function+Length.swift` — String length
 - `Sources/LoomCore/Expressions/Function+Locate.swift` — Substring position (SQLite `instr()`)
 - `Sources/LoomCore/Expressions/Function+GroupConcat.swift` — GROUP_CONCAT aggregate
+
+### JSON functions
+
+- `Sources/LoomCore/Expressions/JSONPath.swift` — `JSONPath`: validated JSON paths rendered as SQL literals (expression-index friendly)
+- `Sources/LoomCore/Expressions/Function+JsonExtract.swift` — JSON_EXTRACT / JSONB_EXTRACT with explicit result typing (`as:`)
+- `Sources/LoomCore/Expressions/Expression+JsonAccess.swift` — `->` (`.jsonFragment`) and `->>` (`.jsonValue`) operators
+- `Sources/LoomCore/Expressions/Function+JsonType.swift` — JSON_TYPE inspector
+- `Sources/LoomCore/Expressions/Function+JsonValid.swift` — JSON_VALID inspector
+- `Sources/LoomCore/Expressions/Function+JsonArrayLength.swift` — JSON_ARRAY_LENGTH inspector
+- `Sources/LoomCore/Expressions/JSONAssignment.swift` — path/value pairs for json_set family (`.value` binds as-is, `.json` wraps in `JSON(?)`)
+- `Sources/LoomCore/Expressions/Function+JsonModify.swift` — JSON_SET / JSON_INSERT / JSON_REPLACE (+ JSONB variants)
+- `Sources/LoomCore/Expressions/Function+JsonRemove.swift` — JSON_REMOVE (+ JSONB variant)
+- `Sources/LoomCore/Expressions/Function+JsonPatch.swift` — JSON_PATCH, RFC 7396 MergePatch (+ JSONB variant)
+- `Sources/LoomCore/Expressions/Function+Json.swift` — JSON() canonicalizer and JSONB() converter
+- `Sources/LoomCore/Expressions/Function+JsonArray.swift` — JSON_ARRAY construction (+ JSONB variant)
+- `Sources/LoomCore/Expressions/Function+JsonObject.swift` — JSON_OBJECT construction (+ JSONB variant)
+- `Sources/LoomCore/Expressions/Function+JsonGroupArray.swift` — JSON_GROUP_ARRAY aggregate (+ JSONB variant)
+- `Sources/LoomCore/Expressions/Function+JsonGroupObject.swift` — JSON_GROUP_OBJECT aggregate (+ JSONB variant)
+- `Sources/LoomCore/Expressions/Function+JsonEach.swift` — `JSONEach`: json_each table-valued function with typed column handles
+- `Sources/LoomCore/Expressions/Function+JsonTree.swift` — `JSONTree`: json_tree recursive walker with typed column handles
 - `Sources/LoomCore/Expressions/IfNullExpression.swift` — IFNULL/COALESCE handling

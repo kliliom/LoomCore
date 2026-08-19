@@ -59,6 +59,11 @@ struct BindableStringTests {
 
     let withQuotes = "test'quote"
     #expect(try withQuotes.asSQLLiteral() == "'test''quote'")
+
+    // Grapheme-level search would see `'` + U+0301 as a single character and skip the
+    // quote; escaping must operate on Unicode scalars.
+    let withCombiningScalar = "a'\u{301}b"
+    #expect(try withCombiningScalar.asSQLLiteral() == "'a''\u{301}b'")
   }
 
   @Test("String defaultSQLStorageType")

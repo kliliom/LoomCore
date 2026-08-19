@@ -38,6 +38,17 @@ struct ColumnExpressionTests {
     #expect(builder.makeStatement().sql == "\"weird\"\"name\"")
   }
 
+  @Test("A double quote followed by a combining scalar is still doubled")
+  func testCombiningScalarQuoteEscaping() {
+    // Grapheme-level search would see `"` + U+0301 as a single character and skip the
+    // quote; escaping must operate on Unicode scalars.
+    let column = ColumnExpression<Int>("weird\"\u{301}name")
+    var builder = SQLBuilder()
+    column.append(to: &builder)
+
+    #expect(builder.makeStatement().sql == "\"weird\"\"\u{301}name\"")
+  }
+
   @Test("Reserved word column name is safely quoted")
   func testReservedWordColumn() {
     let column = ColumnExpression<Int>("order")

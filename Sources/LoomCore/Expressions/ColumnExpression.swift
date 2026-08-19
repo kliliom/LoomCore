@@ -68,9 +68,6 @@ public struct ColumnExpression<T>: Expression {
   }
 
   private static func escape(_ name: String) -> String {
-    guard name.utf8.contains(UInt8(ascii: "\"")) else {
-      return "\"\(name)\""
-    }
-    return "\"\(name.replacingOccurrences(of: "\"", with: "\"\""))\""
+    "\"\(name.doublingOccurrences(of: "\""))\""
   }
 }
