@@ -9,14 +9,14 @@ struct DatabaseTransactionTests {
   func testTransactionCommit() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
-      try db.exec("INSERT INTO test (value) VALUES (2)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
+      try await db.exec("INSERT INTO test (value) VALUES (2)")
     }
 
-    let result = try db.query("SELECT COUNT(*) FROM test") { stmt, _ in
+    let result = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -27,18 +27,18 @@ struct DatabaseTransactionTests {
   func testTransactionRollback() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     do {
-      try db.transaction {
-        try db.exec("INSERT INTO test (value) VALUES (1)")
+      try await db.transaction { db in
+        try await db.exec("INSERT INTO test (value) VALUES (1)")
         throw LoomError.core(.unexpectedState, message: "test error")
       }
     } catch {
       // Expected error
     }
 
-    let result = try db.query("SELECT COUNT(*) FROM test") { stmt, _ in
+    let result = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -49,13 +49,13 @@ struct DatabaseTransactionTests {
   func testTransactionDeferred() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    try db.transaction(kind: .deferred) {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction(kind: .deferred) { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -66,13 +66,13 @@ struct DatabaseTransactionTests {
   func testTransactionImmediate() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    try db.transaction(kind: .immediate) {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction(kind: .immediate) { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -83,13 +83,13 @@ struct DatabaseTransactionTests {
   func testTransactionExclusive() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    try db.transaction(kind: .exclusive) {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction(kind: .exclusive) { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -100,11 +100,11 @@ struct DatabaseTransactionTests {
   func testTransactionWithLastInsertedRowID() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    let insertedId = try db.transaction {
-      try db.lastInsertedRowID {
-        try db.exec("INSERT INTO test (value) VALUES (42)")
+    let insertedId = try await db.transaction { db in
+      try await db.lastInsertedRowID {
+        try await db.exec("INSERT INTO test (value) VALUES (42)")
       }
     }
 
@@ -113,7 +113,7 @@ struct DatabaseTransactionTests {
       return
     }
 
-    let result = try db.query("SELECT value FROM test WHERE rowid = \(insertedId)") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test WHERE rowid = \(insertedId)") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -124,17 +124,17 @@ struct DatabaseTransactionTests {
   func testTransactionMultipleOperations() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-    try db.exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, content TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, content TEXT)")
 
-    try db.transaction {
-      let userId = try db.lastInsertedRowID {
-        try db.exec("INSERT INTO users (name) VALUES ('Alice')")
+    try await db.transaction { db in
+      let userId = try await db.lastInsertedRowID {
+        try await db.exec("INSERT INTO users (name) VALUES ('Alice')")
       }
-      try db.exec("INSERT INTO posts (user_id, content) VALUES (\(userId), 'Hello')")
+      try await db.exec("INSERT INTO posts (user_id, content) VALUES (\(userId), 'Hello')")
     }
 
-    let result = try db.query(
+    let result = try await db.query(
       """
       SELECT users.name, posts.content
       FROM users
@@ -154,19 +154,19 @@ struct DatabaseTransactionTests {
   func testTransactionIsolation() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (1)")
 
-    try db.transaction {
-      try db.exec("UPDATE test SET value = 2")
+    try await db.transaction { db in
+      try await db.exec("UPDATE test SET value = 2")
 
-      let result = try db.query("SELECT value FROM test") { stmt, _ in
+      let result = try await db.query("SELECT value FROM test") { stmt, _ in
         try Int.column(of: stmt, at: 0)
       }
       #expect(result.first == 2)
     }
 
-    let finalResult = try db.query("SELECT value FROM test") { stmt, _ in
+    let finalResult = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
     #expect(finalResult.first == 2)
@@ -176,20 +176,20 @@ struct DatabaseTransactionTests {
   func testTransactionRollbackPreservesData() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (1)")
 
     do {
-      try db.transaction {
-        try db.exec("UPDATE test SET value = 2")
-        try db.exec("INSERT INTO test (value) VALUES (3)")
+      try await db.transaction { db in
+        try await db.exec("UPDATE test SET value = 2")
+        try await db.exec("INSERT INTO test (value) VALUES (3)")
         throw LoomError.core(.unexpectedState, message: "test error")
       }
     } catch {
       // Expected error
     }
 
-    let result = try db.query("SELECT value FROM test ORDER BY value") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test ORDER BY value") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -201,20 +201,20 @@ struct DatabaseTransactionTests {
   func testTransactionConstraintViolation() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value INTEGER)")
-    try db.exec("INSERT INTO test (id, value) VALUES (1, 100)")
+    try await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value INTEGER)")
+    try await db.exec("INSERT INTO test (id, value) VALUES (1, 100)")
 
     do {
-      try db.transaction {
-        try db.exec("INSERT INTO test (id, value) VALUES (2, 200)")
+      try await db.transaction { db in
+        try await db.exec("INSERT INTO test (id, value) VALUES (2, 200)")
         // This should violate primary key constraint
-        try db.exec("INSERT INTO test (id, value) VALUES (1, 300)")
+        try await db.exec("INSERT INTO test (id, value) VALUES (1, 300)")
       }
     } catch {
       // Expected constraint violation
     }
 
-    let result = try db.query("SELECT COUNT(*) FROM test") { stmt, _ in
+    let result = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 

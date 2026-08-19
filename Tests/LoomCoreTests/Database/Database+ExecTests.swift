@@ -10,9 +10,9 @@ struct DatabaseExecTests {
   func testExecWithSQLAndBinder() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO users (name, age) VALUES (?, ?)",
       binder: { stmt in
         try "Alice".bind(to: stmt, at: 1)
@@ -20,7 +20,7 @@ struct DatabaseExecTests {
       }
     )
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let name = try String.column(of: stmt, at: 0)
       let age = try Int.column(of: stmt, at: 1)
       return (name, age)
@@ -35,11 +35,11 @@ struct DatabaseExecTests {
   func testExecWithSQLString() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let name = try String.column(of: stmt, at: 0)
       let age = try Int.column(of: stmt, at: 1)
       return (name, age)
@@ -54,9 +54,9 @@ struct DatabaseExecTests {
   func testExecWithSQLAndManagedBinder() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO users (name, age) VALUES (?, ?)",
       binder: { stmt, index in
         try "Alice".bind(to: stmt, at: &index)
@@ -64,7 +64,7 @@ struct DatabaseExecTests {
       }
     )
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let name = try String.column(of: stmt, at: 0)
       let age = try Int.column(of: stmt, at: 1)
       return (name, age)
@@ -79,15 +79,15 @@ struct DatabaseExecTests {
   func testExecWithSQLAndBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO users (name, age) VALUES (?, ?)",
       binding: "Alice",
       25
     )
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let name = try String.column(of: stmt, at: 0)
       let age = try Int.column(of: stmt, at: 1)
       return (name, age)
@@ -102,11 +102,11 @@ struct DatabaseExecTests {
   func testExecWithSQLStatement() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec("INSERT INTO users (name, age) VALUES (\("Alice"), \(25))")
+    try await db.exec("INSERT INTO users (name, age) VALUES (\("Alice"), \(25))")
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let name = try String.column(of: stmt, at: 0)
       let age = try Int.column(of: stmt, at: 1)
       return (name, age)

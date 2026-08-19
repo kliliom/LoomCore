@@ -7,17 +7,17 @@ import Testing
 struct ExpressionStringTests {
   let db: Database
 
-  init() throws {
+  init() async throws {
     db = try Database.openInMemory()
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, email TEXT)")
-    try prepareDatabase()
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, email TEXT)")
+    try await prepareDatabase()
   }
 
-  func prepareDatabase() throws {
-    try db.exec(raw: "INSERT INTO users (username, email) VALUES ('admin', 'admin@example.com')")
-    try db.exec(raw: "INSERT INTO users (username, email) VALUES ('user_123', 'user@example.com')")
-    try db.exec(raw: "INSERT INTO users (username, email) VALUES ('user123', 'guest@test.com')")
-    try db.exec(raw: "INSERT INTO users (username, email) VALUES ('moderator', 'mod@example.com')")
+  func prepareDatabase() async throws {
+    try await db.exec(raw: "INSERT INTO users (username, email) VALUES ('admin', 'admin@example.com')")
+    try await db.exec(raw: "INSERT INTO users (username, email) VALUES ('user_123', 'user@example.com')")
+    try await db.exec(raw: "INSERT INTO users (username, email) VALUES ('user123', 'guest@test.com')")
+    try await db.exec(raw: "INSERT INTO users (username, email) VALUES ('moderator', 'mod@example.com')")
   }
 
   let username = ColumnExpression<String>("username")
@@ -27,14 +27,14 @@ struct ExpressionStringTests {
     _ expression: E,
     expectedExpression: String,
     expectedValues: [T]
-  ) throws where E.ExpressionValue == T, T: Bindable & Equatable {
+  ) async throws where E.ExpressionValue == T, T: Bindable & Equatable {
     // Test SQL generation
     var builder = SQLBuilder()
     expression.append(to: &builder)
     #expect(builder.makeStatement().sql == expectedExpression)
 
     // Test query execution
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expression) FROM users ORDER BY id",
       stepper: { stmt, _ in
         try T.column(of: stmt, at: 0)
@@ -44,8 +44,8 @@ struct ExpressionStringTests {
   }
 
   @Test("LIKE operator with wildcard")
-  func testLikeWithWildcard() throws {
-    try run(
+  func testLikeWithWildcard() async throws {
+    try await run(
       username.like("%user%"),
       expectedExpression: "( \"username\" LIKE ? )",
       expectedValues: [false, true, true, false]
@@ -53,8 +53,8 @@ struct ExpressionStringTests {
   }
 
   @Test("LIKE operator with single character wildcard")
-  func testLikeWithSingleCharacterWildcard() throws {
-    try run(
+  func testLikeWithSingleCharacterWildcard() async throws {
+    try await run(
       username.like("u_er%"),
       expectedExpression: "( \"username\" LIKE ? )",
       expectedValues: [false, true, true, false]
@@ -62,8 +62,8 @@ struct ExpressionStringTests {
   }
 
   @Test("LIKE operator with no wildcard")
-  func testLikeWithNoWildcard() throws {
-    try run(
+  func testLikeWithNoWildcard() async throws {
+    try await run(
       username.like("admin"),
       expectedExpression: "( \"username\" LIKE ? )",
       expectedValues: [true, false, false, false]
@@ -71,8 +71,8 @@ struct ExpressionStringTests {
   }
 
   @Test("LIKE operator with special characters")
-  func testLikeWithSpecialCharacters() throws {
-    try run(
+  func testLikeWithSpecialCharacters() async throws {
+    try await run(
       email.like("%@example.com"),
       expectedExpression: "( \"email\" LIKE ? )",
       expectedValues: [true, true, false, true]
@@ -80,8 +80,8 @@ struct ExpressionStringTests {
   }
 
   @Test("LIKE operator with escape character")
-  func testLikeWithEscapeCharacter() throws {
-    try run(
+  func testLikeWithEscapeCharacter() async throws {
+    try await run(
       username.like("user\\_%", escape: "\\"),
       expectedExpression: "( \"username\" LIKE ? ESCAPE '\\' )",
       expectedValues: [false, true, false, false]
@@ -89,8 +89,8 @@ struct ExpressionStringTests {
   }
 
   @Test("NOT LIKE operator with wildcard")
-  func testNotLikeWithWildcard() throws {
-    try run(
+  func testNotLikeWithWildcard() async throws {
+    try await run(
       username.notLike("%user%"),
       expectedExpression: "( \"username\" NOT LIKE ? )",
       expectedValues: [true, false, false, true]
@@ -98,8 +98,8 @@ struct ExpressionStringTests {
   }
 
   @Test("NOT LIKE operator with single character wildcard")
-  func testNotLikeWithSingleCharacterWildcard() throws {
-    try run(
+  func testNotLikeWithSingleCharacterWildcard() async throws {
+    try await run(
       username.notLike("u_er%"),
       expectedExpression: "( \"username\" NOT LIKE ? )",
       expectedValues: [true, false, false, true]
@@ -107,8 +107,8 @@ struct ExpressionStringTests {
   }
 
   @Test("NOT LIKE operator with no wildcard")
-  func testNotLikeWithNoWildcard() throws {
-    try run(
+  func testNotLikeWithNoWildcard() async throws {
+    try await run(
       username.notLike("admin"),
       expectedExpression: "( \"username\" NOT LIKE ? )",
       expectedValues: [false, true, true, true]
@@ -116,8 +116,8 @@ struct ExpressionStringTests {
   }
 
   @Test("NOT LIKE operator with special characters")
-  func testNotLikeWithSpecialCharacters() throws {
-    try run(
+  func testNotLikeWithSpecialCharacters() async throws {
+    try await run(
       email.notLike("%@example.com"),
       expectedExpression: "( \"email\" NOT LIKE ? )",
       expectedValues: [false, false, true, false]
@@ -125,8 +125,8 @@ struct ExpressionStringTests {
   }
 
   @Test("NOT LIKE operator with escape character")
-  func testNotLikeWithEscapeCharacter() throws {
-    try run(
+  func testNotLikeWithEscapeCharacter() async throws {
+    try await run(
       username.notLike("user\\_%", escape: "\\"),
       expectedExpression: "( \"username\" NOT LIKE ? ESCAPE '\\' )",
       expectedValues: [true, false, true, true]

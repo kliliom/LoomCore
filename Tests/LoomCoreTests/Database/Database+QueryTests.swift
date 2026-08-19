@@ -9,13 +9,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLAndBinder() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= ? ORDER BY age ASC",
       binder: { stmt in
         try 30.bind(to: stmt, at: 1)
@@ -31,7 +31,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= ? ORDER BY age ASC",
       binder: { stmt in
         try 30.bind(to: stmt, at: 1)
@@ -52,13 +52,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLStringAndStepper() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= 30 ORDER BY age ASC",
       stepper: { stmt, _ in
         let name = try String.column(of: stmt, at: 0)
@@ -71,7 +71,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= 30 ORDER BY age ASC",
       stepper: { stmt, stop in
         let name = try String.column(of: stmt, at: 0)
@@ -89,13 +89,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLStringAndManagedStepper() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= 30 ORDER BY age ASC",
       stepper: { stmt, index, _ in
         let name = try String.column(of: stmt, at: &index)
@@ -108,7 +108,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= 30 ORDER BY age ASC",
       stepper: { stmt, index, stop in
         let name = try String.column(of: stmt, at: &index)
@@ -126,13 +126,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLAndManagedBinder() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= ? ORDER BY age ASC",
       binder: { stmt, index in
         try 30.bind(to: stmt, at: &index)
@@ -148,7 +148,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= ? ORDER BY age ASC",
       binder: { stmt, index in
         try 30.bind(to: stmt, at: &index)
@@ -169,13 +169,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLStringAndBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= ? ORDER BY age ASC",
       binding: 30,
       stepper: { stmt, index, _ in
@@ -189,7 +189,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       raw: "SELECT name, age FROM users WHERE age >= ? ORDER BY age ASC",
       binding: 30,
       stepper: { stmt, index, stop in
@@ -208,13 +208,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLStatementAndStepper() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT name, age FROM users WHERE age >= \(30) ORDER BY age ASC",
       stepper: { stmt, _ in
         let name = try String.column(of: stmt, at: 0)
@@ -227,7 +227,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       "SELECT name, age FROM users WHERE age >= \(30) ORDER BY age ASC",
       stepper: { stmt, stop in
         let name = try String.column(of: stmt, at: 0)
@@ -245,13 +245,13 @@ struct DatabaseQueryTests {
   func testQueryWithSQLStatementAndManagedStepper() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
-    try db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec(raw: "INSERT INTO users (name, age) VALUES ('Charlie', 35)")
 
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT name, age FROM users WHERE age >= \(30) ORDER BY age ASC",
       stepper: { stmt, index, _ in
         let name = try String.column(of: stmt, at: &index)
@@ -264,7 +264,7 @@ struct DatabaseQueryTests {
     #expect(result[0] == ("Bob", 30))
     #expect(result[1] == ("Charlie", 35))
 
-    let stopped = try db.query(
+    let stopped = try await db.query(
       "SELECT name, age FROM users WHERE age >= \(30) ORDER BY age ASC",
       stepper: { stmt, index, stop in
         let name = try String.column(of: stmt, at: &index)

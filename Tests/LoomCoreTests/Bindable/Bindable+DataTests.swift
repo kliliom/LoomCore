@@ -9,12 +9,12 @@ struct BindableDataTests {
   func testDataBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let testData = Data([0x01, 0x02, 0x03, 0x04, 0x05])
-    try db.exec("INSERT INTO test (data) VALUES (\(testData))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(testData))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Data.column(of: stmt, at: 0)
     }
 
@@ -25,12 +25,12 @@ struct BindableDataTests {
   func testEmptyData() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let emptyData = Data()
-    try db.exec("INSERT INTO test (data) VALUES (\(emptyData))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(emptyData))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Data.column(of: stmt, at: 0)
     }
 
@@ -42,16 +42,16 @@ struct BindableDataTests {
   func testLargeData() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     var largeData = Data(count: 10000)
     for i in 0..<10000 {
       largeData[i] = UInt8(i % 256)
     }
 
-    try db.exec("INSERT INTO test (data) VALUES (\(largeData))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(largeData))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Data.column(of: stmt, at: 0)
     }
 
@@ -63,16 +63,16 @@ struct BindableDataTests {
   func testAllByteValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     var allBytes = Data()
     for byte in 0...255 {
       allBytes.append(UInt8(byte))
     }
 
-    try db.exec("INSERT INTO test (data) VALUES (\(allBytes))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(allBytes))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Data.column(of: stmt, at: 0)
     }
 
@@ -81,7 +81,7 @@ struct BindableDataTests {
   }
 
   @Test("Data as SQL literal")
-  func testDataAsSQLLiteral() throws {
+  func testDataAsSQLLiteral() async throws {
     let data = Data([0xDE, 0xAD, 0xBE, 0xEF])
     let literal = try data.asSQLLiteral()
 
@@ -89,7 +89,7 @@ struct BindableDataTests {
   }
 
   @Test("Empty Data as SQL literal")
-  func testEmptyDataAsSQLLiteral() throws {
+  func testEmptyDataAsSQLLiteral() async throws {
     let data = Data()
     let literal = try data.asSQLLiteral()
 
@@ -105,12 +105,12 @@ struct BindableDataTests {
   func testBinaryDataRoundTrip() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let binaryData = "Hello, World!".data(using: .utf8)!
-    try db.exec("INSERT INTO test (data) VALUES (\(binaryData))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(binaryData))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Data.column(of: stmt, at: 0)
     }
 
@@ -122,23 +122,23 @@ struct BindableDataTests {
   func testDataUnexpectedNullValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
-    try db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
 
-    #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot return Data.")) {
-      try db.query("SELECT data FROM test") { stmt, _ in
+    await #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot return Data.")) {
+      try await db.query("SELECT data FROM test") { stmt, _ in
         try Data.column(of: stmt, at: 0)
       }
     }
   }
 
   @Test("Data bind throws with connection error message on out-of-range index")
-  func testDataBindOutOfRangeIndex() throws {
+  func testDataBindOutOfRangeIndex() async throws {
     let db = try Database.openInMemory()
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
-    let error = #expect(throws: LoomError.self) {
-      try db.exec(
+    let error = await #expect(throws: LoomError.self) {
+      try await db.exec(
         raw: "INSERT INTO test (data) VALUES (?)",
         binder: { stmt in
           try Data([0x01, 0x02]).bind(to: stmt, at: 99)

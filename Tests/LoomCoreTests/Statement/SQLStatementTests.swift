@@ -35,15 +35,15 @@ struct SQLStatementTests {
   func testStatementExecution() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
     let name = "Alice"
     let age = 25
     let stmt: SQLStatement = "INSERT INTO users (name, age) VALUES (\(name), \(age))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let n = try String.column(of: stmt, at: 0)
       let a = try Int.column(of: stmt, at: 1)
       return (n, a)
@@ -57,15 +57,15 @@ struct SQLStatementTests {
   func testStatementWithOptionals() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, email TEXT)")
+    try await db.exec("CREATE TABLE users (name TEXT, email TEXT)")
 
     let name = "Bob"
     let email: String? = nil
     let stmt: SQLStatement = "INSERT INTO users (name, email) VALUES (\(name), \(email))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT name, email FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, email FROM users") { stmt, _ in
       let n = try String.column(of: stmt, at: 0)
       let e = try Optional<String>.column(of: stmt, at: 1)
       return (n, e)
@@ -79,7 +79,7 @@ struct SQLStatementTests {
   func testStatementWithMixedTypes() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (str TEXT, int INTEGER, double DOUBLE, bool BOOLEAN, data BLOB)")
+    try await db.exec("CREATE TABLE test (str TEXT, int INTEGER, double DOUBLE, bool BOOLEAN, data BLOB)")
 
     let str = "test"
     let int = 42
@@ -90,9 +90,9 @@ struct SQLStatementTests {
     let stmt: SQLStatement =
       "INSERT INTO test (str, int, double, bool, data) VALUES (\(str), \(int), \(double), \(bool), \(data))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT str, int, double, bool, data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT str, int, double, bool, data FROM test") { stmt, _ in
       let s = try String.column(of: stmt, at: 0)
       let i = try Int.column(of: stmt, at: 1)
       let d = try Double.column(of: stmt, at: 2)
@@ -112,14 +112,14 @@ struct SQLStatementTests {
   func testStatementInQuery() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
-    try db.exec("INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Bob', 30)")
 
     let minAge = 26
     let stmt: SQLStatement = "SELECT name FROM users WHERE age >= \(minAge)"
 
-    let result = try db.query(stmt) { stmt, _ in
+    let result = try await db.query(stmt) { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -131,14 +131,14 @@ struct SQLStatementTests {
   func testStatementWithSpecialCharacters() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let specialStr = "Test with 'quotes' and \"double\" and \\ backslash"
     let stmt: SQLStatement = "INSERT INTO test (value) VALUES (\(specialStr))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -149,17 +149,17 @@ struct SQLStatementTests {
   func testStatementReuse() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
     let name = "Alice"
     let age = 25
     let stmt: SQLStatement = "INSERT INTO users (name, age) VALUES (\(name), \(age))"
 
     // Execute the same statement multiple times
-    try db.exec(stmt)
-    try db.exec(stmt)
+    try await db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT COUNT(*) FROM users") { stmt, _ in
+    let result = try await db.query("SELECT COUNT(*) FROM users") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -170,14 +170,14 @@ struct SQLStatementTests {
   func testStatementWithUUID() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id BLOB)")
+    try await db.exec("CREATE TABLE test (id BLOB)")
 
     let uuid = UUID()
     let stmt: SQLStatement = "INSERT INTO test (id) VALUES (\(uuid))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT id FROM test") { stmt, _ in
+    let result = try await db.query("SELECT id FROM test") { stmt, _ in
       try UUID.column(of: stmt, at: 0)
     }
 
@@ -188,14 +188,14 @@ struct SQLStatementTests {
   func testStatementWithDate() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (created DOUBLE)")
+    try await db.exec("CREATE TABLE test (created DOUBLE)")
 
     let date = Date(timeIntervalSince1970: 1234567890.0)
     let stmt: SQLStatement = "INSERT INTO test (created) VALUES (\(date))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT created FROM test") { stmt, _ in
+    let result = try await db.query("SELECT created FROM test") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
 
@@ -208,9 +208,9 @@ struct SQLStatementTests {
   func testPlusEqualsOperatorExecution() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
-    try db.exec("INSERT INTO users (name, age) VALUES ('Alice', 25)")
-    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 30)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Alice', 25)")
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Bob', 30)")
 
     var stmt: SQLStatement = "INSERT INTO users (name, age)"
     stmt += "VALUES"
@@ -219,9 +219,9 @@ struct SQLStatementTests {
     let age = 35
     stmt += "(\(name), \(age))"
 
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT name, age FROM users WHERE name = 'Charlie'") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users WHERE name = 'Charlie'") { stmt, _ in
       let n = try String.column(of: stmt, at: 0)
       let a = try Int.column(of: stmt, at: 1)
       return (n, a)
@@ -235,10 +235,10 @@ struct SQLStatementTests {
   func testPlusOperatorMultipleBinders() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER, active INTEGER)")
-    try db.exec("INSERT INTO users (name, age, active) VALUES ('Alice', 25, 1)")
-    try db.exec("INSERT INTO users (name, age, active) VALUES ('Bob', 30, 0)")
-    try db.exec("INSERT INTO users (name, age, active) VALUES ('Charlie', 35, 1)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER, active INTEGER)")
+    try await db.exec("INSERT INTO users (name, age, active) VALUES ('Alice', 25, 1)")
+    try await db.exec("INSERT INTO users (name, age, active) VALUES ('Bob', 30, 0)")
+    try await db.exec("INSERT INTO users (name, age, active) VALUES ('Charlie', 35, 1)")
 
     let minAge = 26
     let active = true
@@ -249,7 +249,7 @@ struct SQLStatementTests {
 
     #expect(combined.binders.count == 2)
 
-    let result = try db.query(combined) { stmt, _ in
+    let result = try await db.query(combined) { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 

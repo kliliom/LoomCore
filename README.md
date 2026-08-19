@@ -7,11 +7,12 @@ A type-safe SQLite wrapper for Swift 6+ using actor isolation for thread safety.
 - 🛡️ **Type-Safe Bindings** - `Bindable` protocol for compile-time-checked parameter binding and column extraction
 - 💉 **Safe Interpolation** - SQL string interpolation with automatic parameter binding (no SQL injection)
 - 🧵 **Actor Isolation** - All database access serialized through `DatabaseActor` (no race conditions)
-- 🔁 **Transactions** - Atomic blocks with deferred/immediate/exclusive lock modes and automatic rollback
+- 🔁 **Transactions** - Async atomic blocks with deferred/immediate/exclusive lock modes, automatic rollback, and `SAVEPOINT`-based nesting
+- 🚦 **Transaction Gating** - Operations outside an in-flight transaction wait until it commits or rolls back — transaction bodies can suspend freely
 - 🧮 **Expressions** - Operator overloading for building SQL expressions in Swift
 - 🗂️ **Codable Support** - Automatic JSON encoding/decoding for `Codable` types
 - 🪝 **Service Hooks** - Transaction lifecycle callbacks for cache invalidation and side effects
-- 🗃️ **Statement Caching** - Prepared statements cached automatically per database
+- 🗃️ **Statement Caching** - Prepared statements cached automatically inside `cached { }` scopes (per task tree)
 
 ## Installation
 
@@ -30,13 +31,13 @@ import LoomCore
 
 let db = try await Database.openInMemory()
 
-try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
 
 let name = "Alice"
 let age = 30
-try db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
+try await db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
 
-let users = try db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
+let users = try await db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
     let name = try String.column(of: stmt, at: 0)
     let age = try Int.column(of: stmt, at: 1)
     return (name, age)
@@ -81,7 +82,7 @@ Values inside `\(...)` are automatically bound as parameters:
 
 ```swift
 let minAge = 21
-let users = try db.query("SELECT name FROM users WHERE age > \(minAge)") { stmt, _ in
+let users = try await db.query("SELECT name FROM users WHERE age > \(minAge)") { stmt, _ in
     try String.column(of: stmt, at: 0)
 }
 ```
@@ -89,7 +90,7 @@ let users = try db.query("SELECT name FROM users WHERE age > \(minAge)") { stmt,
 ### Raw SQL with Manual Binding
 
 ```swift
-let users = try db.query(
+let users = try await db.query(
     raw: "SELECT name, email FROM users WHERE status = ?",
     binder: { stmt, index in
         try "active".bind(to: stmt, at: &index)
@@ -107,7 +108,7 @@ let users = try db.query(
 Set `stop = true` in the stepper to stop iterating:
 
 ```swift
-let firstMatch = try db.query("SELECT name FROM users") { stmt, stop in
+let firstMatch = try await db.query("SELECT name FROM users") { stmt, stop in
     let name = try String.column(of: stmt, at: 0)
     if name == "TargetName" {
         stop = true
@@ -120,35 +121,39 @@ let firstMatch = try db.query("SELECT name FROM users") { stmt, stop in
 
 ```swift
 // DDL
-try db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)")
+try await db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)")
 
 // INSERT / UPDATE / DELETE with interpolation
-try db.exec("INSERT INTO items (name) VALUES (\(name))")
+try await db.exec("INSERT INTO items (name) VALUES (\(name))")
 
-// Last inserted rowid
-let id = db.lastInsertedRowID
+// Last inserted rowid — captures the ROWID of the last insert inside the block
+let id = try await db.lastInsertedRowID {
+    try await db.exec("INSERT INTO items (name) VALUES (\(name))")
+}
 ```
 
 ## Transactions
 
-Transactions commit on success and roll back on error:
+Transactions commit on success and roll back on error. The body receives the database it runs on and may suspend freely — atomicity is preserved across `await`s:
 
 ```swift
-try db.transaction {
-    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 25)")
-    try db.exec("INSERT INTO users (name, age) VALUES ('Carol', 28)")
+try await db.transaction { db in
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Bob', 25)")
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Carol', 28)")
 }
 ```
 
 With a specific lock mode:
 
 ```swift
-try db.transaction(kind: .immediate) {
+try await db.transaction(kind: .immediate) { db in
     // ...
 }
 ```
 
-Nested transactions are not supported — calling `transaction()` within an active transaction logs a warning and executes in the existing transaction context.
+While a transaction is in flight — even while suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Structured child tasks (`async let`, task groups) and `Task {}` run inside the transaction (an un-awaited `Task {}` that outlives the body races the commit); `Task.detached` does not and waits like any outside caller.
+
+Nested `transaction` calls open a `SAVEPOINT` scope: a normal return releases the savepoint into the enclosing transaction, and a throw rolls back to the savepoint — leaving the enclosing transaction's work intact — and rethrows. The `kind:` parameter is ignored for nested calls.
 
 ## Type Bindings
 
@@ -167,9 +172,9 @@ Nested transactions are not supported — calling `transaction()` within an acti
 
 ```swift
 let email: String? = nil
-try db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
+try await db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
 
-let result = try db.query("SELECT email FROM users") { stmt, _ in
+let result = try await db.query("SELECT email FROM users") { stmt, _ in
     try Optional<String>.column(of: stmt, at: 0)
 }
 ```
@@ -183,9 +188,9 @@ struct Metadata: Codable {
 }
 
 let meta = Metadata(createdAt: Date(), tags: ["swift", "database"])
-try db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
+try await db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
 
-let retrieved = try db.query("SELECT metadata FROM items") { stmt, _ in
+let retrieved = try await db.query("SELECT metadata FROM items") { stmt, _ in
     try Metadata.column(of: stmt, at: 0)
 }
 ```
@@ -195,7 +200,7 @@ let retrieved = try db.query("SELECT metadata FROM items") { stmt, _ in
 For multi-column queries, `ManagedIndex` auto-increments after each bind/column call so you don't have to track positions manually:
 
 ```swift
-let users = try db.query(
+let users = try await db.query(
     raw: "SELECT id, name, email, age FROM users WHERE status = ?",
     binder: { stmt, index in
         try "active".bind(to: stmt, at: &index)        // -> param 1
@@ -264,7 +269,7 @@ class CacheInvalidationService: Database.Service {
 let service = db.getService(CacheInvalidationService.self)
 ```
 
-Services are singletons per `Database` instance and per type.
+Services are singletons per `Database` instance and per type. Lifecycle hooks fire only for the outermost physical transaction — nested `SAVEPOINT` scopes do not trigger them. The participating set is fixed when the transaction begins; a service registered mid-transaction receives callbacks starting with the next transaction.
 
 ## Requirements
 

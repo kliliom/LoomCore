@@ -13,7 +13,7 @@
 /// let stock = ColumnExpression<Int>("stock")
 ///
 /// let inStockBudget = (price <= 100) && (stock > 0)
-/// let rows = try db.query("SELECT * FROM products WHERE \(inStockBudget)") { row in
+/// let rows = try await db.query("SELECT * FROM products WHERE \(inStockBudget)") { row in
 ///   try row.string(at: 0)
 /// }
 /// ```

@@ -10,7 +10,7 @@ extension Database {
   ///   try "Alice".bind(to: stmt, at: 1)
   ///   try 25.bind(to: stmt, at: 2)
   /// }
-  /// try db.exec(raw: "INSERT INTO users (name, age) VALUES (?, ?)", binder: binder)
+  /// try await db.exec(raw: "INSERT INTO users (name, age) VALUES (?, ?)", binder: binder)
   /// ```
   ///
   /// See ``ManagedBinder`` for automatic index management and ``Bindable`` for the
@@ -32,7 +32,7 @@ extension Database {
   ///   let age = try Int.column(of: stmt, at: 1)
   ///   return (name, age)
   /// }
-  /// let users = try db.query(raw: "SELECT name, age FROM users", stepper: stepper)
+  /// let users = try await db.query(raw: "SELECT name, age FROM users", stepper: stepper)
   /// ```
   ///
   /// Stopping early once a sentinel row is found:
@@ -108,7 +108,7 @@ extension Database {
   ///   try 25.bind(to: stmt, at: &index)
   ///   try "alice@example.com".bind(to: stmt, at: &index)
   /// }
-  /// try db.exec(
+  /// try await db.exec(
   ///   raw: "INSERT INTO users (name, age, email) VALUES (?, ?, ?)",
   ///   binder: binder
   /// )
@@ -132,7 +132,7 @@ extension Database {
   ///   let email = try String.column(of: stmt, at: &index)
   ///   return (name, age, email)
   /// }
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   raw: "SELECT name, age, email FROM users",
   ///   stepper: stepper
   /// )

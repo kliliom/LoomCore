@@ -6,22 +6,22 @@ import Testing
 @DatabaseActor
 struct FunctionGroupConcatTests {
   @Test("GroupConcat function")
-  func testGroupConcat() throws {
+  func testGroupConcat() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
 
     // Test expression
     let expr = ColumnExpression<String>("name").groupConcat()
 
     // Query using GROUP_CONCAT function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
         try String?.column(of: stmt, at: 0)
@@ -33,22 +33,22 @@ struct FunctionGroupConcatTests {
   }
 
   @Test("GroupConcat function with custom separator")
-  func testGroupConcatCustomSeparator() throws {
+  func testGroupConcatCustomSeparator() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
 
     // Test expression with custom separator
     let expr = ColumnExpression<String>("name").groupConcat(separator: " | ")
 
     // Query using GROUP_CONCAT function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
         try String?.column(of: stmt, at: 0)
@@ -60,23 +60,23 @@ struct FunctionGroupConcatTests {
   }
 
   @Test("GroupConcat function with distinct")
-  func testGroupConcatDistinct() throws {
+  func testGroupConcatDistinct() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data with duplicates
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
-    try db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
+    try await db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
 
     // Test expression with distinct
     let expr = ColumnExpression<String>("name").groupConcat(distinct: true)
 
     // Query using GROUP_CONCAT function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
         try String?.column(of: stmt, at: 0)
@@ -88,17 +88,17 @@ struct FunctionGroupConcatTests {
   }
 
   @Test("GroupConcat function with no rows")
-  func testGroupConcatNoRows() throws {
+  func testGroupConcatNoRows() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Test expression
     let expr = ColumnExpression<String>("name").groupConcat()
 
     // Query using GROUP_CONCAT function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
         try String?.column(of: stmt, at: 0)

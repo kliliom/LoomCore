@@ -9,8 +9,8 @@
 ///
 /// ```swift
 /// @DatabaseActor
-/// func loadActiveUsers(from db: Database) throws -> [User] {
-///   try db.query("SELECT id, name FROM users WHERE active = \(true)") { row in
+/// func loadActiveUsers(from db: Database) async throws -> [User] {
+///   try await db.query("SELECT id, name FROM users WHERE active = \(true)") { row in
 ///     User(id: try row.column(at: 0), name: try row.column(at: 1))
 ///   }
 /// }

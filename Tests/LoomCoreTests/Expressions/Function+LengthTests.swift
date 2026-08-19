@@ -6,22 +6,22 @@ import Testing
 @DatabaseActor
 struct FunctionLengthTests {
   @Test("Length function")
-  func testLength() throws {
+  func testLength() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('John')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('Jane')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('Alexander')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('John')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('Jane')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('Alexander')")
 
     // Test expression
     let expr = ColumnExpression<String>("name").length()
 
     // Query using LENGTH function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
         try Int?.column(of: stmt, at: 0)
@@ -35,21 +35,21 @@ struct FunctionLengthTests {
   }
 
   @Test("Length function with empty string")
-  func testLengthEmptyString() throws {
+  func testLengthEmptyString() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data with empty string
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('Bob')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('Bob')")
 
     // Test expression
     let expr = ColumnExpression<String>("name").length()
 
     // Query using LENGTH function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
         try Int?.column(of: stmt, at: 0)
@@ -62,17 +62,17 @@ struct FunctionLengthTests {
   }
 
   @Test("Length function with no rows")
-  func testLengthNoRows() throws {
+  func testLengthNoRows() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Test expression
     let expr = ColumnExpression<String>("name").length()
 
     // Query using LENGTH function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users",
       stepper: { stmt, _ in
         try Int?.column(of: stmt, at: 0)

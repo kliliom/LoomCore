@@ -14,12 +14,12 @@ struct BindableCodableTests {
   func testCodableStructBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let person = Person(name: "Alice", age: 25)
-    try db.exec("INSERT INTO test (data) VALUES (\(person))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(person))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Person.column(of: stmt, at: 0)
     }
 
@@ -30,7 +30,7 @@ struct BindableCodableTests {
   func testMultipleCodableValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let people = [
       Person(name: "Alice", age: 25),
@@ -39,10 +39,10 @@ struct BindableCodableTests {
     ]
 
     for person in people {
-      try db.exec("INSERT INTO test (data) VALUES (\(person))")
+      try await db.exec("INSERT INTO test (data) VALUES (\(person))")
     }
 
-    let result = try db.query("SELECT data FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test ORDER BY rowid") { stmt, _ in
       try Person.column(of: stmt, at: 0)
     }
 
@@ -64,15 +64,15 @@ struct BindableCodableTests {
 
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let employee = Employee(
       name: "Alice",
       address: Address(street: "123 Main St", city: "Springfield")
     )
-    try db.exec("INSERT INTO test (data) VALUES (\(employee))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(employee))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Employee.column(of: stmt, at: 0)
     }
 
@@ -80,7 +80,7 @@ struct BindableCodableTests {
   }
 
   @Test("Codable as SQL literal")
-  func testCodableAsSQLLiteral() throws {
+  func testCodableAsSQLLiteral() async throws {
     let person = Person(name: "Alice", age: 25)
     let literal = try person.asSQLLiteral()
 
@@ -102,15 +102,15 @@ struct BindableCodableTests {
 
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let profile1 = Profile(name: "Alice", email: "alice@example.com")
     let profile2 = Profile(name: "Bob", email: nil)
 
-    try db.exec("INSERT INTO test (data) VALUES (\(profile1))")
-    try db.exec("INSERT INTO test (data) VALUES (\(profile2))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(profile1))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(profile2))")
 
-    let result = try db.query("SELECT data FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test ORDER BY rowid") { stmt, _ in
       try Profile.column(of: stmt, at: 0)
     }
 
@@ -128,12 +128,12 @@ struct BindableCodableTests {
 
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let team = Team(name: "Dev Team", members: ["Alice", "Bob", "Charlie"])
-    try db.exec("INSERT INTO test (data) VALUES (\(team))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(team))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try Team.column(of: stmt, at: 0)
     }
 
@@ -144,23 +144,23 @@ struct BindableCodableTests {
   func testCodableUnexpectedNullValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
-    try db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec(raw: "INSERT INTO test (data) VALUES (NULL)")
 
-    #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot decode to Person.")) {
-      try db.query("SELECT data FROM test") { stmt, _ in
+    await #expect(throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL, cannot decode to Person.")) {
+      try await db.query("SELECT data FROM test") { stmt, _ in
         try Person.column(of: stmt, at: 0)
       }
     }
   }
 
   @Test("Codable bind throws with connection error message on out-of-range index")
-  func testCodableBindOutOfRangeIndex() throws {
+  func testCodableBindOutOfRangeIndex() async throws {
     let db = try Database.openInMemory()
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
-    let error = #expect(throws: LoomError.self) {
-      try db.exec(
+    let error = await #expect(throws: LoomError.self) {
+      try await db.exec(
         raw: "INSERT INTO test (data) VALUES (?)",
         binder: { stmt in
           try Person(name: "Alice", age: 25).bind(to: stmt, at: 99)

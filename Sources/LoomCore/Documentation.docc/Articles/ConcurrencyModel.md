@@ -22,6 +22,15 @@ Every public method on ``Database``, every static method on ``Bindable``, and ev
 - No two SQLite calls run at the same time, ever, in your process.
 - No accidental shared mutable state between callers — the actor is the single point of synchronization.
 - `Sendable` values you pass into binders and steppers are safe to capture; mutable references are flagged at compile time.
+- Once an operation starts executing, it runs to completion synchronously on the actor. Interleaving between tasks happens only at suspension points — never in the middle of a statement.
+
+## The transaction gate
+
+Actor isolation alone is not enough for transactions: ``DatabaseActor`` releases its executor at every `await`, so a transaction body that suspends would otherwise let another task's statements run inside the open transaction. LoomCore closes that hole with a **gate**.
+
+While a transaction is in flight — including while its body is suspended — database operations from tasks outside the transaction suspend at the gate and resume once the transaction commits or rolls back. Membership is a task-local token bound around the transaction block: structured children (`async let`, task groups) and unstructured `Task {}` inherit it and run inside the transaction — an unstructured task must complete before the body returns, or it races the commit; `Task.detached` does not inherit it and waits like any outside caller. An operation waiting at the gate throws `CancellationError` if its task is cancelled.
+
+The gate is what makes `await` inside a transaction body safe. When no transaction is active it costs a single nil check. See <doc:TransactionsAndServices> for the full semantics, including savepoint nesting.
 
 ## What this rules out
 

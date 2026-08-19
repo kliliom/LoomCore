@@ -39,7 +39,7 @@ struct Profile: Codable, Bindable {
   let preferences: [String: String]
 }
 
-try db.exec(
+try await db.exec(
   "CREATE TABLE accounts (id INTEGER PRIMARY KEY, profile BLOB)"
 )
 
@@ -48,7 +48,7 @@ let profile = Profile(
   avatarURL: URL(string: "https://example.com/a.png"),
   preferences: ["theme": "dark"]
 )
-try db.exec("INSERT INTO accounts (profile) VALUES (\(profile))")
+try await db.exec("INSERT INTO accounts (profile) VALUES (\(profile))")
 ```
 
 Encoding uses `JSONEncoder` and stores BLOB. The trade-off is that you cannot query into the JSON with SQL (no `json_extract` integration), so this is best for opaque payloads, not for fields you filter on.
@@ -80,7 +80,7 @@ enum AccountState: Int, Bindable {
   case closed = 2
 }
 
-try db.exec("INSERT INTO accounts (state) VALUES (\(AccountState.active))")
+try await db.exec("INSERT INTO accounts (state) VALUES (\(AccountState.active))")
 ```
 
 If a stored value doesn't map to a case (e.g. `state = 99`), extraction throws ``LoomError`` with code ``LoomCoreErrorCode/typeMappingFailed``.

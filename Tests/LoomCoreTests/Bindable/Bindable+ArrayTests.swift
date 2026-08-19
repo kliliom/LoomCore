@@ -9,12 +9,12 @@ struct BindableArrayTests {
   func testStringArrayBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let tags = ["swift", "database", "testing"]
-    try db.exec("INSERT INTO test (data) VALUES (\(tags))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(tags))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try [String].column(of: stmt, at: 0)
     }
 
@@ -25,12 +25,12 @@ struct BindableArrayTests {
   func testIntArrayBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let numbers = [1, 2, 3, 4, 5]
-    try db.exec("INSERT INTO test (data) VALUES (\(numbers))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(numbers))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try [Int].column(of: stmt, at: 0)
     }
 
@@ -41,12 +41,12 @@ struct BindableArrayTests {
   func testEmptyArray() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let empty: [String] = []
-    try db.exec("INSERT INTO test (data) VALUES (\(empty))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(empty))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try [String].column(of: stmt, at: 0)
     }
 
@@ -62,16 +62,16 @@ struct BindableArrayTests {
 
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let points = [
       Point(x: 1, y: 2),
       Point(x: 3, y: 4),
       Point(x: 5, y: 6),
     ]
-    try db.exec("INSERT INTO test (data) VALUES (\(points))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(points))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try [Point].column(of: stmt, at: 0)
     }
 
@@ -79,7 +79,7 @@ struct BindableArrayTests {
   }
 
   @Test("Array as SQL literal")
-  func testArrayAsSQLLiteral() throws {
+  func testArrayAsSQLLiteral() async throws {
     let tags = ["swift", "database"]
     let literal = try tags.asSQLLiteral()
 
@@ -97,12 +97,12 @@ struct BindableArrayTests {
   func testLargeArray() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let largeArray = Array(1...100)
-    try db.exec("INSERT INTO test (data) VALUES (\(largeArray))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(largeArray))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try [Int].column(of: stmt, at: 0)
     }
 
@@ -114,15 +114,15 @@ struct BindableArrayTests {
   func testOptionalArray() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let array1: [String]? = ["a", "b", "c"]
     let array2: [String]? = nil
 
-    try db.exec("INSERT INTO test (data) VALUES (\(array1))")
-    try db.exec("INSERT INTO test (data) VALUES (\(array2))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(array1))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(array2))")
 
-    let result = try db.query("SELECT data FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test ORDER BY rowid") { stmt, _ in
       try Optional<[String]>.column(of: stmt, at: 0)
     }
 
@@ -135,7 +135,7 @@ struct BindableArrayTests {
   func testArrayWithMixedStringLengths() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (data BLOB)")
+    try await db.exec("CREATE TABLE test (data BLOB)")
 
     let strings = [
       "short",
@@ -143,9 +143,9 @@ struct BindableArrayTests {
       "",
       "medium length",
     ]
-    try db.exec("INSERT INTO test (data) VALUES (\(strings))")
+    try await db.exec("INSERT INTO test (data) VALUES (\(strings))")
 
-    let result = try db.query("SELECT data FROM test") { stmt, _ in
+    let result = try await db.query("SELECT data FROM test") { stmt, _ in
       try [String].column(of: stmt, at: 0)
     }
 

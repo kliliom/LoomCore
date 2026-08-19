@@ -1,11 +1,11 @@
 extension TaskStore {
     @DatabaseActor
-    func openTasks(in categoryID: UUID) throws -> [TaskRow] {
+    func openTasks(in categoryID: UUID) async throws -> [TaskRow] {
         let predicate =
             TaskColumns.categoryID == categoryID
             && TaskColumns.completedAt.isNull()
 
-        return try db.query(
+        return try await db.query(
             """
             SELECT id, category_id, title, completed_at, metadata
             FROM tasks

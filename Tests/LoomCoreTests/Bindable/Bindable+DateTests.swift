@@ -9,12 +9,12 @@ struct BindableDateTests {
   func testDateBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (date DOUBLE)")
+    try await db.exec("CREATE TABLE test (date DOUBLE)")
 
     let testDate = Date()
-    try db.exec("INSERT INTO test (date) VALUES (\(testDate))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(testDate))")
 
-    let result = try db.query("SELECT date FROM test") { stmt, _ in
+    let result = try await db.query("SELECT date FROM test") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
 
@@ -26,12 +26,12 @@ struct BindableDateTests {
   func testSpecificDate() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (date DOUBLE)")
+    try await db.exec("CREATE TABLE test (date DOUBLE)")
 
     let specificDate = Date(timeIntervalSince1970: 1234567890.0)
-    try db.exec("INSERT INTO test (date) VALUES (\(specificDate))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(specificDate))")
 
-    let result = try db.query("SELECT date FROM test") { stmt, _ in
+    let result = try await db.query("SELECT date FROM test") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
 
@@ -43,29 +43,29 @@ struct BindableDateTests {
   func testDistantDates() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (date DOUBLE)")
+    try await db.exec("CREATE TABLE test (date DOUBLE)")
 
     let distantPast = Date.distantPast
-    try db.exec("INSERT INTO test (date) VALUES (\(distantPast))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(distantPast))")
 
-    let resultPast = try db.query("SELECT date FROM test") { stmt, _ in
+    let resultPast = try await db.query("SELECT date FROM test") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
     #expect(resultPast.first?.timeIntervalSince1970 == distantPast.timeIntervalSince1970)
 
-    try db.exec("DELETE FROM test")
+    try await db.exec("DELETE FROM test")
 
     let distantFuture = Date.distantFuture
-    try db.exec("INSERT INTO test (date) VALUES (\(distantFuture))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(distantFuture))")
 
-    let resultFuture = try db.query("SELECT date FROM test") { stmt, _ in
+    let resultFuture = try await db.query("SELECT date FROM test") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
     #expect(resultFuture.first?.timeIntervalSince1970 == distantFuture.timeIntervalSince1970)
   }
 
   @Test("Date as SQL literal")
-  func testDateAsSQLLiteral() throws {
+  func testDateAsSQLLiteral() async throws {
     let date = Date(timeIntervalSince1970: 1234567890.5)
     let literal = try date.asSQLLiteral()
 
@@ -81,17 +81,17 @@ struct BindableDateTests {
   func testMultipleDatesOrdering() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (date DOUBLE)")
+    try await db.exec("CREATE TABLE test (date DOUBLE)")
 
     let date1 = Date(timeIntervalSince1970: 1000)
     let date2 = Date(timeIntervalSince1970: 2000)
     let date3 = Date(timeIntervalSince1970: 3000)
 
-    try db.exec("INSERT INTO test (date) VALUES (\(date2))")
-    try db.exec("INSERT INTO test (date) VALUES (\(date1))")
-    try db.exec("INSERT INTO test (date) VALUES (\(date3))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(date2))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(date1))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(date3))")
 
-    let results = try db.query("SELECT date FROM test ORDER BY date ASC") { stmt, _ in
+    let results = try await db.query("SELECT date FROM test ORDER BY date ASC") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
 
@@ -105,12 +105,12 @@ struct BindableDateTests {
   func testDateWithFractionalSeconds() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (date DOUBLE)")
+    try await db.exec("CREATE TABLE test (date DOUBLE)")
 
     let dateWithFraction = Date(timeIntervalSince1970: 1234567890.123456)
-    try db.exec("INSERT INTO test (date) VALUES (\(dateWithFraction))")
+    try await db.exec("INSERT INTO test (date) VALUES (\(dateWithFraction))")
 
-    let result = try db.query("SELECT date FROM test") { stmt, _ in
+    let result = try await db.query("SELECT date FROM test") { stmt, _ in
       try Date.column(of: stmt, at: 0)
     }
 
@@ -122,17 +122,17 @@ struct BindableDateTests {
   func testDateRangeQueries() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE events (date DOUBLE, name TEXT)")
+    try await db.exec("CREATE TABLE events (date DOUBLE, name TEXT)")
 
     let now = Date()
     let yesterday = Date(timeIntervalSinceNow: -86400)
     let tomorrow = Date(timeIntervalSinceNow: 86400)
 
-    try db.exec("INSERT INTO events (date, name) VALUES (\(yesterday), 'past')")
-    try db.exec("INSERT INTO events (date, name) VALUES (\(now), 'present')")
-    try db.exec("INSERT INTO events (date, name) VALUES (\(tomorrow), 'future')")
+    try await db.exec("INSERT INTO events (date, name) VALUES (\(yesterday), 'past')")
+    try await db.exec("INSERT INTO events (date, name) VALUES (\(now), 'present')")
+    try await db.exec("INSERT INTO events (date, name) VALUES (\(tomorrow), 'future')")
 
-    let futureEvents = try db.query("SELECT name FROM events WHERE date > \(now)") { stmt, _ in
+    let futureEvents = try await db.query("SELECT name FROM events WHERE date > \(now)") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 

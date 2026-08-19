@@ -13,7 +13,7 @@ extension Database {
   /// for every result row. Returned values are collected into an array.
   ///
   /// ```swift
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   raw: "SELECT name, age FROM users WHERE age > ?",
   ///   binder: { stmt in
   ///     try 18.bind(to: stmt, at: 1)
@@ -29,7 +29,7 @@ extension Database {
   /// Set `stop` to `true` inside `stepper` to halt iteration after the current row:
   ///
   /// ```swift
-  /// let firstActive = try db.query(
+  /// let firstActive = try await db.query(
   ///   raw: "SELECT id, name FROM users WHERE active = 1 ORDER BY id",
   ///   binder: { _ in },
   ///   stepper: { stmt, stop in
@@ -40,11 +40,17 @@ extension Database {
   /// ```
   ///
   /// Parameter indices are 1-based; column indices are 0-based. See <doc:IndexConventions>.
+  ///
+  /// Suspends while a transaction owned by another task is active. Once past the gate the
+  /// whole query — bind, step, extract — runs synchronously on the actor, so no other
+  /// database work can interleave mid-statement.
   public func query<R>(
     raw statement: String,
     binder: Binder,
     stepper: Stepper<R>
-  ) throws -> [R] {
+  ) async throws -> [R] {
+    try await gate()
+
     let stmt = try prepare(sql: statement)
     try binder(stmt)
 
@@ -67,7 +73,7 @@ extension Database {
   /// Executes a parameter-free raw SQL query and extracts each row through `stepper`.
   ///
   /// ```swift
-  /// let counts = try db.query(
+  /// let counts = try await db.query(
   ///   raw: "SELECT status, COUNT(*) FROM orders GROUP BY status",
   ///   stepper: { stmt, _ in
   ///     let status = try String.column(of: stmt, at: 0)
@@ -84,8 +90,8 @@ extension Database {
   public func query<R>(
     raw statement: String,
     stepper: Stepper<R>
-  ) throws -> [R] {
-    try query(
+  ) async throws -> [R] {
+    try await query(
       raw: statement,
       binder: { _ in },
       stepper: stepper
@@ -103,7 +109,7 @@ extension Database {
   /// remove parameters and columns without renumbering.
   ///
   /// ```swift
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   raw: "SELECT name, age, email FROM users WHERE age > ? AND status = ?",
   ///   binder: { stmt, index in
   ///     try 18.bind(to: stmt, at: &index)
@@ -122,8 +128,8 @@ extension Database {
     raw statement: String,
     binder: ManagedBinder,
     stepper: ManagedStepper<R>
-  ) throws -> [R] {
-    try query(
+  ) async throws -> [R] {
+    try await query(
       raw: statement,
       binder: { stmt in
         var index = ManagedIndex()
@@ -139,7 +145,7 @@ extension Database {
   /// Executes a parameter-free raw SQL query using a ``ManagedStepper`` for column extraction.
   ///
   /// ```swift
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   raw: "SELECT name, age, email FROM users",
   ///   stepper: { stmt, index, _ in
   ///     let name = try String.column(of: stmt, at: &index)
@@ -153,8 +159,8 @@ extension Database {
   public func query<R>(
     raw statement: String,
     stepper: ManagedStepper<R>
-  ) throws -> [R] {
-    try query(raw: statement, binder: { _, _ in }, stepper: stepper)
+  ) async throws -> [R] {
+    try await query(raw: statement, binder: { _, _ in }, stepper: stepper)
   }
 }
 
@@ -167,7 +173,7 @@ extension Database {
   /// ``ManagedStepper``.
   ///
   /// ```swift
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   raw: "SELECT name, age FROM users WHERE age > ? AND status = ?",
   ///   binding: 18, "active",
   ///   stepper: { stmt, index, _ in
@@ -183,7 +189,7 @@ extension Database {
     binding firstValue: some Bindable,
     _ otherValues: repeat each Values,
     stepper: ManagedStepper<R>
-  ) throws -> [R] {
+  ) async throws -> [R] {
     // It should be possible to skip this "packing into an array" trick
     // in the future, but current Swift 6 compiler has an issue with this
     // try query(raw: statement, binder: { stmt, index in
@@ -198,7 +204,7 @@ extension Database {
     ]
     repeat (binders.append((each otherValues).managedBinder))
     let captureds = binders
-    return try query(
+    return try await query(
       raw: statement,
       binder: { stmt, index in
         for captured in captureds {
@@ -223,7 +229,7 @@ extension Database {
   /// ```swift
   /// let minAge = 18
   /// let status = "active"
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   "SELECT name, age FROM users WHERE age > \(minAge) AND status = \(status)",
   ///   stepper: { stmt, _ in
   ///     let name = try String.column(of: stmt, at: 0)
@@ -238,15 +244,15 @@ extension Database {
   public func query<R>(
     _ statement: SQLStatement,
     stepper: Stepper<R>
-  ) throws -> [R] {
-    try query(raw: statement.sql, binder: statement.binder, stepper: stepper)
+  ) async throws -> [R] {
+    try await query(raw: statement.sql, binder: statement.binder, stepper: stepper)
   }
 
   /// Executes a ``SQLStatement`` query, pairing its embedded bindings with a ``ManagedStepper``.
   ///
   /// ```swift
   /// let minAge = 18
-  /// let users = try db.query(
+  /// let users = try await db.query(
   ///   "SELECT name, age, email FROM users WHERE age > \(minAge)",
   ///   stepper: { stmt, index, _ in
   ///     let name = try String.column(of: stmt, at: &index)
@@ -260,7 +266,7 @@ extension Database {
   public func query<R>(
     _ statement: SQLStatement,
     stepper: ManagedStepper<R>
-  ) throws -> [R] {
-    try query(raw: statement.sql, binder: statement.managedBinder, stepper: stepper)
+  ) async throws -> [R] {
+    try await query(raw: statement.sql, binder: statement.managedBinder, stepper: stepper)
   }
 }

@@ -13,7 +13,7 @@ struct Notes {
         let db = try await Database.openInMemory()
         // ... schema and inserts elided ...
 
-        let notes: [Note] = try db.query(
+        let notes: [Note] = try await db.query(
             raw: "SELECT id, body, created_at FROM notes ORDER BY created_at",
             stepper: { stmt, index, _ in
                 Note(

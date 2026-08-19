@@ -8,7 +8,7 @@ LoomCore uses Swift's string interpolation as its primary SQL-construction API. 
 
 ```swift
 let user = "Alice'; DROP TABLE users; --"
-try db.exec("INSERT INTO users (name) VALUES (\(user))")
+try await db.exec("INSERT INTO users (name) VALUES (\(user))")
 // SQL: "INSERT INTO users (name) VALUES (?)"
 // Bound: "Alice'; DROP TABLE users; --"
 ```
@@ -21,7 +21,7 @@ Some things cannot be parameters — table names, column names, SQL keywords. Fo
 
 ```swift
 let table = "users"  // from your own configuration, NOT user input
-try db.exec("SELECT * FROM \(table, mode: .raw) WHERE active = \(true)")
+try await db.exec("SELECT * FROM \(table, mode: .raw) WHERE active = \(true)")
 // SQL: "SELECT * FROM users WHERE active = ?"
 ```
 
@@ -37,7 +37,7 @@ When you need to refer to a column by name, ``ColumnExpression`` is preferable t
 let nameColumn = ColumnExpression<String>("name")
 let userEmail  = ColumnExpression<String>("email", of: "users")
 
-try db.query("SELECT \(nameColumn) FROM users") { stmt, _ in
+try await db.query("SELECT \(nameColumn) FROM users") { stmt, _ in
   try String.column(of: stmt, at: 0)
 }
 ```

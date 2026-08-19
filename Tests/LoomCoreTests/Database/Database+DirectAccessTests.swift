@@ -10,7 +10,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessProvidesPointer() async throws {
     let db = try Database.openInMemory()
 
-    try db.directAccess { dbPtr in
+    try await db.directAccess { dbPtr in
       // Just verify we can access the pointer without crashing
       _ = dbPtr
     }
@@ -20,10 +20,10 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessLastInsertRowID() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (42)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (42)")
 
-    let rowID = try db.directAccess { dbPtr in
+    let rowID = try await db.directAccess { dbPtr in
       sqlite3_last_insert_rowid(dbPtr)
     }
 
@@ -34,14 +34,14 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessChanges() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (1)")
-    try db.exec("INSERT INTO test (value) VALUES (2)")
-    try db.exec("INSERT INTO test (value) VALUES (3)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.exec("INSERT INTO test (value) VALUES (2)")
+    try await db.exec("INSERT INTO test (value) VALUES (3)")
 
-    try db.exec("UPDATE test SET value = 100")
+    try await db.exec("UPDATE test SET value = 100")
 
-    let changes = try db.directAccess { dbPtr in
+    let changes = try await db.directAccess { dbPtr in
       sqlite3_changes(dbPtr)
     }
 
@@ -52,13 +52,13 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessTotalChanges() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     for i in 1...5 {
-      try db.exec("INSERT INTO test (value) VALUES (\(i))")
+      try await db.exec("INSERT INTO test (value) VALUES (\(i))")
     }
 
-    let totalChanges = try db.directAccess { dbPtr in
+    let totalChanges = try await db.directAccess { dbPtr in
       sqlite3_total_changes(dbPtr)
     }
 
@@ -69,7 +69,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessAutocommit() async throws {
     let db = try Database.openInMemory()
 
-    let autocommit = try db.directAccess { dbPtr in
+    let autocommit = try await db.directAccess { dbPtr in
       sqlite3_get_autocommit(dbPtr)
     }
 
@@ -81,17 +81,17 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessNoAutocommitInTransaction() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    try db.transaction {
-      let autocommit = try db.directAccess { dbPtr in
+    try await db.transaction { db in
+      let autocommit = try await db.directAccess { dbPtr in
         sqlite3_get_autocommit(dbPtr)
       }
 
       // Should not be in autocommit mode inside transaction
       #expect(autocommit == 0)
 
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
   }
 
@@ -99,7 +99,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessReadonly() async throws {
     let db = try Database.openInMemory()
 
-    let isReadonly = try db.directAccess { dbPtr in
+    let isReadonly = try await db.directAccess { dbPtr in
       sqlite3_db_readonly(dbPtr, "main")
     }
 
@@ -112,7 +112,7 @@ struct DatabaseDirectAccessTests {
     let db = try Database.openInMemory()
 
     // Set a pragma using direct access
-    try db.directAccess { dbPtr in
+    try await db.directAccess { dbPtr in
       var errorMsg: UnsafeMutablePointer<CChar>?
       let result = sqlite3_exec(dbPtr, "PRAGMA foreign_keys = ON", nil, nil, &errorMsg)
 
@@ -127,7 +127,7 @@ struct DatabaseDirectAccessTests {
     }
 
     // Verify pragma was set
-    let result = try db.query("PRAGMA foreign_keys") { stmt, _ in
+    let result = try await db.query("PRAGMA foreign_keys") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -138,8 +138,8 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessCanThrowErrors() async throws {
     let db = try Database.openInMemory()
 
-    #expect(throws: LoomError.self) {
-      try db.directAccess { dbPtr in
+    await #expect(throws: LoomError.self) {
+      try await db.directAccess { dbPtr in
         var errorMsg: UnsafeMutablePointer<CChar>?
         let result = sqlite3_exec(dbPtr, "INVALID SQL", nil, nil, &errorMsg)
 
@@ -159,10 +159,10 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessReturnsValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (42)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (42)")
 
-    let value = try db.directAccess { dbPtr -> Int64 in
+    let value = try await db.directAccess { dbPtr -> Int64 in
       sqlite3_last_insert_rowid(dbPtr)
     }
 
@@ -173,7 +173,7 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessDbFilename() async throws {
     let db = try Database.openInMemory()
 
-    let filename = try db.directAccess { dbPtr -> String? in
+    let filename = try await db.directAccess { dbPtr -> String? in
       if let cStr = sqlite3_db_filename(dbPtr, "main") {
         return String(cString: cStr)
       }

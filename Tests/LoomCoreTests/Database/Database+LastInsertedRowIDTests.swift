@@ -10,10 +10,10 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDSingleInsert() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (value) VALUES (42)")
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (value) VALUES (42)")
     }
 
     #expect(rowID != nil)
@@ -24,14 +24,14 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDMultipleInserts() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
-      let firstID = try db.directAccess { sqlite3_last_insert_rowid($0) }
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
+      let firstID = try await db.directAccess { sqlite3_last_insert_rowid($0) }
 
-      try db.exec("INSERT INTO test (value) VALUES (2)")
-      let secondID = try db.directAccess { sqlite3_last_insert_rowid($0) }
+      try await db.exec("INSERT INTO test (value) VALUES (2)")
+      let secondID = try await db.directAccess { sqlite3_last_insert_rowid($0) }
 
       // Verify IDs are incrementing
       #expect(secondID > firstID)
@@ -44,11 +44,11 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDNoInsert() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    let rowID = try db.lastInsertedRowID {
+    let rowID = try await db.lastInsertedRowID {
       // No INSERT statement
-      try db.exec("SELECT * FROM test")
+      try await db.exec("SELECT * FROM test")
     }
 
     #expect(rowID == nil)
@@ -58,10 +58,10 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDExplicitPrimaryKey() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+    try await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (id, value) VALUES (100, 'test')")
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (id, value) VALUES (100, 'test')")
     }
 
     #expect(rowID == 100)
@@ -71,15 +71,15 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDResets() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     // First insert outside the block
-    try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.exec("INSERT INTO test (value) VALUES (1)")
 
     // This should return nil because the block doesn't insert anything
-    let rowID = try db.lastInsertedRowID {
+    let rowID = try await db.lastInsertedRowID {
       // Just run a non-insert operation (UPDATE with no matching rows)
-      try db.exec("UPDATE test SET value = 2 WHERE value = 999")
+      try await db.exec("UPDATE test SET value = 2 WHERE value = 999")
     }
 
     #expect(rowID == nil)
@@ -89,11 +89,11 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDInTransaction() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    let rowID = try db.transaction {
-      try db.lastInsertedRowID {
-        try db.exec("INSERT INTO test (value) VALUES (42)")
+    let rowID = try await db.transaction { db in
+      try await db.lastInsertedRowID {
+        try await db.exec("INSERT INTO test (value) VALUES (42)")
       }
     }
 
@@ -105,10 +105,10 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDWithStringValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (value) VALUES ('hello')")
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (value) VALUES ('hello')")
     }
 
     #expect(rowID != nil)
@@ -119,16 +119,16 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDMultipleColumns() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (name TEXT, age INTEGER, email TEXT)")
+    try await db.exec("CREATE TABLE test (name TEXT, age INTEGER, email TEXT)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (name, age, email) VALUES ('Alice', 25, 'alice@example.com')")
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (name, age, email) VALUES ('Alice', 25, 'alice@example.com')")
     }
 
     #expect(rowID != nil)
 
     // Verify we can query using the row ID
-    let result = try db.query("SELECT name FROM test WHERE rowid = \(rowID!)") { stmt, _ in
+    let result = try await db.query("SELECT name FROM test WHERE rowid = \(rowID!)") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -139,11 +139,11 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDWithUpdate() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (1)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("UPDATE test SET value = 2")
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("UPDATE test SET value = 2")
     }
 
     #expect(rowID == nil)
@@ -153,11 +153,11 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDWithDelete() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
-    try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("INSERT INTO test (value) VALUES (1)")
 
-    let rowID = try db.lastInsertedRowID {
-      try db.exec("DELETE FROM test WHERE value = 1")
+    let rowID = try await db.lastInsertedRowID {
+      try await db.exec("DELETE FROM test WHERE value = 1")
     }
 
     #expect(rowID == nil)
@@ -167,12 +167,12 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDWithError() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    #expect(throws: LoomError.self) {
-      try db.lastInsertedRowID {
-        try db.exec("INSERT INTO test (value) VALUES (1)")
-        try db.exec("INVALID SQL")
+    await #expect(throws: LoomError.self) {
+      try await db.lastInsertedRowID {
+        try await db.exec("INSERT INTO test (value) VALUES (1)")
+        try await db.exec("INVALID SQL")
       }
     }
   }
@@ -181,21 +181,21 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDBatchInserts() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (name TEXT)")
+    try await db.exec("CREATE TABLE test (name TEXT)")
 
     let names = ["Alice", "Bob", "Charlie"]
     var lastRowID: Int64?
 
     for name in names {
-      lastRowID = try db.lastInsertedRowID {
-        try db.exec("INSERT INTO test (name) VALUES (\(name))")
+      lastRowID = try await db.lastInsertedRowID {
+        try await db.exec("INSERT INTO test (name) VALUES (\(name))")
       }
     }
 
     #expect(lastRowID != nil)
 
     // Verify all rows were inserted
-    let count = try db.query("SELECT COUNT(*) FROM test") { stmt, _ in
+    let count = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -206,14 +206,14 @@ struct DatabaseLastInsertedRowIDTests {
   func testLastInsertedRowIDAutoincrement() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT)")
+    try await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT)")
 
-    let rowID1 = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (value) VALUES ('first')")
+    let rowID1 = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (value) VALUES ('first')")
     }
 
-    let rowID2 = try db.lastInsertedRowID {
-      try db.exec("INSERT INTO test (value) VALUES ('second')")
+    let rowID2 = try await db.lastInsertedRowID {
+      try await db.exec("INSERT INTO test (value) VALUES ('second')")
     }
 
     #expect(rowID1 != nil)

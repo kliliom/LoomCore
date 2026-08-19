@@ -6,22 +6,22 @@ import Testing
 @DatabaseActor
 struct FunctionTrimTests {
   @Test("Trim function")
-  func testTrim() throws {
+  func testTrim() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data with whitespace
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('  John  ')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES (' Jane ')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('Bob')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('  John  ')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES (' Jane ')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('Bob')")
 
     // Test expression
     let expr = ColumnExpression<String>("name").trim()
 
     // Query using TRIM function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
         try String.column(of: stmt, at: 0)
@@ -35,17 +35,17 @@ struct FunctionTrimTests {
   }
 
   @Test("Trim function with no rows")
-  func testTrimNoRows() throws {
+  func testTrimNoRows() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Test expression
     let expr = ColumnExpression<String>("name").trim()
 
     // Query using TRIM function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users",
       stepper: { stmt, _ in
         try String.column(of: stmt, at: 0)

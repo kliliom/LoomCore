@@ -5,11 +5,11 @@ extension Database {
     static func openTaskTracker(at url: URL) async throws -> Database {
         let db = try await Database.open(url: url)
 
-        try db.setJournalMode(.wal)
-        try db.setSynchronous(.normal)
-        try db.setForeignKeys(true)
+        try await db.setJournalMode(.wal)
+        try await db.setSynchronous(.normal)
+        try await db.setForeignKeys(true)
 
-        try db.exec(
+        try await db.exec(
             """
             CREATE TABLE IF NOT EXISTS categories (
               id BLOB PRIMARY KEY,
@@ -17,7 +17,7 @@ extension Database {
             )
             """
         )
-        try db.exec(
+        try await db.exec(
             """
             CREATE TABLE IF NOT EXISTS tasks (
               id INTEGER PRIMARY KEY,

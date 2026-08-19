@@ -6,22 +6,22 @@ import Testing
 @DatabaseActor
 struct FunctionUpperTests {
   @Test("Upper function")
-  func testUpper() throws {
+  func testUpper() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('john')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('Jane')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('bob')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('john')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('Jane')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('bob')")
 
     // Test expression
     let expr = ColumnExpression<String>("name").upper()
 
     // Query using UPPER function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
         try String.column(of: stmt, at: 0)
@@ -35,17 +35,17 @@ struct FunctionUpperTests {
   }
 
   @Test("Upper function with no rows")
-  func testUpperNoRows() throws {
+  func testUpperNoRows() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Test expression
     let expr = ColumnExpression<String>("name").upper()
 
     // Query using UPPER function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users",
       stepper: { stmt, _ in
         try String.column(of: stmt, at: 0)

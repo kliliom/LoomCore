@@ -26,7 +26,7 @@ let age  = try Int.column(of: stmt, at: 1)     // second column
 For multi-column statements, the safest pattern is ``ManagedIndex``. It auto-increments around binds and column reads — for parameters it increments *before* binding, so the first bind hits index 1; for columns it increments *after* reading, so the first read hits index 0.
 
 ```swift
-try db.query(
+try await db.query(
   raw: "SELECT id, name, email, age FROM users WHERE status = ?",
   binder: { stmt, index in
     try "active".bind(to: stmt, at: &index)        // → param 1

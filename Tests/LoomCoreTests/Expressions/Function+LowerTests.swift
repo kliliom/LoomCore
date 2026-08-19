@@ -6,22 +6,22 @@ import Testing
 @DatabaseActor
 struct FunctionLowerTests {
   @Test("Lower function")
-  func testLower() throws {
+  func testLower() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Insert test data
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('JOHN')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('Jane')")
-    try db.exec(raw: "INSERT INTO users (name) VALUES ('BOB')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('JOHN')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('Jane')")
+    try await db.exec(raw: "INSERT INTO users (name) VALUES ('BOB')")
 
     // Test expression
     let expr = ColumnExpression<String>("name").lower()
 
     // Query using LOWER function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
         try String.column(of: stmt, at: 0)
@@ -35,17 +35,17 @@ struct FunctionLowerTests {
   }
 
   @Test("Lower function with no rows")
-  func testLowerNoRows() throws {
+  func testLowerNoRows() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with text data
-    try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
     // Test expression
     let expr = ColumnExpression<String>("name").lower()
 
     // Query using LOWER function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM users",
       stepper: { stmt, _ in
         try String.column(of: stmt, at: 0)

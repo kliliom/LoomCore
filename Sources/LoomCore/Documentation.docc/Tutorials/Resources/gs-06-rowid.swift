@@ -6,7 +6,7 @@ struct Notes {
     static func main() async throws {
         let db = try await Database.openInMemory()
 
-        try db.exec(
+        try await db.exec(
             """
             CREATE TABLE notes (
               id INTEGER PRIMARY KEY,
@@ -18,10 +18,13 @@ struct Notes {
 
         let body = "Pick up groceries"
         let createdAt = Date()
-        try db.exec(
-            "INSERT INTO notes (body, created_at) VALUES (\(body), \(createdAt))"
-        )
-        let newID = db.lastInsertedRowID
-        print("Inserted note with id \(newID)")
+        let newID = try await db.lastInsertedRowID {
+            try await db.exec(
+                "INSERT INTO notes (body, created_at) VALUES (\(body), \(createdAt))"
+            )
+        }
+        if let newID {
+            print("Inserted note with id \(newID)")
+        }
     }
 }

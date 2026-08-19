@@ -1,3 +1,13 @@
+/// Statement-caching scope, tracked per task tree and per database.
+///
+/// A task-local rather than database state: `cached` bodies can suspend, and a flag stored
+/// on the `Database` would leak caching to unrelated tasks interleaving at those suspension
+/// points. The set carries the identities of the databases that opted in, so operations on
+/// a *different* database inside a `cached` block do not populate that database's cache.
+enum StatementCaching {
+  @TaskLocal static var databases: Set<ObjectIdentifier> = []
+}
+
 extension Database {
   /// Enables prepared statement caching for the duration of `block`.
   ///
@@ -7,9 +17,9 @@ extension Database {
   /// for tight loops and batch operations.
   ///
   /// ```swift
-  /// try db.cached {
+  /// try await db.cached {
   ///   for entry in pendingLogs {
-  ///     try db.exec(
+  ///     try await db.exec(
   ///       "INSERT INTO logs (message, level) VALUES (?, ?)",
   ///       binding: entry.message, entry.level
   ///     )
@@ -20,12 +30,15 @@ extension Database {
   /// Caching applies to both `exec` and `query`:
   ///
   /// ```swift
-  /// let names = try db.cached {
-  ///   try db.query("SELECT name FROM users WHERE active = 1") { stmt, index, _ in
+  /// let names = try await db.cached {
+  ///   try await db.query("SELECT name FROM users WHERE active = 1") { stmt, index, _ in
   ///     try String.column(of: stmt, at: &index)
   ///   }
   /// }
   /// ```
+  ///
+  /// Caching is scoped to the current task tree, so concurrent tasks running database work
+  /// outside the block are unaffected.
   ///
   /// ## Lifetime
   ///
@@ -33,13 +46,14 @@ extension Database {
   /// `Database` and grows unbounded as new SQL strings are seen, so a second `cached` block
   /// reuses statements prepared by the first. Nested `cached` calls share the existing scope
   /// and do not enable caching twice.
-  public func cached<T>(_ block: @DatabaseActor () throws -> T) rethrows -> T {
-    if options.contains(.persistent) {
-      return try block()
+  public func cached<T>(_ block: @DatabaseActor () async throws -> T) async rethrows -> T {
+    let id = ObjectIdentifier(self)
+    if StatementCaching.databases.contains(id) {
+      return try await block()
     }
 
-    options.insert(.persistent)
-    defer { options.remove(.persistent) }
-    return try block()
+    return try await StatementCaching.$databases.withValue(StatementCaching.databases.union([id])) {
+      try await block()
+    }
   }
 }

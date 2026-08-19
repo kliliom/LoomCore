@@ -58,7 +58,7 @@
       }
 
       @Step {
-        Get back the auto-assigned `id` with ``Database/lastInsertedRowID``.
+        Get back the auto-assigned `id` by wrapping the insert in ``Database/lastInsertedRowID(_:)``. The method returns the ROWID of the last insert performed inside the block, or `nil` if the block inserted nothing.
 
         @Code(name: "main.swift", file: gs-06-rowid.swift, previousFile: gs-05-insert.swift)
       }
@@ -87,7 +87,7 @@
 
   @Section(title: "Group writes in a transaction") {
     @ContentAndMedia {
-      Two related writes that should either both succeed or both be rolled back belong in a transaction. If the closure throws, LoomCore rolls back automatically and re-throws the error.
+      Two related writes that should either both succeed or both be rolled back belong in a transaction. The block is async, receives the database it runs on, and may suspend freely — LoomCore keeps other tasks' operations out of the transaction until it ends. If the closure throws, LoomCore rolls back automatically and re-throws the error.
     }
 
     @Steps {
@@ -152,7 +152,7 @@
     }
 
     @MultipleChoice {
-      What happens if the closure passed to `db.transaction { … }` throws an error?
+      What happens if the closure passed to `db.transaction { db in … }` throws an error?
 
       @Choice(isCorrect: true) {
         The transaction is rolled back and the error is re-thrown.

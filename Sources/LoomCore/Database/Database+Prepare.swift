@@ -18,7 +18,7 @@ import SQLite3
 /// ```swift
 /// try await db.transaction { db in
 ///   let userID = 42
-///   let row = try db.fetchOne("SELECT name, age FROM users WHERE id = \(userID)") { stmt in
+///   let rows = try await db.query("SELECT name, age FROM users WHERE id = \(userID)") { stmt, _ in
 ///     (try String.column(of: stmt, at: 0), try Int.column(of: stmt, at: 1))
 ///   }
 /// }
@@ -55,15 +55,15 @@ public struct StatementHandle: ~Copyable, Sendable {
 
 extension Database {
   func prepare(sql: String) throws -> StatementHandle {
-    let useCache = options.contains(.persistent)
+    let useCache = StatementCaching.databases.contains(ObjectIdentifier(self))
 
     let dbPtr = try handle.ptr
     let store = handle.resourceStore
 
     // Reuse a cached statement only when it isn't already borrowed by a live
-    // handle. Reentrant use of the same SQL (e.g. a query issued from within
-    // another query's stepper) falls through to a fresh temporary statement so
-    // the two handles never share one `sqlite3_stmt` cursor.
+    // handle. Two live handles for the same SQL are not currently expressible
+    // through the public API (operations run to completion synchronously once
+    // past the gate), so the checkout guard is defense in depth.
     if useCache, let stmtPtr = store.statementCache[sql], store.checkOut(stmtPtr) {
       return StatementHandle(dbPtr: dbPtr, stmtPtr: stmtPtr, freeOnDeinit: false, store: store)
     }

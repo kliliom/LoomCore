@@ -10,16 +10,20 @@ extension Database {
   /// ```swift
   /// import SQLite3
   ///
-  /// let changes = try db.directAccess { ptr in
+  /// let changes = try await db.directAccess { ptr in
   ///   Int(sqlite3_changes(ptr))
   /// }
   /// ```
+  ///
+  /// Suspends while a transaction owned by another task is active. The block itself is
+  /// synchronous by design: the raw pointer must never live across a suspension point.
   ///
   /// The handle is only valid for the duration of `block`. Storing it, escaping it into
   /// another task, or using it after the closure returns is undefined behavior.
   ///
   /// - Parameter block: Receives the live `sqlite3*` pointer. Must not retain or escape it.
-  public func directAccess<T>(_ block: @DatabaseActor (_ ptr: OpaquePointer) throws -> T) throws -> T {
-    try block(handle.ptr)
+  public func directAccess<T>(_ block: @DatabaseActor (_ ptr: OpaquePointer) throws -> T) async throws -> T {
+    try await gate()
+    return try block(handle.ptr)
   }
 }

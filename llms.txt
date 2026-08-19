@@ -5,7 +5,9 @@
 LoomCore emphasizes safety through Swift's type system and concurrency model. The library prevents SQL injection via automatic parameter binding in string interpolation, prevents race conditions via actor isolation, and prevents type errors via the `Bindable` protocol. All `Database` methods and `Bindable` operations are isolated to `DatabaseActor`, which means you cannot accidentally perform unsynchronized access to SQLite.
 
 **Important constraints:**
-- Nested transactions are not supported. Calling `transaction()` within an active transaction logs a warning and executes in the existing transaction context.
+- All public `Database` operations are `async` — `exec`, `query`, pragma methods, `directAccess`, `cached`, `lastInsertedRowID`, and `transaction` are called as `try await db.…`. Only `close()`, `getService(_:)`, and `shutdownService(_:)` remain synchronous.
+- Nested transactions are supported via `SAVEPOINT`: calling `transaction()` inside an active transaction opens a savepoint scope. A normal return releases the savepoint into the enclosing transaction; a throw rolls back to the savepoint (leaving the enclosing transaction's work intact) and rethrows. Service lifecycle hooks fire only for the outermost physical transaction (the participating set is fixed when it begins), and `kind:` is ignored when nested.
+- While a transaction is in flight — even suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Membership is a task-local token bound around the body, inherited by structured children (`async let`, task groups) and `Task {}`, but NOT by `Task.detached`. An unstructured `Task {}` must complete before the body returns (await its value); a task that outlives the body races the commit and may run outside the transaction. Waiting operations throw `CancellationError` on task cancellation. Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — nothing interleaves mid-statement.
 - The `Database` class is `@DatabaseActor` isolated. You cannot call its methods from arbitrary async contexts without hopping to the actor.
 - String interpolation defaults to safe `.bind` mode. Use `.raw` mode only for trusted SQL identifiers (table/column names), never for user input.
 - When using managed indices (`ManagedIndex`), the index auto-increments *after* bind/column operations. Parameters start at 0 (becomes 1 after first bind), columns start at 0.
@@ -39,15 +41,15 @@ let db = try await Database.open(url: fileURL)
 
 ```swift
 // Execute DDL or write operations
-try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
 
 // Insert with string interpolation (automatic parameter binding)
 let name = "Alice"
 let age = 30
-try db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
+try await db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
 
 // Query with type-safe result extraction
-let users = try db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
+let users = try await db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
     let name = try String.column(of: stmt, at: 0)  // Column 0 (leftmost)
     let age = try Int.column(of: stmt, at: 1)      // Column 1
     return (name, age)
@@ -57,15 +59,23 @@ let users = try db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt
 ### Transactions
 
 ```swift
-try db.transaction {
-    try db.exec("INSERT INTO users (name, age) VALUES ('Bob', 25)")
-    try db.exec("INSERT INTO users (name, age) VALUES ('Carol', 28)")
-    // Commits on success, rolls back on error
+try await db.transaction { db in
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Bob', 25)")
+    try await db.exec("INSERT INTO users (name, age) VALUES ('Carol', 28)")
+    // Commits on success, rolls back on error; body may suspend freely
 }
 
 // Transaction with lock mode
-try db.transaction(kind: .immediate) {
+try await db.transaction(kind: .immediate) { db in
     // Operations...
+}
+
+// Nested call opens a SAVEPOINT scope inside the enclosing transaction
+try await db.transaction { db in
+    try await db.transaction { db in
+        // Released into the outer transaction on return,
+        // rolled back to the savepoint on throw (outer work intact)
+    }
 }
 ```
 
@@ -81,21 +91,21 @@ try db.transaction(kind: .immediate) {
 
 ### Database operations
 
-**Query methods:**
+**Query methods (all `async throws`):**
 ```swift
 // String interpolation (recommended)
-db.query(_:stepper:) -> [R]
-db.query(_:stepper:) -> [R]  // With ManagedStepper
+db.query(_:stepper:) async throws -> [R]
+db.query(_:stepper:) async throws -> [R]  // With ManagedStepper
 
 // Raw SQL with manual binding
-db.query(raw:binder:stepper:) -> [R]
-db.query(raw:stepper:) -> [R]  // No parameters
+db.query(raw:binder:stepper:) async throws -> [R]
+db.query(raw:stepper:) async throws -> [R]  // No parameters
 
 // Variadic binding
-db.query(raw:binding:_:stepper:) -> [R]
+db.query(raw:binding:_:stepper:) async throws -> [R]
 ```
 
-**Exec methods:**
+**Exec methods (all `async throws`):**
 ```swift
 db.exec(_:)                    // SQLStatement
 db.exec(raw:binder:)           // Manual binding
@@ -104,9 +114,13 @@ db.exec(raw:)                  // No parameters
 
 **Other methods:**
 ```swift
-db.transaction(kind:_:) -> T   // Execute atomic operations
-db.close()                     // Explicit cleanup
-db.lastInsertedRowID           // Get last INSERT rowid
+// Atomic block; body may suspend; nested calls open SAVEPOINT scopes
+func transaction<T>(kind: TransactionKind = .deferred,
+                    _ block: @DatabaseActor (Database) async throws -> T) async throws -> T
+
+db.cached(_:) async            // Statement caching scope, per task tree (task-local)
+db.lastInsertedRowID(_:) async // ROWID of the last insert performed inside the block -> Int64?
+db.close()                     // Explicit cleanup (synchronous)
 ```
 
 ### Binding and extraction
@@ -153,7 +167,7 @@ let calc = (price * quantity) + tax        // Expression<Double>
 ### Managed indices (recommended for multi-column operations)
 
 ```swift
-let users = try db.query(
+let users = try await db.query(
     raw: "SELECT id, name, email, age FROM users WHERE status = ?",
     binder: { stmt, index in
         try "active".bind(to: stmt, at: &index)  // Auto-increments to 1
@@ -171,7 +185,7 @@ let users = try db.query(
 ### Early query termination
 
 ```swift
-let firstMatch = try db.query("SELECT name FROM users WHERE age > \(21)") { stmt, stop in
+let firstMatch = try await db.query("SELECT name FROM users WHERE age > \(21)") { stmt, stop in
     let name = try String.column(of: stmt, at: 0)
     if name == "TargetName" {
         stop = true  // Stop iterating
@@ -184,9 +198,9 @@ let firstMatch = try db.query("SELECT name FROM users WHERE age > \(21)") { stmt
 
 ```swift
 let email: String? = nil
-try db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
+try await db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
 
-let result = try db.query("SELECT email FROM users") { stmt, _ in
+let result = try await db.query("SELECT email FROM users") { stmt, _ in
     try Optional<String>.column(of: stmt, at: 0)  // Returns nil for NULL
 }
 ```
@@ -200,10 +214,10 @@ struct Metadata: Codable {
 }
 
 let meta = Metadata(createdAt: Date(), tags: ["swift", "database"])
-try db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
+try await db.exec("INSERT INTO items (metadata) VALUES (\(meta))")
 // Automatically encoded as JSON and stored as TEXT
 
-let retrieved = try db.query("SELECT metadata FROM items") { stmt, _ in
+let retrieved = try await db.query("SELECT metadata FROM items") { stmt, _ in
     try Metadata.column(of: stmt, at: 0)  // Automatically decoded from JSON
 }
 ```
@@ -236,9 +250,10 @@ class CacheInvalidationService: Database.Service {
     }
 }
 
-// Register and use service
+// Register and use service (synchronous, on DatabaseActor)
 let service = db.getService(CacheInvalidationService.self)
-// Service receives lifecycle callbacks automatically
+// Service receives lifecycle callbacks automatically — only for the
+// outermost physical transaction, never for nested SAVEPOINT scopes
 ```
 
 ## File Reference
@@ -248,7 +263,9 @@ let service = db.getService(CacheInvalidationService.self)
 - `Sources/Database/Database.swift` — Core `Database` class definition, opening databases, resource management, actor isolation
 - `Sources/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
 - `Sources/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL)
-- `Sources/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), nested transaction behavior
+- `Sources/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting
+- `Sources/Database/Database+Gate.swift` — Transaction gate: suspends operations from tasks outside the active transaction until commit/rollback
+- `Sources/Database/TransactionToken.swift` — Task-local transaction membership token (inherited by structured children and `Task {}`, not `Task.detached`)
 - `Sources/Bindable/Bindable.swift` — Core `Bindable` protocol, bind/column methods, index conventions (1-based vs 0-based), managed indices
 - `Sources/Statement/SQLStatement.swift` — SQL statement construction, string interpolation, raw mode, statement composition
 - `Sources/Statement/SQLBuilder.swift` — String interpolation internals, append modes (bind vs raw), how parameter binding works
@@ -283,13 +300,13 @@ let service = db.getService(CacheInvalidationService.self)
 ### Advanced features
 
 - `Sources/Database/Database+Service.swift` — Service base class, transaction lifecycle hooks, singleton-per-type pattern
-- `Sources/Database/Database+Cached.swift` — Statement caching mechanism (persistent mode)
+- `Sources/Database/Database+Cached.swift` — Statement caching scope, enabled per task tree via a task-local
 - `Sources/Database/Database+Pragmas.swift` — PRAGMA helpers for common SQLite configuration
 
 ## Test Examples
 
 - `Tests/Database/Database+QueryTests.swift` — Query patterns, stepper usage, early termination examples
-- `Tests/Database/Database+TransactionTests.swift` — Transaction usage, rollback behavior, nested transaction warnings
+- `Tests/Database/Database+TransactionTests.swift` — Transaction usage, rollback behavior, savepoint nesting, gating
 - `Tests/Statement/SQLStatementTests.swift` — String interpolation examples, raw mode usage, statement composition
 - `Tests/Bindable/BindableTests.swift` — Type binding examples, index management patterns
 - `Tests/Bindable/Bindable+OptionalTests.swift` — NULL handling patterns, optional value workflows

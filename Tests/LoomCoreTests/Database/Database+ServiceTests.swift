@@ -53,14 +53,14 @@ struct DatabaseServiceTests {
   func testServiceTransactionWillBegin() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let service = db.getService(TrackingService.self)
 
     #expect(service.willBeginCount == 0)
 
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
     #expect(service.willBeginCount == 1)
@@ -70,14 +70,14 @@ struct DatabaseServiceTests {
   func testServiceTransactionDidCommit() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let service = db.getService(TrackingService.self)
 
     #expect(service.didCommitCount == 0)
 
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
     #expect(service.didCommitCount == 1)
@@ -87,16 +87,16 @@ struct DatabaseServiceTests {
   func testServiceTransactionDidRollback() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let service = db.getService(TrackingService.self)
 
     #expect(service.didRollbackCount == 0)
 
-    #expect(throws: LoomError.self) {
-      try db.transaction {
-        try db.exec("INSERT INTO test (value) VALUES (1)")
-        try db.exec("INVALID SQL")
+    await #expect(throws: LoomError.self) {
+      try await db.transaction { db in
+        try await db.exec("INSERT INTO test (value) VALUES (1)")
+        try await db.exec("INVALID SQL")
       }
     }
 
@@ -107,24 +107,24 @@ struct DatabaseServiceTests {
   func testServiceMultipleTransactions() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let service = db.getService(TrackingService.self)
 
     // First transaction (success)
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
     // Second transaction (success)
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (2)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (2)")
     }
 
     // Third transaction (failure)
-    #expect(throws: LoomError.self) {
-      try db.transaction {
-        try db.exec("INVALID SQL")
+    await #expect(throws: LoomError.self) {
+      try await db.transaction { db in
+        try await db.exec("INVALID SQL")
       }
     }
 
@@ -182,13 +182,13 @@ struct DatabaseServiceTests {
 
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let serviceA = db.getService(ServiceA.self)
     let serviceB = db.getService(ServiceB.self)
 
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
     #expect(serviceA.callCount == 1)
@@ -208,12 +208,12 @@ struct DatabaseServiceTests {
 
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let service = db.getService(LoggingService.self)
 
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
     #expect(service.logEntries.count == 1)
@@ -224,17 +224,17 @@ struct DatabaseServiceTests {
   func testServiceLifecycleForNestedTransactions() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let service = db.getService(TrackingService.self)
 
     // Outer transaction
-    try db.transaction {
-      try db.exec("INSERT INTO test (value) VALUES (1)")
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
 
       // Note: Nested transactions just log a warning and execute in the current transaction
-      try db.transaction {
-        try db.exec("INSERT INTO test (value) VALUES (2)")
+      try await db.transaction { db in
+        try await db.exec("INSERT INTO test (value) VALUES (2)")
       }
     }
 

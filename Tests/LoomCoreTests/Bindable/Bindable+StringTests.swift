@@ -9,12 +9,12 @@ struct BindableStringTests {
   func testStringBindingAndExtraction() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let testString = "Hello, World!"
-    try db.exec("INSERT INTO test (value) VALUES (\(testString))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testString))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -25,11 +25,11 @@ struct BindableStringTests {
   func testEmptyString() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
     let emptyString = ""
-    try db.exec("INSERT INTO test (value) VALUES (\(emptyString))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(emptyString))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -40,12 +40,12 @@ struct BindableStringTests {
   func testStringWithSpecialCharacters() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let specialString = "Test with 'quotes' and \"double quotes\" and newlines\nand tabs\t!"
-    try db.exec("INSERT INTO test (value) VALUES (\(specialString))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(specialString))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -53,7 +53,7 @@ struct BindableStringTests {
   }
 
   @Test("String asSQLLiteral")
-  func testSQLLiteral() throws {
+  func testSQLLiteral() async throws {
     let simple = "test"
     #expect(try simple.asSQLLiteral() == "'test'")
 
@@ -70,12 +70,12 @@ struct BindableStringTests {
   func testInstanceMethods() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let testValue = "Instance test"
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -86,12 +86,12 @@ struct BindableStringTests {
   func testUnicodeStrings() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let unicodeString = "Hello 世界 🌍 Привет"
-    try db.exec("INSERT INTO test (value) VALUES (\(unicodeString))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(unicodeString))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -102,14 +102,14 @@ struct BindableStringTests {
   func testMultipleStrings() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let strings = ["first", "second", "third"]
     for str in strings {
-      try db.exec("INSERT INTO test (value) VALUES (\(str))")
+      try await db.exec("INSERT INTO test (value) VALUES (\(str))")
     }
 
-    let result = try db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -121,7 +121,7 @@ struct BindableStringTests {
   func testStringRequiringInternalCopy() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let unicodeString = Array("Hello 世界 🌍 Привет".utf16).withContiguousStorageIfAvailable { ubp in
       ubp.withMemoryRebound(to: UInt16.self) { buffer in
@@ -129,9 +129,9 @@ struct BindableStringTests {
       }
     }
 
-    try db.exec("INSERT INTO test (value) VALUES (\(unicodeString))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(unicodeString))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -139,12 +139,12 @@ struct BindableStringTests {
   }
 
   @Test("String bind throws with connection error message on out-of-range index")
-  func testStringBindOutOfRangeIndex() throws {
+  func testStringBindOutOfRangeIndex() async throws {
     let db = try Database.openInMemory()
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
-    let error = #expect(throws: LoomError.self) {
-      try db.exec(
+    let error = await #expect(throws: LoomError.self) {
+      try await db.exec(
         raw: "INSERT INTO test (value) VALUES (?)",
         binder: { stmt in
           try String.bind(to: stmt, value: "hello", at: 99)

@@ -60,13 +60,13 @@ extension Database {
   /// Returns the current journal mode.
   ///
   /// ```swift
-  /// let mode = try db.getJournalMode()
+  /// let mode = try await db.getJournalMode()
   /// if mode != .wal {
-  ///   try db.setJournalMode(.wal)
+  ///   try await db.setJournalMode(.wal)
   /// }
   /// ```
-  public func getJournalMode() throws -> JournalMode {
-    let result = try query("PRAGMA journal_mode") { stmt, _ in
+  public func getJournalMode() async throws -> JournalMode {
+    let result = try await query("PRAGMA journal_mode") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -85,12 +85,12 @@ extension Database {
   /// that doesn't support shared memory. Inspect the returned value to confirm.
   ///
   /// ```swift
-  /// let active = try db.setJournalMode(.wal)
+  /// let active = try await db.setJournalMode(.wal)
   /// precondition(active == .wal, "WAL mode unavailable on this filesystem")
   /// ```
   @discardableResult
-  public func setJournalMode(_ mode: JournalMode) throws -> JournalMode {
-    let result = try query("PRAGMA journal_mode = \(mode.rawValue, mode: .raw)") { stmt, _ in
+  public func setJournalMode(_ mode: JournalMode) async throws -> JournalMode {
+    let result = try await query("PRAGMA journal_mode = \(mode.rawValue, mode: .raw)") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -137,8 +137,8 @@ extension Database {
   }
 
   /// Returns the current synchronous mode.
-  public func getSynchronous() throws -> SynchronousMode {
-    let result = try query("PRAGMA synchronous") { stmt, _ in
+  public func getSynchronous() async throws -> SynchronousMode {
+    let result = try await query("PRAGMA synchronous") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
 
@@ -160,11 +160,11 @@ extension Database {
   /// - Temporary data only: `.off` — maximum speed, no crash safety.
   ///
   /// ```swift
-  /// try db.setJournalMode(.wal)
-  /// try db.setSynchronous(.normal)
+  /// try await db.setJournalMode(.wal)
+  /// try await db.setSynchronous(.normal)
   /// ```
-  public func setSynchronous(_ mode: SynchronousMode) throws {
-    try exec("PRAGMA synchronous = \(mode.rawValue, mode: .raw)")
+  public func setSynchronous(_ mode: SynchronousMode) async throws {
+    try await exec("PRAGMA synchronous = \(mode.rawValue, mode: .raw)")
   }
 }
 
@@ -194,8 +194,8 @@ extension Database {
   ///
   /// Pages are typically 4096 bytes each. A negative raw value means the cache size is specified in
   /// kibibytes — ``CacheSize`` normalizes that for you.
-  public func getCacheSize() throws -> CacheSize {
-    let result = try query("PRAGMA cache_size") { stmt, _ in
+  public func getCacheSize() async throws -> CacheSize {
+    let result = try await query("PRAGMA cache_size") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
 
@@ -213,12 +213,12 @@ extension Database {
   ///
   /// ```swift
   /// // Cap the cache at 10 MiB.
-  /// try db.setCacheSize(.kibibytes(10240))
+  /// try await db.setCacheSize(.kibibytes(10240))
   ///
   /// // Or 2560 pages (~10 MiB at 4 KiB pages).
-  /// try db.setCacheSize(.pages(2560))
+  /// try await db.setCacheSize(.pages(2560))
   /// ```
-  public func setCacheSize(_ size: CacheSize) throws {
+  public func setCacheSize(_ size: CacheSize) async throws {
     let rawValue: Int32
     switch size {
     case .pages(let pages):
@@ -226,7 +226,7 @@ extension Database {
     case .kibibytes(let kibibytes):
       rawValue = -kibibytes
     }
-    try exec("PRAGMA cache_size = \(rawValue, mode: .raw)")
+    try await exec("PRAGMA cache_size = \(rawValue, mode: .raw)")
   }
 }
 
@@ -250,8 +250,8 @@ extension Database {
   }
 
   /// Returns the current `temp_store` mode.
-  public func getTempStore() throws -> TempStoreMode {
-    let result = try query("PRAGMA temp_store") { stmt, _ in
+  public func getTempStore() async throws -> TempStoreMode {
+    let result = try await query("PRAGMA temp_store") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
 
@@ -268,10 +268,10 @@ extension Database {
   ///
   /// ```swift
   /// // Keep ephemeral B-trees in memory for hot query paths.
-  /// try db.setTempStore(.memory)
+  /// try await db.setTempStore(.memory)
   /// ```
-  public func setTempStore(_ mode: TempStoreMode) throws {
-    try exec("PRAGMA temp_store = \(mode.rawValue, mode: .raw)")
+  public func setTempStore(_ mode: TempStoreMode) async throws {
+    try await exec("PRAGMA temp_store = \(mode.rawValue, mode: .raw)")
   }
 }
 
@@ -281,8 +281,8 @@ extension Database {
   /// Returns the maximum number of bytes available for memory-mapped I/O.
   ///
   /// A return value of `0` indicates memory-mapped I/O is disabled.
-  public func getMmapSize() throws -> Int64 {
-    let result = try query("PRAGMA mmap_size") { stmt, _ in
+  public func getMmapSize() async throws -> Int64 {
+    let result = try await query("PRAGMA mmap_size") { stmt, _ in
       try Int64.column(of: stmt, at: 0)
     }
 
@@ -301,16 +301,16 @@ extension Database {
   ///
   /// ```swift
   /// // Map up to 256 MiB of the database.
-  /// _ = try db.setMmapSize(256 * 1024 * 1024)
+  /// _ = try await db.setMmapSize(256 * 1024 * 1024)
   ///
   /// // Disable memory-mapped I/O.
-  /// _ = try db.setMmapSize(0)
+  /// _ = try await db.setMmapSize(0)
   /// ```
   ///
   /// - Parameter size: Maximum mmap size in bytes, or `0` to disable.
   @discardableResult
-  public func setMmapSize(_ size: Int64) throws -> Int64 {
-    let result = try query("PRAGMA mmap_size = \(size, mode: .raw)") { stmt, _ in
+  public func setMmapSize(_ size: Int64) async throws -> Int64 {
+    let result = try await query("PRAGMA mmap_size = \(size, mode: .raw)") { stmt, _ in
       try Int64.column(of: stmt, at: 0)
     }
 
@@ -328,8 +328,8 @@ extension Database {
   /// Returns whether foreign key constraint enforcement is enabled.
   ///
   /// Foreign keys are disabled by default for backwards compatibility with legacy databases.
-  public func getForeignKeys() throws -> Bool {
-    let result = try query("PRAGMA foreign_keys") { stmt, _ in
+  public func getForeignKeys() async throws -> Bool {
+    let result = try await query("PRAGMA foreign_keys") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
 
@@ -342,11 +342,11 @@ extension Database {
   /// database.
   ///
   /// ```swift
-  /// let db = try Database.openInMemory()
-  /// try db.setForeignKeys(true)
+  /// let db = try await Database.openInMemory()
+  /// try await db.setForeignKeys(true)
   /// ```
-  public func setForeignKeys(_ enabled: Bool) throws {
-    try exec("PRAGMA foreign_keys = \(enabled ? 1 : 0, mode: .raw)")
+  public func setForeignKeys(_ enabled: Bool) async throws {
+    try await exec("PRAGMA foreign_keys = \(enabled ? 1 : 0, mode: .raw)")
   }
 }
 
@@ -373,8 +373,8 @@ extension Database {
   }
 
   /// Returns the current auto-vacuum mode.
-  public func getAutoVacuum() throws -> AutoVacuumMode {
-    let result = try query("PRAGMA auto_vacuum") { stmt, _ in
+  public func getAutoVacuum() async throws -> AutoVacuumMode {
+    let result = try await query("PRAGMA auto_vacuum") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
 
@@ -393,11 +393,11 @@ extension Database {
   /// databases or while a transaction is active.
   ///
   /// ```swift
-  /// try db.setAutoVacuum(.incremental)
-  /// try db.vacuum()  // required for the change to take effect
+  /// try await db.setAutoVacuum(.incremental)
+  /// try await db.vacuum()  // required for the change to take effect
   /// ```
-  public func setAutoVacuum(_ mode: AutoVacuumMode) throws {
-    try exec("PRAGMA auto_vacuum = \(mode.rawValue, mode: .raw)")
+  public func setAutoVacuum(_ mode: AutoVacuumMode) async throws {
+    try await exec("PRAGMA auto_vacuum = \(mode.rawValue, mode: .raw)")
   }
 }
 
@@ -410,7 +410,7 @@ extension Database {
   /// empty array when the database is healthy.
   ///
   /// ```swift
-  /// let issues = try db.integrityCheck()
+  /// let issues = try await db.integrityCheck()
   /// if issues.isEmpty {
   ///   print("Database integrity OK")
   /// } else {
@@ -422,8 +422,8 @@ extension Database {
   ///
   /// - Parameter maxErrors: Maximum number of errors to return before stopping.
   /// - Returns: Error messages found, or an empty array if the database is healthy.
-  public func integrityCheck(maxErrors: Int32 = 100) throws -> [String] {
-    let results = try query("PRAGMA integrity_check(\(maxErrors, mode: .raw))") { stmt, _ in
+  public func integrityCheck(maxErrors: Int32 = 100) async throws -> [String] {
+    let results = try await query("PRAGMA integrity_check(\(maxErrors, mode: .raw))") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -441,10 +441,10 @@ extension Database {
   ///
   /// ```swift
   /// // Run during scheduled maintenance or at app shutdown.
-  /// try db.optimize()
+  /// try await db.optimize()
   /// ```
-  public func optimize() throws {
-    try exec("PRAGMA optimize")
+  public func optimize() async throws {
+    try await exec("PRAGMA optimize")
   }
 
   /// Performs a full `VACUUM` of the database.
@@ -459,8 +459,8 @@ extension Database {
   /// a transaction or against attached databases.
   ///
   /// ```swift
-  /// try db.exec("DELETE FROM old_logs WHERE created_at < ?", binding: cutoffDate)
-  /// try db.vacuum()
+  /// try await db.exec("DELETE FROM old_logs WHERE created_at < ?", binding: cutoffDate)
+  /// try await db.vacuum()
   /// ```
   ///
   /// ## Performance Considerations
@@ -468,29 +468,29 @@ extension Database {
   /// - `VACUUM` can take a long time on multi-gigabyte databases.
   /// - Prefer ``AutoVacuumMode/incremental`` with ``incrementalVacuum(pages:)`` for finer-grained control.
   /// - For WAL-mode databases, ``walCheckpoint(mode:schema:)`` may be the better tool.
-  public func vacuum() throws {
-    try exec("VACUUM")
+  public func vacuum() async throws {
+    try await exec("VACUUM")
   }
 
   /// Reclaims pages from the free list when in ``AutoVacuumMode/incremental`` mode.
   ///
   /// ```swift
-  /// try db.setAutoVacuum(.incremental)
-  /// try db.vacuum()  // apply the new mode
+  /// try await db.setAutoVacuum(.incremental)
+  /// try await db.vacuum()  // apply the new mode
   ///
   /// // Later, in a maintenance window, reclaim freed pages a chunk at a time.
-  /// try db.incrementalVacuum(pages: 100)
+  /// try await db.incrementalVacuum(pages: 100)
   /// ```
   ///
   /// - Parameter pages: Maximum number of pages to remove. Pass `nil` to remove all free pages.
-  public func incrementalVacuum(pages: Int32? = nil) throws {
+  public func incrementalVacuum(pages: Int32? = nil) async throws {
     let statement: SQLStatement =
       if let pages {
         "PRAGMA incremental_vacuum(\(pages, mode: .raw))"
       } else {
         "PRAGMA incremental_vacuum"
       }
-    _ = try query(statement) { stmt, _ in }
+    _ = try await query(statement) { stmt, _ in }
   }
 }
 
@@ -539,9 +539,9 @@ extension Database {
   /// Only meaningful when the database is in ``JournalMode/wal`` mode.
   ///
   /// ```swift
-  /// try db.setJournalMode(.wal)
+  /// try await db.setJournalMode(.wal)
   ///
-  /// let info = try db.walCheckpoint(mode: .passive)
+  /// let info = try await db.walCheckpoint(mode: .passive)
   /// print("Checkpointed \(info.checkpointedPages) of \(info.logPages) pages")
   /// ```
   ///
@@ -551,8 +551,8 @@ extension Database {
   public func walCheckpoint(
     mode: WALCheckpointMode = .passive,
     schema: String = "main"
-  ) throws -> WALCheckpointInfo {
-    let results = try query(
+  ) async throws -> WALCheckpointInfo {
+    let results = try await query(
       "PRAGMA \(schema, mode: .raw).wal_checkpoint(\(mode.rawValue, mode: .raw))"
     ) { stmt, _ in
       (
@@ -601,13 +601,13 @@ extension Database {
   /// Returns the column metadata for a table.
   ///
   /// ```swift
-  /// for column in try db.tableInfo("users") {
+  /// for column in try await db.tableInfo("users") {
   ///   let nullability = column.notNull ? " NOT NULL" : ""
   ///   print("\(column.name): \(column.type)\(nullability)")
   /// }
   /// ```
-  public func tableInfo(_ tableName: String) throws -> [ColumnInfo] {
-    try query("PRAGMA table_info(\(tableName, mode: .raw))") { stmt, _ in
+  public func tableInfo(_ tableName: String) async throws -> [ColumnInfo] {
+    try await query("PRAGMA table_info(\(tableName, mode: .raw))") { stmt, _ in
       ColumnInfo(
         cid: try Int32.column(of: stmt, at: 0),
         name: try String.column(of: stmt, at: 1),
@@ -643,14 +643,14 @@ extension Database {
   /// Lists all tables and views in a schema.
   ///
   /// ```swift
-  /// for table in try db.tableList() where table.type == "table" {
+  /// for table in try await db.tableList() where table.type == "table" {
   ///   print("\(table.name): \(table.ncol) columns")
   /// }
   /// ```
   ///
   /// - Parameter schema: Schema to list tables from (e.g. `"main"`, `"temp"`, or an attached database name).
-  public func tableList(schema: String = "main") throws -> [TableInfo] {
-    try query("PRAGMA \(schema, mode: .raw).table_list") { stmt, _ in
+  public func tableList(schema: String = "main") async throws -> [TableInfo] {
+    try await query("PRAGMA \(schema, mode: .raw).table_list") { stmt, _ in
       TableInfo(
         schema: try String.column(of: stmt, at: 0),
         name: try String.column(of: stmt, at: 1),
@@ -683,13 +683,13 @@ extension Database {
   /// Lists all indexes attached to a table.
   ///
   /// ```swift
-  /// for index in try db.indexList("users") {
+  /// for index in try await db.indexList("users") {
   ///   let kind = index.unique ? " (UNIQUE)" : ""
   ///   print("\(index.name)\(kind)")
   /// }
   /// ```
-  public func indexList(_ tableName: String) throws -> [IndexListInfo] {
-    try query("PRAGMA index_list(\(tableName, mode: .raw))") { stmt, _ in
+  public func indexList(_ tableName: String) async throws -> [IndexListInfo] {
+    try await query("PRAGMA index_list(\(tableName, mode: .raw))") { stmt, _ in
       IndexListInfo(
         seq: try Int32.column(of: stmt, at: 0),
         name: try String.column(of: stmt, at: 1),
@@ -724,14 +724,14 @@ extension Database {
   /// Returns the column composition of an index.
   ///
   /// ```swift
-  /// for column in try db.indexInfo("idx_users_email") {
+  /// for column in try await db.indexInfo("idx_users_email") {
   ///   if let name = column.name {
   ///     print("\(name) \(column.desc ? "DESC" : "ASC") COLLATE \(column.coll)")
   ///   }
   /// }
   /// ```
-  public func indexInfo(_ indexName: String) throws -> [IndexColumnInfo] {
-    try query("PRAGMA index_xinfo(\(indexName, mode: .raw))") { stmt, _ in
+  public func indexInfo(_ indexName: String) async throws -> [IndexColumnInfo] {
+    try await query("PRAGMA index_xinfo(\(indexName, mode: .raw))") { stmt, _ in
       IndexColumnInfo(
         seqno: try Int32.column(of: stmt, at: 0),
         cid: try Int32.column(of: stmt, at: 1),
@@ -773,14 +773,14 @@ extension Database {
   /// Lists all foreign key constraints declared on a table.
   ///
   /// ```swift
-  /// for fk in try db.foreignKeyList("posts") {
+  /// for fk in try await db.foreignKeyList("posts") {
   ///   print("\(fk.from) -> \(fk.table).\(fk.to)")
   ///   print("  ON UPDATE \(fk.onUpdate)")
   ///   print("  ON DELETE \(fk.onDelete)")
   /// }
   /// ```
-  public func foreignKeyList(_ tableName: String) throws -> [ForeignKeyInfo] {
-    try query("PRAGMA foreign_key_list(\(tableName, mode: .raw))") { stmt, _ in
+  public func foreignKeyList(_ tableName: String) async throws -> [ForeignKeyInfo] {
+    try await query("PRAGMA foreign_key_list(\(tableName, mode: .raw))") { stmt, _ in
       ForeignKeyInfo(
         id: try Int32.column(of: stmt, at: 0),
         seq: try Int32.column(of: stmt, at: 1),

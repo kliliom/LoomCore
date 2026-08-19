@@ -132,7 +132,7 @@ struct SQLBuilderTests {
   func testBuilderWithDatabase() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
+    try await db.exec("CREATE TABLE users (name TEXT, age INTEGER)")
 
     var builder = SQLBuilder()
     builder.appendLiteral("INSERT INTO users (name, age) VALUES (")
@@ -142,9 +142,9 @@ struct SQLBuilderTests {
     builder.appendLiteral(")")
 
     let stmt = builder.makeStatement()
-    try db.exec(stmt)
+    try await db.exec(stmt)
 
-    let result = try db.query("SELECT name, age FROM users") { stmt, _ in
+    let result = try await db.query("SELECT name, age FROM users") { stmt, _ in
       let name = try String.column(of: stmt, at: 0)
       let age = try Int.column(of: stmt, at: 1)
       return (name, age)

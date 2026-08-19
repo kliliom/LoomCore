@@ -21,12 +21,12 @@ struct BindableRawRepresentableTests {
   func testStringEnumBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (status TEXT)")
+    try await db.exec("CREATE TABLE test (status TEXT)")
 
     let status = Status.active
-    try db.exec("INSERT INTO test (status) VALUES (\(status))")
+    try await db.exec("INSERT INTO test (status) VALUES (\(status))")
 
-    let result = try db.query("SELECT status FROM test") { stmt, _ in
+    let result = try await db.query("SELECT status FROM test") { stmt, _ in
       try Status.column(of: stmt, at: 0)
     }
 
@@ -37,12 +37,12 @@ struct BindableRawRepresentableTests {
   func testIntEnumBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (priority INTEGER)")
+    try await db.exec("CREATE TABLE test (priority INTEGER)")
 
     let priority = Priority.high
-    try db.exec("INSERT INTO test (priority) VALUES (\(priority))")
+    try await db.exec("INSERT INTO test (priority) VALUES (\(priority))")
 
-    let result = try db.query("SELECT priority FROM test") { stmt, _ in
+    let result = try await db.query("SELECT priority FROM test") { stmt, _ in
       try Priority.column(of: stmt, at: 0)
     }
 
@@ -53,14 +53,14 @@ struct BindableRawRepresentableTests {
   func testMultipleEnumValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (status TEXT)")
+    try await db.exec("CREATE TABLE test (status TEXT)")
 
     let statuses: [Status] = [.active, .inactive, .pending]
     for status in statuses {
-      try db.exec("INSERT INTO test (status) VALUES (\(status))")
+      try await db.exec("INSERT INTO test (status) VALUES (\(status))")
     }
 
-    let result = try db.query("SELECT status FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT status FROM test ORDER BY rowid") { stmt, _ in
       try Status.column(of: stmt, at: 0)
     }
 
@@ -69,7 +69,7 @@ struct BindableRawRepresentableTests {
   }
 
   @Test("Enum as SQL literal")
-  func testEnumAsSQLLiteral() throws {
+  func testEnumAsSQLLiteral() async throws {
     let status = Status.active
     #expect(try status.asSQLLiteral() == "'active'")
 
@@ -87,14 +87,14 @@ struct BindableRawRepresentableTests {
   func testEnumWithQueryFiltering() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE tasks (id INTEGER, status TEXT)")
+    try await db.exec("CREATE TABLE tasks (id INTEGER, status TEXT)")
 
-    try db.exec("INSERT INTO tasks (id, status) VALUES (1, \(Status.active))")
-    try db.exec("INSERT INTO tasks (id, status) VALUES (2, \(Status.inactive))")
-    try db.exec("INSERT INTO tasks (id, status) VALUES (3, \(Status.active))")
+    try await db.exec("INSERT INTO tasks (id, status) VALUES (1, \(Status.active))")
+    try await db.exec("INSERT INTO tasks (id, status) VALUES (2, \(Status.inactive))")
+    try await db.exec("INSERT INTO tasks (id, status) VALUES (3, \(Status.active))")
 
     let activeStatus = Status.active
-    let result = try db.query("SELECT id FROM tasks WHERE status = \(activeStatus) ORDER BY id") { stmt, _ in
+    let result = try await db.query("SELECT id FROM tasks WHERE status = \(activeStatus) ORDER BY id") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -106,15 +106,15 @@ struct BindableRawRepresentableTests {
   func testOptionalEnumBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (status TEXT)")
+    try await db.exec("CREATE TABLE test (status TEXT)")
 
     let status1: Status? = .active
     let status2: Status? = nil
 
-    try db.exec("INSERT INTO test (status) VALUES (\(status1))")
-    try db.exec("INSERT INTO test (status) VALUES (\(status2))")
+    try await db.exec("INSERT INTO test (status) VALUES (\(status1))")
+    try await db.exec("INSERT INTO test (status) VALUES (\(status2))")
 
-    let result = try db.query("SELECT status FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT status FROM test ORDER BY rowid") { stmt, _ in
       try Optional<Status>.column(of: stmt, at: 0)
     }
 
@@ -127,14 +127,14 @@ struct BindableRawRepresentableTests {
   func testEnumRoundTripAllCases() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (priority INTEGER)")
+    try await db.exec("CREATE TABLE test (priority INTEGER)")
 
     let priorities: [Priority] = [.low, .medium, .high]
     for priority in priorities {
-      try db.exec("INSERT INTO test (priority) VALUES (\(priority))")
+      try await db.exec("INSERT INTO test (priority) VALUES (\(priority))")
     }
 
-    let result = try db.query("SELECT priority FROM test ORDER BY priority") { stmt, _ in
+    let result = try await db.query("SELECT priority FROM test ORDER BY priority") { stmt, _ in
       try Priority.column(of: stmt, at: 0)
     }
 
@@ -145,14 +145,14 @@ struct BindableRawRepresentableTests {
   func testTypeMappingFailed() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (status TEXT)")
+    try await db.exec("CREATE TABLE test (status TEXT)")
 
     // Insert an invalid raw value that doesn't correspond to any enum case
-    try db.exec(raw: "INSERT INTO test (status) VALUES ('invalid')")
+    try await db.exec(raw: "INSERT INTO test (status) VALUES ('invalid')")
 
     // Should throw typeMappingFailed when trying to read invalid value as enum
-    #expect(throws: LoomError.self) {
-      try db.query("SELECT status FROM test") { stmt, _ in
+    await #expect(throws: LoomError.self) {
+      try await db.query("SELECT status FROM test") { stmt, _ in
         try Status.column(of: stmt, at: 0)
       }
     }

@@ -6,7 +6,7 @@ struct Notes {
     static func main() async throws {
         let db = try await Database.openInMemory()
 
-        try db.exec(
+        try await db.exec(
             """
             CREATE TABLE notes (
               id INTEGER PRIMARY KEY,

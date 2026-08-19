@@ -96,7 +96,7 @@
       }
 
       @Step {
-        Wire the cache to a service. `transactionDidCommit` is called after every committed transaction; `transactionDidRollback` is called on rollback. You can tighten this up by tracking which tables changed if you need finer-grained invalidation.
+        Wire the cache to a service. `transactionDidCommit` is called after every committed outermost transaction; `transactionDidRollback` is called on rollback. Nested (savepoint) scopes fire no callbacks — only the physical transaction does. You can tighten this up by tracking which tables changed if you need finer-grained invalidation.
 
         @Code(name: "TaskStore+Cache.swift", file: ex-11-service.swift, previousFile: ex-10-cache.swift)
       }
@@ -159,17 +159,17 @@
       When does `transactionDidCommit` fire on a service?
 
       @Choice(isCorrect: true) {
-        After every transaction opened via `db.transaction { … }` that completes successfully.
+        After every outermost transaction opened via `db.transaction { db in … }` that commits successfully.
 
         @Justification(reaction: "Correct!") {
-          Implicit per-statement transactions — a bare `exec` outside a `transaction` block — do not fire service callbacks.
+          Implicit per-statement transactions — a bare `exec` outside a `transaction` block — and nested (savepoint) scopes do not fire service callbacks.
         }
       }
       @Choice(isCorrect: false) {
         After every `exec` call.
 
         @Justification(reaction: "Try again.") {
-          Only `transaction { … }` blocks notify services.
+          Only outermost `transaction { db in … }` blocks notify services.
         }
       }
     }

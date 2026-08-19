@@ -6,23 +6,23 @@ import Testing
 @DatabaseActor
 struct FunctionSumTests {
   @Test("Sum function")
-  func testSum() throws {
+  func testSum() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with numeric data
-    try db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
+    try await db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
 
     // Insert test data
-    try db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
-    try db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
-    try db.exec(raw: "INSERT INTO sales (amount) VALUES (300)")
-    try db.exec(raw: "INSERT INTO sales (amount) VALUES (150)")
+    try await db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
+    try await db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
+    try await db.exec(raw: "INSERT INTO sales (amount) VALUES (300)")
+    try await db.exec(raw: "INSERT INTO sales (amount) VALUES (150)")
 
     // Test expression
     let expr = ColumnExpression<Int>("amount").sum()
 
     // Query using SUM function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM sales",
       stepper: { stmt, _ in
         try Int?.column(of: stmt, at: 0)
@@ -34,17 +34,17 @@ struct FunctionSumTests {
   }
 
   @Test("Sum function with no rows")
-  func testSumNoRows() throws {
+  func testSumNoRows() async throws {
     let db = try Database.openInMemory()
 
     // Create a table with numeric data
-    try db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
+    try await db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
 
     // Test expression
     let expr = ColumnExpression<Int>("amount").sum()
 
     // Query using SUM function
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expr) FROM sales",
       stepper: { stmt, _ in
         try Int?.column(of: stmt, at: 0)

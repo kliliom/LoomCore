@@ -12,10 +12,10 @@ extension Database {
   ///
   /// Suitable for INSERT, UPDATE, DELETE, DDL (CREATE/DROP/ALTER), PRAGMA, and any other
   /// non-SELECT statement. The statement is prepared, bound via the closure, then stepped
-  /// to completion.
+  /// to completion. Suspends while a transaction owned by another task is active.
   ///
   /// ```swift
-  /// try db.exec(
+  /// try await db.exec(
   ///   raw: "INSERT INTO users (name, age) VALUES (?, ?)",
   ///   binder: { stmt in
   ///     try "Alice".bind(to: stmt, at: 1)
@@ -28,11 +28,27 @@ extension Database {
   public func exec(
     raw statement: String,
     binder: Binder
+  ) async throws {
+    try await gate()
+    try execCore(raw: statement, binder: binder)
+  }
+
+  /// Ungated core shared by the public `exec` overloads and the transaction machinery
+  /// (BEGIN/COMMIT/ROLLBACK/SAVEPOINT must not gate against their own transaction).
+  /// Runs to completion synchronously on the actor, so once past the gate nothing can
+  /// interleave mid-statement.
+  func execCore(
+    raw statement: String,
+    binder: Binder
   ) throws {
     let stmt = try prepare(sql: statement)
     try binder(stmt)
 
     try check(sqlite3_step(stmt.stmtPtr), db: stmt.dbPtr, is: SQLITE_DONE)
+  }
+
+  func execCore(raw statement: String) throws {
+    try execCore(raw: statement, binder: { _ in })
   }
 }
 
@@ -40,9 +56,9 @@ extension Database {
   /// Executes a raw SQL statement with no parameters.
   ///
   /// ```swift
-  /// try db.exec(raw: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-  /// try db.exec(raw: "PRAGMA foreign_keys = ON")
-  /// try db.exec(raw: "DELETE FROM temp_data")
+  /// try await db.exec(raw: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+  /// try await db.exec(raw: "PRAGMA foreign_keys = ON")
+  /// try await db.exec(raw: "DELETE FROM temp_data")
   /// ```
   ///
   /// For statements with dynamic values, use one of the binding overloads — never
@@ -50,8 +66,8 @@ extension Database {
   @inline(__always)
   public func exec(
     raw statement: String
-  ) throws {
-    try exec(raw: statement, binder: { _ in })
+  ) async throws {
+    try await exec(raw: statement, binder: { _ in })
   }
 }
 
@@ -64,7 +80,7 @@ extension Database {
   /// parameter 1, the second to parameter 2, and so on.
   ///
   /// ```swift
-  /// try db.exec(
+  /// try await db.exec(
   ///   raw: "INSERT INTO users (name, age, email) VALUES (?, ?, ?)",
   ///   binder: { stmt, index in
   ///     try "Alice".bind(to: stmt, at: &index)
@@ -77,8 +93,8 @@ extension Database {
   public func exec(
     raw statement: String,
     binder: ManagedBinder
-  ) throws {
-    try exec(
+  ) async throws {
+    try await exec(
       raw: statement,
       binder: { stmt in
         var index = ManagedIndex()
@@ -97,12 +113,12 @@ extension Database {
   /// ``Bindable``, which the compiler enforces.
   ///
   /// ```swift
-  /// try db.exec(
+  /// try await db.exec(
   ///   raw: "INSERT INTO users (name, age, email) VALUES (?, ?, ?)",
   ///   binding: "Alice", 25, "alice@example.com"
   /// )
   ///
-  /// try db.exec(
+  /// try await db.exec(
   ///   raw: "UPDATE users SET age = ? WHERE name = ?",
   ///   binding: 26, "Alice"
   /// )
@@ -112,7 +128,7 @@ extension Database {
     raw statement: String,
     binding firstValue: some Bindable,
     _ otherValues: repeat each Values
-  ) throws {
+  ) async throws {
     // It should be possible to skip this "packing into an array" trick
     // in the future, but current Swift 6 compiler has an issue with this
     // try exec(raw: statement, binder: { stmt, index in
@@ -125,7 +141,7 @@ extension Database {
     ]
     repeat (binders.append((each otherValues).managedBinder))
     let captureds = binders
-    try exec(
+    try await exec(
       raw: statement,
       binder: { stmt, index in
         for captured in captureds {
@@ -147,18 +163,18 @@ extension Database {
   /// ```swift
   /// let name = "Alice"
   /// let age = 25
-  /// try db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
+  /// try await db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
   /// ```
   ///
   /// For static SQL with no interpolated values, use ``SQLStatement/raw(_:)``:
   ///
   /// ```swift
-  /// try db.exec(SQLStatement.raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"))
+  /// try await db.exec(SQLStatement.raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"))
   /// ```
   @inline(__always)
   public func exec(
     _ statement: SQLStatement
-  ) throws {
-    try exec(raw: statement.sql, binder: statement.binder)
+  ) async throws {
+    try await exec(raw: statement.sql, binder: statement.binder)
   }
 }

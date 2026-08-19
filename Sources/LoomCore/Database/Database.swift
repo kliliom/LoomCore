@@ -1,29 +1,6 @@
 import Foundation
 import SQLite3
 
-/// Runtime configuration flags for database behavior.
-///
-/// These options control various database features like statement caching and
-/// transaction state tracking. They are stored as a bitset to allow combining
-/// multiple options efficiently.
-struct DatabaseOptions: OptionSet {
-  let rawValue: UInt32
-
-  /// Enables prepared statement caching for improved performance.
-  ///
-  /// When enabled, compiled SQL statements are cached and reused across executions
-  /// instead of being re-parsed each time. This significantly improves performance
-  /// for frequently executed queries.
-  static let persistent = DatabaseOptions(rawValue: 1 << 0)
-
-  /// Indicates an active transaction is in progress.
-  ///
-  /// This flag tracks whether a BEGIN TRANSACTION has been issued without a
-  /// corresponding COMMIT or ROLLBACK, preventing nested transactions or
-  /// operations that require no active transaction.
-  static let transactionActive = DatabaseOptions(rawValue: 1 << 1)
-}
-
 /// SQLite database connection serialized through ``DatabaseActor``.
 ///
 /// Owns the underlying `sqlite3*` handle, the prepared-statement cache, and any registered
@@ -61,8 +38,15 @@ public final class Database: Sendable {
   /// cleanup of all resources on ``DatabaseActor``.
   var handle: DatabaseHandle
 
-  /// Runtime configuration flags controlling caching and transaction state.
-  var options: DatabaseOptions = []
+  /// Token of the innermost open transaction scope (savepoint scopes included), or `nil`
+  /// when no transaction is active. Operations gate on this — see `Database+Gate.swift`.
+  var activeTransactionToken: TransactionToken?
+
+  /// Tasks suspended on the gate, waiting for the active transaction scope to close.
+  var transactionWaiters: [(id: UInt64, continuation: CheckedContinuation<Void, any Error>)] = []
+
+  /// Monotonic source of waiter identifiers, used to remove cancelled waiters.
+  var nextWaiterID: UInt64 = 0
 
   /// Registered services keyed by their metatype identity.
   ///
@@ -85,6 +69,10 @@ public final class Database: Sendable {
   /// or when running large numbers of short-lived connections in tests. Any subsequent
   /// operation on this database will throw.
   ///
+  /// Deliberately synchronous and exempt from transaction gating, so it can serve as an
+  /// escape hatch for a stuck transaction: closing the connection makes the transaction's
+  /// remaining statements — and any waiting operations — fail with `.databaseClosed`.
+  ///
   /// ```swift
   /// let db = try await Database.open(url: tempURL)
   /// defer { Task { @DatabaseActor in db.close() } }
@@ -92,5 +80,10 @@ public final class Database: Sendable {
   /// ```
   public func close() {
     handle.close()
+    // Wake the gate so queued operations observe the closed handle instead of waiting
+    // on a transaction that can no longer finish. An in-flight transaction's own scope
+    // close tolerates the cleared token.
+    activeTransactionToken = nil
+    resumeTransactionWaiters()
   }
 }

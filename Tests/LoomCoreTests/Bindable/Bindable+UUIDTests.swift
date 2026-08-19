@@ -9,12 +9,12 @@ struct BindableUUIDTests {
   func testUUIDBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id BLOB)")
+    try await db.exec("CREATE TABLE test (id BLOB)")
 
     let testUUID = UUID()
-    try db.exec("INSERT INTO test (id) VALUES (\(testUUID))")
+    try await db.exec("INSERT INTO test (id) VALUES (\(testUUID))")
 
-    let result = try db.query("SELECT id FROM test") { stmt, _ in
+    let result = try await db.query("SELECT id FROM test") { stmt, _ in
       try UUID.column(of: stmt, at: 0)
     }
 
@@ -25,17 +25,17 @@ struct BindableUUIDTests {
   func testMultipleUUIDs() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id BLOB)")
+    try await db.exec("CREATE TABLE test (id BLOB)")
 
     let uuid1 = UUID()
     let uuid2 = UUID()
     let uuid3 = UUID()
 
-    try db.exec("INSERT INTO test (id) VALUES (\(uuid1))")
-    try db.exec("INSERT INTO test (id) VALUES (\(uuid2))")
-    try db.exec("INSERT INTO test (id) VALUES (\(uuid3))")
+    try await db.exec("INSERT INTO test (id) VALUES (\(uuid1))")
+    try await db.exec("INSERT INTO test (id) VALUES (\(uuid2))")
+    try await db.exec("INSERT INTO test (id) VALUES (\(uuid3))")
 
-    let results = try db.query("SELECT id FROM test ORDER BY rowid") { stmt, _ in
+    let results = try await db.query("SELECT id FROM test ORDER BY rowid") { stmt, _ in
       try UUID.column(of: stmt, at: 0)
     }
 
@@ -51,7 +51,7 @@ struct BindableUUIDTests {
   }
 
   @Test("UUID as SQL literal")
-  func testUUIDAsSQLLiteral() throws {
+  func testUUIDAsSQLLiteral() async throws {
     let uuid = UUID()
     let literal = try uuid.asSQLLiteral()
 
@@ -64,13 +64,13 @@ struct BindableUUIDTests {
   func testSpecificUUIDValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id BLOB)")
+    try await db.exec("CREATE TABLE test (id BLOB)")
 
     // Use a specific UUID to verify byte-level accuracy
     let specificUUID = UUID(uuidString: "12345678-1234-5678-1234-567812345678")!
-    try db.exec("INSERT INTO test (id) VALUES (\(specificUUID))")
+    try await db.exec("INSERT INTO test (id) VALUES (\(specificUUID))")
 
-    let result = try db.query("SELECT id FROM test") { stmt, _ in
+    let result = try await db.query("SELECT id FROM test") { stmt, _ in
       try UUID.column(of: stmt, at: 0)
     }
 
@@ -82,13 +82,13 @@ struct BindableUUIDTests {
   func testUUIDAsPrimaryKey() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id BLOB PRIMARY KEY, name TEXT)")
+    try await db.exec("CREATE TABLE test (id BLOB PRIMARY KEY, name TEXT)")
 
     let id = UUID()
     let name = "Test"
-    try db.exec("INSERT INTO test (id, name) VALUES (\(id), \(name))")
+    try await db.exec("INSERT INTO test (id, name) VALUES (\(id), \(name))")
 
-    let result = try db.query("SELECT id, name FROM test WHERE id = \(id)") { stmt, _ in
+    let result = try await db.query("SELECT id, name FROM test WHERE id = \(id)") { stmt, _ in
       let resultId = try UUID.column(of: stmt, at: 0)
       let resultName = try String.column(of: stmt, at: 1)
       return (resultId, resultName)
@@ -102,25 +102,25 @@ struct BindableUUIDTests {
   func testUUIDUnexpectedNullValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (id BLOB)")
-    try db.exec(raw: "INSERT INTO test (id) VALUES (NULL)")
+    try await db.exec("CREATE TABLE test (id BLOB)")
+    try await db.exec(raw: "INSERT INTO test (id) VALUES (NULL)")
 
-    #expect(
+    await #expect(
       throws: LoomError.core(.nullValue, message: "Column at index 0 is NULL or not 16 bytes, cannot return UUID.")
     ) {
-      try db.query("SELECT id FROM test") { stmt, _ in
+      try await db.query("SELECT id FROM test") { stmt, _ in
         try UUID.column(of: stmt, at: 0)
       }
     }
   }
 
   @Test("UUID bind throws with connection error message on out-of-range index")
-  func testUUIDBindOutOfRangeIndex() throws {
+  func testUUIDBindOutOfRangeIndex() async throws {
     let db = try Database.openInMemory()
-    try db.exec("CREATE TABLE test (id BLOB)")
+    try await db.exec("CREATE TABLE test (id BLOB)")
 
-    let error = #expect(throws: LoomError.self) {
-      try db.exec(
+    let error = await #expect(throws: LoomError.self) {
+      try await db.exec(
         raw: "INSERT INTO test (id) VALUES (?)",
         binder: { stmt in
           try UUID().bind(to: stmt, at: 99)

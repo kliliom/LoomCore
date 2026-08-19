@@ -96,32 +96,35 @@ extension Database {
     removed?.shutdown()
   }
 
-  /// Notifies all registered services that a transaction is about to begin.
+  /// Notifies all registered services that a transaction has begun, returning the
+  /// participating set.
   ///
-  /// Called internally by ``transaction(kind:_:)`` before executing the transaction block.
-  /// Invokes ``Service/transactionWillBegin()`` on each registered service.
-  func signalTransactionWillBegin() {
-    for (_, service) in services {
+  /// Called internally by ``transaction(kind:_:)`` after the `BEGIN` statement succeeds.
+  /// The returned snapshot is passed to the matching commit/rollback signal so a service
+  /// registered while the transaction is in flight never receives an unpaired terminal
+  /// callback.
+  func signalTransactionWillBegin() -> [Service] {
+    let participants = Array(services.values)
+    for service in participants {
       service.transactionWillBegin()
     }
+    return participants
   }
 
-  /// Notifies all registered services that a transaction has committed successfully.
+  /// Notifies the participating services that the transaction has committed successfully.
   ///
   /// Called internally by ``transaction(kind:_:)`` after the `COMMIT` statement succeeds.
-  /// Invokes ``Service/transactionDidCommit()`` on each registered service.
-  func signalTransactionDidCommit() {
-    for (_, service) in services {
+  func signalTransactionDidCommit(to participants: [Service]) {
+    for service in participants {
       service.transactionDidCommit()
     }
   }
 
-  /// Notifies all registered services that a transaction has been rolled back.
+  /// Notifies the participating services that the transaction has been rolled back.
   ///
-  /// Called internally by ``transaction(kind:_:)`` when an error occurs or `ROLLBACK` is executed.
-  /// Invokes ``Service/transactionDidRollback()`` on each registered service.
-  func signalTransactionDidRollback() {
-    for (_, service) in services {
+  /// Called internally by ``transaction(kind:_:)`` after the `ROLLBACK` statement succeeds.
+  func signalTransactionDidRollback(to participants: [Service]) {
+    for service in participants {
       service.transactionDidRollback()
     }
   }

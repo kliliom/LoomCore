@@ -10,14 +10,14 @@ struct DatabaseKillTests {
     let db = try Database.openInMemory()
 
     // Verify database is usable
-    try db.exec("CREATE TABLE test (id INTEGER)")
-    try db.exec("INSERT INTO test (id) VALUES (1)")
+    try await db.exec("CREATE TABLE test (id INTEGER)")
+    try await db.exec("INSERT INTO test (id) VALUES (1)")
 
     db.close()
 
     // Verify database is closed
-    #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
-      try db.exec("SELECT * FROM test")
+    await #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
+      try await db.exec("SELECT * FROM test")
     }
   }
 
@@ -26,19 +26,19 @@ struct DatabaseKillTests {
     let db1 = try Database.openInMemory()
     let db2 = try Database.openInMemory()
 
-    try db1.exec("CREATE TABLE test (value TEXT)")
-    try db1.exec("INSERT INTO test (value) VALUES ('db1')")
+    try await db1.exec("CREATE TABLE test (value TEXT)")
+    try await db1.exec("INSERT INTO test (value) VALUES ('db1')")
 
-    try db2.exec("CREATE TABLE test (value TEXT)")
-    try db2.exec("INSERT INTO test (value) VALUES ('db2')")
+    try await db2.exec("CREATE TABLE test (value TEXT)")
+    try await db2.exec("INSERT INTO test (value) VALUES ('db2')")
 
     db1.close()
 
-    #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
-      try db1.exec("SELECT * FROM test")
+    await #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
+      try await db1.exec("SELECT * FROM test")
     }
 
-    let result = try db2.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db2.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -55,13 +55,13 @@ struct DatabaseKillTests {
       url.remove()
     }
 
-    try db.exec("CREATE TABLE test (id INTEGER)")
-    try db.exec("INSERT INTO test (id) VALUES (42)")
+    try await db.exec("CREATE TABLE test (id INTEGER)")
+    try await db.exec("INSERT INTO test (id) VALUES (42)")
 
     db.close()
 
-    #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
-      try db.exec("SELECT * FROM test")
+    await #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
+      try await db.exec("SELECT * FROM test")
     }
   }
 }

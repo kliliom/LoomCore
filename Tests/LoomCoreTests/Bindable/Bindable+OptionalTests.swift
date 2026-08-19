@@ -9,12 +9,12 @@ struct BindableOptionalTests {
   func testOptionalStringWithValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let testValue: String? = "Hello"
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<String>.column(of: stmt, at: 0)
     }
 
@@ -25,12 +25,12 @@ struct BindableOptionalTests {
   func testOptionalStringWithNil() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
     let testValue: String? = nil
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<String>.column(of: stmt, at: 0)
     }
 
@@ -41,12 +41,12 @@ struct BindableOptionalTests {
   func testOptionalIntWithValue() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let testValue: Int? = 42
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<Int>.column(of: stmt, at: 0)
     }
 
@@ -57,12 +57,12 @@ struct BindableOptionalTests {
   func testOptionalIntWithNil() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let testValue: Int? = nil
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<Int>.column(of: stmt, at: 0)
     }
 
@@ -73,21 +73,21 @@ struct BindableOptionalTests {
   func testOptionalDouble() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value DOUBLE)")
+    try await db.exec("CREATE TABLE test (value DOUBLE)")
 
     let value1: Double? = 3.14
-    try db.exec("INSERT INTO test (value) VALUES (\(value1))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(value1))")
 
-    let result1 = try db.query("SELECT value FROM test LIMIT 1") { stmt, _ in
+    let result1 = try await db.query("SELECT value FROM test LIMIT 1") { stmt, _ in
       try Optional<Double>.column(of: stmt, at: 0)
     }
     #expect(result1.first == value1)
 
-    try db.exec("DELETE FROM test")
+    try await db.exec("DELETE FROM test")
     let value2: Double? = nil
-    try db.exec("INSERT INTO test (value) VALUES (\(value2))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(value2))")
 
-    let result2 = try db.query("SELECT value FROM test") { stmt, _ in
+    let result2 = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<Double>.column(of: stmt, at: 0)
     }
     #expect(result2 == [nil])
@@ -97,28 +97,28 @@ struct BindableOptionalTests {
   func testOptionalBool() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value BOOLEAN)")
+    try await db.exec("CREATE TABLE test (value BOOLEAN)")
 
     let trueValue: Bool? = true
-    try db.exec("INSERT INTO test (value) VALUES (\(trueValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(trueValue))")
 
-    let result1 = try db.query("SELECT value FROM test") { stmt, _ in
+    let result1 = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<Bool>.column(of: stmt, at: 0)
     }
     #expect(result1.first == true)
 
-    try db.exec("DELETE FROM test")
+    try await db.exec("DELETE FROM test")
     let nilValue: Bool? = nil
-    try db.exec("INSERT INTO test (value) VALUES (\(nilValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(nilValue))")
 
-    let result2 = try db.query("SELECT value FROM test") { stmt, _ in
+    let result2 = try await db.query("SELECT value FROM test") { stmt, _ in
       try Optional<Bool>.column(of: stmt, at: 0)
     }
     #expect(result2 == [nil])
   }
 
   @Test("Optional SQL literals")
-  func testOptionalSQLLiterals() throws {
+  func testOptionalSQLLiterals() async throws {
     let someValue: String? = "test"
     #expect(try someValue.asSQLLiteral() == "'test'")
 
@@ -143,11 +143,11 @@ struct BindableOptionalTests {
   func testNonOptionalThrowsOnNull() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
-    try db.exec("INSERT INTO test (value) VALUES (NULL)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("INSERT INTO test (value) VALUES (NULL)")
 
-    #expect(throws: LoomError.self) {
-      try db.query("SELECT value FROM test") { stmt, _ in
+    await #expect(throws: LoomError.self) {
+      try await db.query("SELECT value FROM test") { stmt, _ in
         try String.column(of: stmt, at: 0)
       }
     }
@@ -157,14 +157,14 @@ struct BindableOptionalTests {
   func testMultipleOptionalValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let values: [Int?] = [1, nil, 3, nil, 5]
     for val in values {
-      try db.exec("INSERT INTO test (value) VALUES (\(val))")
+      try await db.exec("INSERT INTO test (value) VALUES (\(val))")
     }
 
-    let result = try db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
       try Optional<Int>.column(of: stmt, at: 0)
     }
 

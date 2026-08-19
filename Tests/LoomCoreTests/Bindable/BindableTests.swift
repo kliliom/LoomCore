@@ -11,9 +11,9 @@ struct BindableTests {
   func testInstanceMethodBind() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("CREATE TABLE test (value TEXT)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (value) VALUES (?)",
       binder: { stmt in
         let testString = "Hello, World!"
@@ -21,7 +21,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
 
@@ -32,10 +32,10 @@ struct BindableTests {
   func testInstanceMethodMutatingColumn() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value TEXT)")
-    try db.exec("INSERT INTO test (value) VALUES ('Test Value')")
+    try await db.exec("CREATE TABLE test (value TEXT)")
+    try await db.exec("INSERT INTO test (value) VALUES ('Test Value')")
 
-    _ = try db.query("SELECT value FROM test") { stmt, _ in
+    _ = try await db.query("SELECT value FROM test") { stmt, _ in
       var value = ""
       try value.column(of: stmt, at: 0)
       #expect(value == "Test Value")
@@ -46,9 +46,9 @@ struct BindableTests {
   func testInstanceMethodBindMultipleTypes() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (str TEXT, num INTEGER, flag BOOLEAN)")
+    try await db.exec("CREATE TABLE test (str TEXT, num INTEGER, flag BOOLEAN)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (str, num, flag) VALUES (?, ?, ?)",
       binder: { stmt in
         let str = "test"
@@ -61,7 +61,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT str, num, flag FROM test") { stmt, _ in
+    let result = try await db.query("SELECT str, num, flag FROM test") { stmt, _ in
       let s = try String.column(of: stmt, at: 0)
       let n = try Int.column(of: stmt, at: 1)
       let f = try Bool.column(of: stmt, at: 2)
@@ -79,9 +79,9 @@ struct BindableTests {
   func testStaticMethodBindManagedIndex() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER)")
+    try await db.exec("CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b, c) VALUES (?, ?, ?)",
       binder: { stmt, index in
         try Int.bind(to: stmt, value: 1, at: &index)
@@ -90,7 +90,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT a, b, c FROM test") { stmt, _ in
+    let result = try await db.query("SELECT a, b, c FROM test") { stmt, _ in
       let a = try Int.column(of: stmt, at: 0)
       let b = try Int.column(of: stmt, at: 1)
       let c = try Int.column(of: stmt, at: 2)
@@ -106,10 +106,10 @@ struct BindableTests {
   func testStaticMethodColumnManagedIndex() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a TEXT, b INTEGER, c DOUBLE)")
-    try db.exec("INSERT INTO test (a, b, c) VALUES ('test', 42, 3.14)")
+    try await db.exec("CREATE TABLE test (a TEXT, b INTEGER, c DOUBLE)")
+    try await db.exec("INSERT INTO test (a, b, c) VALUES ('test', 42, 3.14)")
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT a, b, c FROM test",
       stepper: { stmt, index, _ in
         let a = try String.column(of: stmt, at: &index)
@@ -128,12 +128,12 @@ struct BindableTests {
   func testManagedIndexIncrement() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER)")
+    try await db.exec("CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER)")
 
     let bindIndex = ManagedIndex()
     #expect(bindIndex.value == 0)
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b, c) VALUES (?, ?, ?)",
       binder: { stmt, index in
         #expect(index.value == 0)
@@ -146,7 +146,7 @@ struct BindableTests {
       }
     )
 
-    _ = try db.query(
+    _ = try await db.query(
       raw: "SELECT a, b, c FROM test",
       stepper: { stmt, index, _ in
         #expect(index.value == 0)
@@ -170,9 +170,9 @@ struct BindableTests {
   func testInstanceMethodBindManagedIndex() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a TEXT, b INTEGER, c BOOLEAN)")
+    try await db.exec("CREATE TABLE test (a TEXT, b INTEGER, c BOOLEAN)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b, c) VALUES (?, ?, ?)",
       binder: { stmt, index in
         let str = "hello"
@@ -185,7 +185,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT a, b, c FROM test") { stmt, _ in
+    let result = try await db.query("SELECT a, b, c FROM test") { stmt, _ in
       let a = try String.column(of: stmt, at: 0)
       let b = try Int.column(of: stmt, at: 1)
       let c = try Bool.column(of: stmt, at: 2)
@@ -201,10 +201,10 @@ struct BindableTests {
   func testInstanceMethodMutatingColumnManagedIndex() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a TEXT, b INTEGER, c DOUBLE)")
-    try db.exec("INSERT INTO test (a, b, c) VALUES ('alpha', 999, 2.71)")
+    try await db.exec("CREATE TABLE test (a TEXT, b INTEGER, c DOUBLE)")
+    try await db.exec("INSERT INTO test (a, b, c) VALUES ('alpha', 999, 2.71)")
 
-    _ = try db.query(
+    _ = try await db.query(
       raw: "SELECT a, b, c FROM test",
       stepper: { stmt, index, _ in
         var str = ""
@@ -226,9 +226,9 @@ struct BindableTests {
   func testInstanceMethodManagedIndexAutoIncrement() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER, d INTEGER)")
+    try await db.exec("CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER, d INTEGER)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b, c, d) VALUES (?, ?, ?, ?)",
       binder: { stmt, index in
         let val1 = 5
@@ -248,7 +248,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT a, b, c, d FROM test") { stmt, _ in
+    let result = try await db.query("SELECT a, b, c, d FROM test") { stmt, _ in
       (
         try Int.column(of: stmt, at: 0),
         try Int.column(of: stmt, at: 1),
@@ -269,19 +269,19 @@ struct BindableTests {
   func testManagedBinderProperty() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let testValue = 42
     let binder = testValue.managedBinder
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (value) VALUES (?)",
       binder: { stmt, index in
         try binder(stmt, &index)
       }
     )
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -292,7 +292,7 @@ struct BindableTests {
   func testManagedBinderMultipleValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a TEXT, b INTEGER, c DOUBLE)")
+    try await db.exec("CREATE TABLE test (a TEXT, b INTEGER, c DOUBLE)")
 
     let str = "test"
     let num = 123
@@ -302,7 +302,7 @@ struct BindableTests {
     let numBinder = num.managedBinder
     let dblBinder = dbl.managedBinder
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b, c) VALUES (?, ?, ?)",
       binder: { stmt, index in
         try strBinder(stmt, &index)
@@ -311,7 +311,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT a, b, c FROM test") { stmt, _ in
+    let result = try await db.query("SELECT a, b, c FROM test") { stmt, _ in
       (
         try String.column(of: stmt, at: 0),
         try Int.column(of: stmt, at: 1),
@@ -330,9 +330,9 @@ struct BindableTests {
   func testMixedStaticAndInstanceMethods() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a INTEGER, b TEXT)")
+    try await db.exec("CREATE TABLE test (a INTEGER, b TEXT)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b) VALUES (?, ?)",
       binder: { stmt in
         try Int.bind(to: stmt, value: 100, at: 1)  // Static method
@@ -341,7 +341,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query("SELECT a, b FROM test") { stmt, _ in
+    let result = try await db.query("SELECT a, b FROM test") { stmt, _ in
       var num = 0
       try num.column(of: stmt, at: 0)  // Instance mutating method
       let str = try String.column(of: stmt, at: 1)  // Static method
@@ -356,9 +356,9 @@ struct BindableTests {
   func testConvenienceMethodsWithOptionals() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (a TEXT, b INTEGER)")
+    try await db.exec("CREATE TABLE test (a TEXT, b INTEGER)")
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (a, b) VALUES (?, ?)",
       binder: { stmt, index in
         let optStr: String? = "optional"
@@ -369,7 +369,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT a, b FROM test",
       stepper: { stmt, index, _ in
         var str: String? = nil
@@ -390,13 +390,13 @@ struct BindableTests {
   func testConvenienceMethodsWithComplexTypes() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (uuid BLOB, data BLOB, date DOUBLE)")
+    try await db.exec("CREATE TABLE test (uuid BLOB, data BLOB, date DOUBLE)")
 
     let uuid = UUID()
     let data = Data([0x01, 0x02, 0x03])
     let date = Date(timeIntervalSince1970: 1234567890.0)
 
-    try db.exec(
+    try await db.exec(
       raw: "INSERT INTO test (uuid, data, date) VALUES (?, ?, ?)",
       binder: { stmt, index in
         try uuid.bind(to: stmt, at: &index)
@@ -405,7 +405,7 @@ struct BindableTests {
       }
     )
 
-    let result = try db.query(
+    let result = try await db.query(
       raw: "SELECT uuid, data, date FROM test",
       stepper: { stmt, index, _ in
         var u = UUID()

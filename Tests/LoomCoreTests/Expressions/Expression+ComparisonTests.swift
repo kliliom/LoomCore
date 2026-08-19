@@ -7,17 +7,17 @@ import Testing
 struct ExpressionComparisonTests {
   let db: Database
 
-  init() throws {
+  init() async throws {
     db = try Database.openInMemory()
-    try db.exec("CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL)")
-    try prepareDatabase()
+    try await db.exec("CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, score REAL)")
+    try await prepareDatabase()
   }
 
-  func prepareDatabase() throws {
-    try db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Alice', 25, 85.5)")
-    try db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Bob', 30, 92.0)")
-    try db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Charlie', 20, 78.5)")
-    try db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Diana', 25, 88.0)")
+  func prepareDatabase() async throws {
+    try await db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Alice', 25, 85.5)")
+    try await db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Bob', 30, 92.0)")
+    try await db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Charlie', 20, 78.5)")
+    try await db.exec(raw: "INSERT INTO people (name, age, score) VALUES ('Diana', 25, 88.0)")
   }
 
   let name = ColumnExpression<String>("name")
@@ -28,14 +28,14 @@ struct ExpressionComparisonTests {
     _ expression: E,
     expectedExpression: String,
     expectedValues: [T]
-  ) throws where E.ExpressionValue == T, T: Bindable & Equatable {
+  ) async throws where E.ExpressionValue == T, T: Bindable & Equatable {
     // Test SQL generation
     var builder = SQLBuilder()
     expression.append(to: &builder)
     #expect(builder.makeStatement().sql == expectedExpression)
 
     // Test query execution
-    let result = try db.query(
+    let result = try await db.query(
       "SELECT \(expression) FROM people ORDER BY id",
       stepper: { stmt, _ in
         try T.column(of: stmt, at: 0)
@@ -45,8 +45,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("String equality operator")
-  func testStringEqualitySQL() throws {
-    try run(
+  func testStringEqualitySQL() async throws {
+    try await run(
       name == "Alice",
       expectedExpression: "( \"name\" = ? )",
       expectedValues: [true, false, false, false]
@@ -54,8 +54,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Integer equality operator")
-  func testIntegerEqualitySQL() throws {
-    try run(
+  func testIntegerEqualitySQL() async throws {
+    try await run(
       age == 25,
       expectedExpression: "( \"age\" = ? )",
       expectedValues: [true, false, false, true]
@@ -63,8 +63,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Real equality operator")
-  func testRealEqualitySQL() throws {
-    try run(
+  func testRealEqualitySQL() async throws {
+    try await run(
       score == 85.5,
       expectedExpression: "( \"score\" = ? )",
       expectedValues: [true, false, false, false]
@@ -72,8 +72,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("String inequality operator")
-  func testStringInequalitySQL() throws {
-    try run(
+  func testStringInequalitySQL() async throws {
+    try await run(
       name != "Alice",
       expectedExpression: "( \"name\" <> ? )",
       expectedValues: [false, true, true, true]
@@ -81,8 +81,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Integer inequality operator")
-  func testIntegerInequalitySQL() throws {
-    try run(
+  func testIntegerInequalitySQL() async throws {
+    try await run(
       age != 25,
       expectedExpression: "( \"age\" <> ? )",
       expectedValues: [false, true, true, false]
@@ -90,8 +90,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Real inequality operator")
-  func testRealInequalitySQL() throws {
-    try run(
+  func testRealInequalitySQL() async throws {
+    try await run(
       score != 85.5,
       expectedExpression: "( \"score\" <> ? )",
       expectedValues: [false, true, true, true]
@@ -99,8 +99,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("String less than operator")
-  func testStringLessThanSQL() throws {
-    try run(
+  func testStringLessThanSQL() async throws {
+    try await run(
       name < "Charlie",
       expectedExpression: "( \"name\" < ? )",
       expectedValues: [true, true, false, false]
@@ -108,8 +108,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Integer less than operator")
-  func testIntegerLessThanSQL() throws {
-    try run(
+  func testIntegerLessThanSQL() async throws {
+    try await run(
       age < 25,
       expectedExpression: "( \"age\" < ? )",
       expectedValues: [false, false, true, false]
@@ -117,8 +117,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Real less than operator")
-  func testRealLessThanSQL() throws {
-    try run(
+  func testRealLessThanSQL() async throws {
+    try await run(
       score < 85.5,
       expectedExpression: "( \"score\" < ? )",
       expectedValues: [false, false, true, false]
@@ -126,8 +126,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("String less than equal operator")
-  func testStringLessThanEqualSQL() throws {
-    try run(
+  func testStringLessThanEqualSQL() async throws {
+    try await run(
       name <= "Charlie",
       expectedExpression: "( \"name\" <= ? )",
       expectedValues: [true, true, true, false]
@@ -135,8 +135,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Integer less than equal operator")
-  func testIntegerLessThanEqualSQL() throws {
-    try run(
+  func testIntegerLessThanEqualSQL() async throws {
+    try await run(
       age <= 25,
       expectedExpression: "( \"age\" <= ? )",
       expectedValues: [true, false, true, true]
@@ -144,8 +144,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Real less than equal operator")
-  func testRealLessThanEqualSQL() throws {
-    try run(
+  func testRealLessThanEqualSQL() async throws {
+    try await run(
       score <= 85.5,
       expectedExpression: "( \"score\" <= ? )",
       expectedValues: [true, false, true, false]
@@ -153,8 +153,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("String greater than operator")
-  func testStringGreaterThanSQL() throws {
-    try run(
+  func testStringGreaterThanSQL() async throws {
+    try await run(
       name > "Charlie",
       expectedExpression: "( \"name\" > ? )",
       expectedValues: [false, false, false, true]
@@ -162,8 +162,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Integer greater than operator")
-  func testIntegerGreaterThanSQL() throws {
-    try run(
+  func testIntegerGreaterThanSQL() async throws {
+    try await run(
       age > 25,
       expectedExpression: "( \"age\" > ? )",
       expectedValues: [false, true, false, false]
@@ -171,8 +171,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Real greater than operator")
-  func testRealGreaterThanSQL() throws {
-    try run(
+  func testRealGreaterThanSQL() async throws {
+    try await run(
       score > 85.5,
       expectedExpression: "( \"score\" > ? )",
       expectedValues: [false, true, false, true]
@@ -180,8 +180,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("String greater than or equal operator")
-  func testStringGreaterThanEqualSQL() throws {
-    try run(
+  func testStringGreaterThanEqualSQL() async throws {
+    try await run(
       name >= "Charlie",
       expectedExpression: "( \"name\" >= ? )",
       expectedValues: [false, false, true, true]
@@ -189,8 +189,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Integer greater than or equal operator")
-  func testIntegerGreaterThanEqualSQL() throws {
-    try run(
+  func testIntegerGreaterThanEqualSQL() async throws {
+    try await run(
       age >= 25,
       expectedExpression: "( \"age\" >= ? )",
       expectedValues: [true, true, false, true]
@@ -198,8 +198,8 @@ struct ExpressionComparisonTests {
   }
 
   @Test("Real greater than or equal operator")
-  func testRealGreaterThanEqualSQL() throws {
-    try run(
+  func testRealGreaterThanEqualSQL() async throws {
+    try await run(
       score >= 85.5,
       expectedExpression: "( \"score\" >= ? )",
       expectedValues: [true, true, false, true]

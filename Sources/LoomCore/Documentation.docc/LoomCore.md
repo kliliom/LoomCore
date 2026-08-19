@@ -17,12 +17,12 @@ If you have used SQLite directly from C, you will recognize the model. If you ar
 import LoomCore
 
 let db = try await Database.openInMemory()
-try db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
 
 let name = "Alice"
-try db.exec("INSERT INTO users (name, age) VALUES (\(name), \(30))")
+try await db.exec("INSERT INTO users (name, age) VALUES (\(name), \(30))")
 
-let users = try db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
+let users = try await db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
   let name = try String.column(of: stmt, at: 0)
   let age = try Int.column(of: stmt, at: 1)
   return (name, age)

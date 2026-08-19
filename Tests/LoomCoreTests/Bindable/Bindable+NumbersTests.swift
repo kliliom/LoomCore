@@ -9,12 +9,12 @@ struct BindableNumbersTests {
   func testIntBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let testValue = 42
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -25,12 +25,12 @@ struct BindableNumbersTests {
   func testInt32Binding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let testValue: Int32 = 12345
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
 
@@ -41,12 +41,12 @@ struct BindableNumbersTests {
   func testInt64Binding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let testValue: Int64 = 9_223_372_036_854_775_807
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int64.column(of: stmt, at: 0)
     }
 
@@ -57,11 +57,11 @@ struct BindableNumbersTests {
   func testNegativeNumbers() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
     let negativeValue = -123
-    try db.exec("INSERT INTO test (value) VALUES (\(negativeValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(negativeValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
@@ -72,21 +72,21 @@ struct BindableNumbersTests {
   func testBoolBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value BOOLEAN)")
+    try await db.exec("CREATE TABLE test (value BOOLEAN)")
 
     let trueValue = true
-    try db.exec("INSERT INTO test (value) VALUES (\(trueValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(trueValue))")
 
-    let resultTrue = try db.query("SELECT value FROM test") { stmt, _ in
+    let resultTrue = try await db.query("SELECT value FROM test") { stmt, _ in
       try Bool.column(of: stmt, at: 0)
     }
     #expect(resultTrue.first == true)
 
-    try db.exec("DELETE FROM test")
+    try await db.exec("DELETE FROM test")
     let falseValue = false
-    try db.exec("INSERT INTO test (value) VALUES (\(falseValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(falseValue))")
 
-    let resultFalse = try db.query("SELECT value FROM test") { stmt, _ in
+    let resultFalse = try await db.query("SELECT value FROM test") { stmt, _ in
       try Bool.column(of: stmt, at: 0)
     }
     #expect(resultFalse.first == false)
@@ -96,12 +96,12 @@ struct BindableNumbersTests {
   func testFloatBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value DOUBLE)")
+    try await db.exec("CREATE TABLE test (value DOUBLE)")
 
     let testValue: Float = 3.14159
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Float.column(of: stmt, at: 0)
     }
 
@@ -113,12 +113,12 @@ struct BindableNumbersTests {
   func testDoubleBinding() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value DOUBLE)")
+    try await db.exec("CREATE TABLE test (value DOUBLE)")
 
     let testValue: Double = 2.718281828459045
-    try db.exec("INSERT INTO test (value) VALUES (\(testValue))")
+    try await db.exec("INSERT INTO test (value) VALUES (\(testValue))")
 
-    let result = try db.query("SELECT value FROM test") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test") { stmt, _ in
       try Double.column(of: stmt, at: 0)
     }
 
@@ -126,7 +126,7 @@ struct BindableNumbersTests {
   }
 
   @Test("SQL literals for numbers")
-  func testSQLLiterals() throws {
+  func testSQLLiterals() async throws {
     #expect(try 42.asSQLLiteral() == "42")
     #expect(try Int32(123).asSQLLiteral() == "123")
     #expect(try Int64(-456).asSQLLiteral() == "-456")
@@ -150,12 +150,12 @@ struct BindableNumbersTests {
   func testZeroValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (int_val INTEGER, double_val DOUBLE)")
+    try await db.exec("CREATE TABLE test (int_val INTEGER, double_val DOUBLE)")
     let intVal = 0
     let doubleVal = 0.0
-    try db.exec("INSERT INTO test (int_val, double_val) VALUES (\(intVal), \(doubleVal))")
+    try await db.exec("INSERT INTO test (int_val, double_val) VALUES (\(intVal), \(doubleVal))")
 
-    let result = try db.query("SELECT int_val, double_val FROM test") { stmt, _ in
+    let result = try await db.query("SELECT int_val, double_val FROM test") { stmt, _ in
       let intResult = try Int.column(of: stmt, at: 0)
       let doubleResult = try Double.column(of: stmt, at: 1)
       return (intResult, doubleResult)
@@ -169,14 +169,14 @@ struct BindableNumbersTests {
   func testMultipleNumericValues() async throws {
     let db = try Database.openInMemory()
 
-    try db.exec("CREATE TABLE test (value INTEGER)")
+    try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let values = [1, 2, 3, 42, 100]
     for val in values {
-      try db.exec("INSERT INTO test (value) VALUES (\(val))")
+      try await db.exec("INSERT INTO test (value) VALUES (\(val))")
     }
 
-    let result = try db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
+    let result = try await db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
 
