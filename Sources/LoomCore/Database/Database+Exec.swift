@@ -28,12 +28,15 @@ extension Database {
   /// ```
   ///
   /// Parameter indices in the binder are 1-based, matching SQLite's convention.
+  /// Cancelling the task interrupts the statement mid-step and throws `CancellationError`.
   public func exec(
     raw statement: String,
     binder: Binder
   ) async throws {
     try await gate()
-    try execCore(raw: statement, binder: binder)
+    try await withInterruptOnCancellation {
+      try execCore(raw: statement, binder: binder)
+    }
   }
 
   /// Ungated core shared by the public `exec` overloads and the transaction machinery
@@ -224,7 +227,9 @@ extension Database {
   /// - Parameter script: One or more SQL statements separated by `;`.
   public func execScript(_ script: String) async throws {
     try await gate()
-    try execScriptCore(script)
+    try await withInterruptOnCancellation {
+      try execScriptCore(script)
+    }
   }
 
   /// Ungated core of ``execScript(_:)``. Runs to completion synchronously on the actor,
@@ -247,6 +252,11 @@ extension Database {
       try script.withCString { start in
         var cursor: UnsafePointer<CChar>? = start
         while let current = cursor, current.pointee != 0 {
+          // SQLite clears the interrupt flag whenever its running-statement count
+          // reaches zero, which happens between the script's statements — so an
+          // interrupt-on-cancel alone cannot stop a script. Check explicitly.
+          try Task.checkCancellation()
+
           var ptr: OpaquePointer?
           var tail: UnsafePointer<CChar>?
           try check(sqlite3_prepare_v3(dbPtr, current, -1, 0, &ptr, &tail), db: dbPtr, is: SQLITE_OK)

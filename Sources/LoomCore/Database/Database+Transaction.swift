@@ -99,10 +99,14 @@ extension Database {
   ///   `BEGIN`, `COMMIT`, `SAVEPOINT`, or `RELEASE` itself fails, or with
   ///   ``LoomCoreErrorCode/transactionScopeLost`` in place of the `COMMIT`/`RELEASE` when
   ///   the scope lost the connection first (the database was closed mid-flight, or an
-  ///   enclosing scope exited underneath an un-awaited task). A failed rollback of
-  ///   the outermost transaction closes the underlying handle before rethrowing; a failed
-  ///   savepoint rollback leaves the handle open so the outermost transaction can still
-  ///   roll everything back.
+  ///   enclosing scope exited underneath an un-awaited task) or when SQLite rolled the
+  ///   physical transaction back underneath the body — an interrupted write
+  ///   (``interrupt()`` or task cancellation) or an `ON CONFLICT ROLLBACK` constraint.
+  ///   The auto-rollback case skips the machinery's own `ROLLBACK`, still fires
+  ///   ``Service/transactionDidRollback()``, and leaves the connection open. A genuinely
+  ///   failed rollback of the outermost transaction closes the underlying handle before
+  ///   rethrowing; a failed savepoint rollback leaves the handle open so the outermost
+  ///   transaction can still roll everything back.
   public func transaction<T>(
     kind: TransactionKind = .deferred,
     _ block: @DatabaseActor (Database) async throws -> T
@@ -185,6 +189,16 @@ extension Database {
               + "the database was closed while the transaction was in flight."
           )
         }
+        // An interrupted or conflict-resolved write (sqlite3_interrupt,
+        // ON CONFLICT ROLLBACK) rolls the physical transaction back underneath the
+        // body. Surface that here instead of letting COMMIT fail opaquely.
+        guard try sqlite3_get_autocommit(handle.ptr) == 0 else {
+          throw LoomError.core(
+            .transactionScopeLost,
+            message: "Transaction scope lost the physical transaction before COMMIT: "
+              + "SQLite rolled it back after an interrupted or conflict-resolved write."
+          )
+        }
         try execCore(raw: "COMMIT TRANSACTION", cacheable: false)
         signalTransactionDidCommit(to: participants)
         return result
@@ -198,7 +212,12 @@ extension Database {
           throw error
         }
         do {
-          try execCore(raw: "ROLLBACK TRANSACTION", cacheable: false)
+          // When SQLite already rolled the transaction back (interrupted or
+          // conflict-resolved write), an explicit ROLLBACK would fail on a healthy
+          // connection — the work is gone either way, so only report the rollback.
+          if try sqlite3_get_autocommit(handle.ptr) == 0 {
+            try execCore(raw: "ROLLBACK TRANSACTION", cacheable: false)
+          }
           signalTransactionDidRollback(to: participants)
         } catch {
           warn("Failed to rollback transaction: \(error)")
@@ -232,6 +251,16 @@ extension Database {
               + "closed. Its writes were committed or rolled back with the enclosing scope."
           )
         }
+        // The savepoint dies with the whole transaction when an interrupted or
+        // conflict-resolved write rolls it back underneath the body.
+        guard try sqlite3_get_autocommit(handle.ptr) == 0 else {
+          throw LoomError.core(
+            .transactionScopeLost,
+            message: "Savepoint scope lost the physical transaction before RELEASE: "
+              + "SQLite rolled the whole transaction back after an interrupted or "
+              + "conflict-resolved write."
+          )
+        }
         try execCore(raw: "RELEASE SAVEPOINT \(name)", cacheable: false)
         return result
       } catch {
@@ -244,10 +273,14 @@ extension Database {
           throw error
         }
         do {
-          // ROLLBACK TO undoes the work but keeps the savepoint on the stack;
-          // RELEASE closes the scope.
-          try execCore(raw: "ROLLBACK TO SAVEPOINT \(name)", cacheable: false)
-          try execCore(raw: "RELEASE SAVEPOINT \(name)", cacheable: false)
+          // Nothing to roll back to when SQLite already rolled the whole transaction
+          // back — the enclosing scope's own autocommit guard completes the story.
+          if try sqlite3_get_autocommit(handle.ptr) == 0 {
+            // ROLLBACK TO undoes the work but keeps the savepoint on the stack;
+            // RELEASE closes the scope.
+            try execCore(raw: "ROLLBACK TO SAVEPOINT \(name)", cacheable: false)
+            try execCore(raw: "RELEASE SAVEPOINT \(name)", cacheable: false)
+          }
         } catch {
           // Unlike the outermost path, do not close the handle: the enclosing
           // transaction's full ROLLBACK can still recover the connection.

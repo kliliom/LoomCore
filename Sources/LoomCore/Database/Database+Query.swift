@@ -43,14 +43,25 @@ extension Database {
   ///
   /// Suspends while a transaction owned by another task is active. Once past the gate the
   /// whole query — bind, step, extract — runs synchronously on the actor, so no other
-  /// database work can interleave mid-statement.
+  /// database work can interleave mid-statement. Cancelling the task interrupts the
+  /// statement mid-step and throws `CancellationError`.
   public func query<R>(
     raw statement: String,
     binder: Binder,
     stepper: Stepper<R>
   ) async throws -> [R] {
     try await gate()
+    return try await withInterruptOnCancellation {
+      try queryCore(raw: statement, binder: binder, stepper: stepper)
+    }
+  }
 
+  /// Ungated core of the `query` family. Runs to completion synchronously on the actor.
+  private func queryCore<R>(
+    raw statement: String,
+    binder: Binder,
+    stepper: Stepper<R>
+  ) throws -> [R] {
     let stmt = try prepare(sql: statement)
     try binder(stmt)
 

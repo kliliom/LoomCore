@@ -32,6 +32,19 @@ While a transaction is in flight — including while its body is suspended — d
 
 The gate is what makes `await` inside a transaction body safe. When no transaction is active it costs a single nil check. See <doc:TransactionsAndServices> for the full semantics, including savepoint nesting.
 
+## Cancellation
+
+Cancellation is ambient — no opt-in, no API knob:
+
+- **Waiting at the gate** — a cancelled waiter resumes throwing `CancellationError`, leaving the in-flight transaction undisturbed.
+- **Mid-statement** — cancelling a task whose `exec`, `query`, or `execScript` is stepping aborts the statement via `sqlite3_interrupt` (the one SQLite call that is safe cross-thread on a live connection) and throws `CancellationError`. This works even inside a single long-running step, and a per-operation ticket guarantees a late-firing cancellation can never abort a different task's statement.
+
+An interrupted **write** inside an explicit transaction makes SQLite roll the whole transaction back; ``Database/transaction(kind:_:)`` recognizes that, reports a rollback to services, and leaves the connection open.
+
+``Database/interrupt()`` exposes the same abort switch directly — it is `nonisolated`, so any thread can stop a long query on a busy connection without cancelling the task running it. The interrupted operation throws ``LoomError`` with ``SQLiteResultCode/interrupt``.
+
+``Database/directAccess(_:)`` is the exception: it runs no LoomCore statements, so nothing is armed — code inside it manages its own cancellation.
+
 ## What this rules out
 
 - **Concurrent reads against the same `Database`.** Even if SQLite would allow it (e.g. in WAL mode), LoomCore serializes everything through the actor. If you want true read parallelism, open multiple ``Database`` instances against the same file — each has its own connection and runs on its own actor turn.

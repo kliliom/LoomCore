@@ -58,11 +58,17 @@ public final class Database: Sendable {
   /// lazily via ``getService(_:)`` and removed via ``shutdownService(_:)``.
   var services: [ObjectIdentifier: Service] = [:]
 
+  /// Off-actor interrupt channel for this connection, backing ``interrupt()`` and
+  /// task-cancellation handlers — the only database facility reachable without
+  /// hopping onto ``DatabaseActor``.
+  nonisolated let interruptor: Interruptor
+
   /// Creates a new database instance wrapping an existing connection.
   ///
   /// - Parameter handle: The database handle to manage. Ownership is transferred to
   ///   this instance via `consuming` semantics.
   init(handle: consuming DatabaseHandle) {
+    self.interruptor = handle.resourceStore.interruptor
     self.handle = handle
   }
 

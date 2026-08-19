@@ -222,12 +222,12 @@ struct DatabaseTransactionTests {
     #expect(result.first == 1)
   }
 
-  // `ON CONFLICT ROLLBACK` makes SQLite roll back the physical transaction itself,
-  // so the library's own `ROLLBACK TRANSACTION` in the catch path fails on a
-  // still-open connection — the documented "failed rollback closes the handle"
-  // branch, which no other test reaches without closing the database first.
-  @Test("Failed outermost rollback closes the handle")
-  func testFailedRollbackClosesHandle() async throws {
+  // `ON CONFLICT ROLLBACK` makes SQLite roll back the physical transaction itself.
+  // The machinery must recognize that (via sqlite3_get_autocommit) and skip its own
+  // ROLLBACK instead of treating the doomed statement's failure as a broken
+  // connection — the body's error propagates and the handle stays open.
+  @Test("Conflict-resolved rollback keeps the connection open")
+  func testConflictResolvedRollbackKeepsConnectionOpen() async throws {
     let db = try Database.openInMemory()
 
     try await db.exec("CREATE TABLE test (value INTEGER PRIMARY KEY ON CONFLICT ROLLBACK)")
@@ -235,19 +235,20 @@ struct DatabaseTransactionTests {
 
     do {
       try await db.transaction { db in
+        try await db.exec("INSERT INTO test (value) VALUES (2)")
         try await db.exec("INSERT INTO test (value) VALUES (1)")
       }
       Issue.record("Transaction with a conflicting insert should throw")
     } catch let error as LoomError {
-      // The body's constraint error is what propagates, not the rollback failure.
-      #expect(error.core != .databaseClosed)
+      // The body's constraint error is what propagates, not a machinery failure.
+      #expect(error.sqlite == .constraint)
     }
 
-    do {
-      try await db.exec("INSERT INTO test (value) VALUES (2)")
-      Issue.record("The handle should be closed after the failed rollback")
-    } catch let error as LoomError {
-      #expect(error.core == .databaseClosed)
+    // The connection survives and the transaction's work is gone.
+    try await db.exec("INSERT INTO test (value) VALUES (3)")
+    let values = try await db.query("SELECT value FROM test ORDER BY value") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
     }
+    #expect(values == [1, 3])
   }
 }

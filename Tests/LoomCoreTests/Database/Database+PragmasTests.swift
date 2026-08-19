@@ -699,4 +699,19 @@ class DatabasePragmasTests {
     }
     #expect(count.first == 1)
   }
+
+  @Test("Busy timeout defaults to zero and round-trips")
+  func testBusyTimeout() async throws {
+    let db = try Database.openInMemory()
+
+    #expect(try await db.getBusyTimeout() == 0)
+
+    // PRAGMA busy_timeout = N returns a row, so the setter must run as a query;
+    // the returned value pins that it applied.
+    #expect(try await db.setBusyTimeout(milliseconds: 250) == 250)
+    #expect(try await db.getBusyTimeout() == 250)
+
+    #expect(try await db.setBusyTimeout(milliseconds: 0) == 0)
+    #expect(try await db.getBusyTimeout() == 0)
+  }
 }

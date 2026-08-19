@@ -109,7 +109,32 @@ Services receive ``Database/Service/transactionWillBegin()``, ``Database/Service
 
 ## What rollback failure means
 
-If `ROLLBACK` itself fails (rare — typically only happens with a corrupt or disconnected database), LoomCore logs a warning, closes the underlying handle, and rethrows the original error from the block. Subsequent operations on the database fail with a closed-database error.
+Some failures roll the physical transaction back inside SQLite itself — an interrupted write (``Database/interrupt()`` or task cancellation) and `ON CONFLICT ROLLBACK` constraints both do. LoomCore detects that, skips its own now-pointless `ROLLBACK`, still notifies services via ``Database/Service/transactionDidRollback()``, and rethrows the block's error with the connection intact.
+
+If `ROLLBACK` itself fails on a transaction that is genuinely still open (rare — typically only a corrupt or disconnected database), LoomCore logs a warning, closes the underlying handle, and rethrows the original error from the block. Subsequent operations on the database fail with a closed-database error.
+
+## Handling SQLITE_BUSY
+
+A second connection — another process, or another `Database` on the same file — can hold a lock that makes a statement fail with ``SQLiteResultCode/busy``. Three tools, in the order to reach for them:
+
+- **``Database/setBusyTimeout(milliseconds:)``** — SQLite retries the lock inside `sqlite3_step` for up to the timeout before failing. Keep it modest: the wait sleeps while holding the global ``DatabaseActor``, stalling every `Database` in the process for its duration. ``Database/interrupt()`` (and task cancellation) aborts a busy wait.
+- **``TransactionKind/immediate``** — a transaction that will write should fail fast at `BEGIN` rather than mid-transaction after doing work.
+- **Retry at the call site** — for contention that outlasts a reasonable timeout:
+
+```swift
+func withBusyRetry<T>(_ attempts: Int = 3, _ body: () async throws -> T) async throws -> T {
+  for _ in 0..<(attempts - 1) {
+    do {
+      return try await body()
+    } catch let error as LoomError where error.sqlite == .busy {
+      try await Task.sleep(for: .milliseconds(50))
+    }
+  }
+  return try await body()
+}
+```
+
+Enabling WAL mode (``Database/setJournalMode(_:)``) also removes most reader/writer contention between connections to the same file.
 
 ## Topics
 
@@ -117,3 +142,5 @@ If `ROLLBACK` itself fails (rare — typically only happens with a corrupt or di
 - ``TransactionKind``
 - ``Database/Service``
 - ``Database/getService(_:)``
+- ``Database/setBusyTimeout(milliseconds:)``
+- ``Database/interrupt()``

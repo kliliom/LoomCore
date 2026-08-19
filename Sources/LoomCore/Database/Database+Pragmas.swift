@@ -350,6 +350,57 @@ extension Database {
   }
 }
 
+// MARK: - Busy Timeout
+
+extension Database {
+  /// Returns the busy timeout in milliseconds.
+  ///
+  /// `0` — the default on a fresh connection — means lock contention fails immediately
+  /// with ``SQLiteResultCode/busy`` instead of waiting.
+  public func getBusyTimeout() async throws -> Int32 {
+    let result = try await query("PRAGMA busy_timeout") { stmt, _ in
+      try Int32.column(of: stmt, at: 0)
+    }
+
+    guard let timeout = result.first else {
+      throw LoomError.core(.unexpectedState, message: "busy_timeout returned no value")
+    }
+
+    return timeout
+  }
+
+  /// Sets the busy timeout and returns the value actually applied.
+  ///
+  /// While the timeout is nonzero, a statement that hits a locked database retries inside
+  /// `sqlite3_step` for up to that long before failing with ``SQLiteResultCode/busy``.
+  /// Pass `0` to fail immediately again.
+  ///
+  /// ```swift
+  /// let db = try await Database.open(url: URL(fileURLWithPath: "/tmp/shared.sqlite"))
+  /// try await db.setBusyTimeout(milliseconds: 250)
+  /// ```
+  ///
+  /// - Warning: The busy wait sleeps inside the statement while it holds the global
+  ///   ``DatabaseActor``, stalling every `Database` in the process for its duration — keep
+  ///   timeouts modest. ``interrupt()`` (and thus task cancellation) aborts a busy wait.
+  ///
+  /// - Parameter milliseconds: Wait budget per lock acquisition, or `0` to disable waiting.
+  @discardableResult
+  public func setBusyTimeout(milliseconds: Int32) async throws -> Int32 {
+    // PRAGMA busy_timeout = N returns a row with the applied value, so this must go
+    // through `query` — `exec` would throw on the unexpected SQLITE_ROW.
+    let result = try await query("PRAGMA busy_timeout = \(milliseconds, mode: .raw)") { stmt, _ in
+      try Int32.column(of: stmt, at: 0)
+    }
+
+    guard let timeout = result.first else {
+      throw LoomError.core(.unexpectedState, message: "busy_timeout returned no value")
+    }
+
+    return timeout
+  }
+}
+
 // MARK: - Auto Vacuum
 
 extension Database {

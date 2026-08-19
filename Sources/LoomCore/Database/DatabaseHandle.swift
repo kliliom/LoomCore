@@ -31,7 +31,7 @@ public struct DatabaseHandle: ~Copyable, Sendable {
 
   init(ptr: OpaquePointer, statementCacheCapacity: Int) {
     self.ptrRaw = ptr
-    self.resourceStore = ResourceStore(capacity: statementCacheCapacity)
+    self.resourceStore = ResourceStore(dbPtr: ptr, capacity: statementCacheCapacity)
   }
 
   // `deinit` may run off-actor, so cleanup hops onto `DatabaseActor`.
@@ -75,8 +75,13 @@ extension DatabaseHandle {
     // Monotonic recency clock, bumped on every cache hit and insert.
     private var tick: UInt64 = 0
 
-    init(capacity: Int) {
+    // Off-actor interrupt channel for this connection; lives here so the deinit
+    // cleanup `Task` can invalidate it right before closing the connection.
+    nonisolated let interruptor: Interruptor
+
+    init(dbPtr: OpaquePointer, capacity: Int) {
       precondition(capacity > 0, "Statement cache capacity must be positive")
+      self.interruptor = Interruptor(dbPtr: dbPtr)
       self.capacity = capacity
     }
 
@@ -174,6 +179,10 @@ extension DatabaseHandle {
       checkedOut = []
 
       if let dbPtr {
+        // Disconnect the interrupt channel first: SQLite forbids closing a
+        // connection while sqlite3_interrupt runs on it, and the Interruptor's
+        // lock makes this ordering exclusive against in-flight interrupts.
+        interruptor.invalidate()
         let rc = sqlite3_close_v2(dbPtr)
         if rc != SQLITE_OK {
           let message = String(cString: sqlite3_errstr(rc))
