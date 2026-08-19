@@ -113,4 +113,14 @@ struct FunctionGroupConcatTests {
   func testGroupConcatExpressionValueIsOptional() {
     #expect(GroupConcat.ExpressionValue.self == String?.self)
   }
+
+  // SQLite rejects GROUP_CONCAT(DISTINCT expr, sep) at runtime; the distinct
+  // initializer takes no separator, so this pins the only SQL it can render.
+  @Test("GroupConcat with distinct renders without a separator argument")
+  func testGroupConcatDistinctRendering() {
+    let expr = GroupConcat(ColumnExpression<String>("name"), distinct: true)
+    var builder = SQLBuilder()
+    expr.append(to: &builder)
+    #expect(builder.makeStatement().sql == "GROUP_CONCAT( DISTINCT  \"name\" )")
+  }
 }

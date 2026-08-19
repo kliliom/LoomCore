@@ -5,12 +5,16 @@
 /// `ExpressionValue` is `String?` because the result is NULL for an empty group or when
 /// every input value is NULL.
 ///
+/// SQLite rejects `GROUP_CONCAT(DISTINCT expr, sep)` — a custom separator cannot be
+/// combined with `DISTINCT` — so the two options live on separate initializers and the
+/// illegal combination does not compile.
+///
 /// ```swift
-/// // SELECT user_id, GROUP_CONCAT(DISTINCT tag, '|') AS tags
+/// // SELECT user_id, GROUP_CONCAT(DISTINCT tag) AS tags
 /// //   FROM user_tags
 /// //  GROUP BY user_id
 /// let tag = ColumnExpression<String>("tag")
-/// let tags = tag.groupConcat(distinct: true, separator: "|")
+/// let tags = tag.groupConcat(distinct: true)
 /// ```
 public struct GroupConcat: Function {
   public typealias ExpressionValue = String?
@@ -25,12 +29,25 @@ public struct GroupConcat: Function {
   ///
   /// - Parameters:
   ///   - expression: Expression whose values are concatenated.
-  ///   - distinct: Concatenate only distinct values when `true`.
   ///   - separator: Separator written between values. When `nil`, SQLite uses `,`.
-  public init(_ expression: any Expression, distinct: Bool = false, separator: String? = nil) {
+  public init(_ expression: any Expression, separator: String? = nil) {
+    self.expression = expression
+    self.distinct = false
+    self.separator = separator
+  }
+
+  /// Creates a `GROUP_CONCAT` aggregate over `expression`'s distinct values.
+  ///
+  /// SQLite always joins distinct values with `,` — it rejects a custom separator
+  /// alongside `DISTINCT`, which is why this initializer accepts none.
+  ///
+  /// - Parameters:
+  ///   - expression: Expression whose distinct values are concatenated.
+  ///   - distinct: Concatenate only distinct values when `true`.
+  public init(_ expression: any Expression, distinct: Bool) {
     self.expression = expression
     self.distinct = distinct
-    self.separator = separator
+    self.separator = nil
   }
 
   public func append(to builder: inout SQLBuilder) {
@@ -58,10 +75,26 @@ extension Expression {
   /// let titles = title.groupConcat(separator: "; ")
   /// ```
   ///
-  /// - Parameters:
-  ///   - distinct: Concatenate only distinct values when `true`.
-  ///   - separator: Separator written between values. When `nil`, SQLite uses `,`.
-  public func groupConcat(distinct: Bool = false, separator: String? = nil) -> GroupConcat {
-    GroupConcat(self, distinct: distinct, separator: separator)
+  /// - Parameter separator: Separator written between values. When `nil`, SQLite uses `,`.
+  public func groupConcat(separator: String? = nil) -> GroupConcat {
+    GroupConcat(self, separator: separator)
+  }
+
+  /// Builds a `GROUP_CONCAT` aggregate over this expression's distinct values.
+  ///
+  /// SQLite always joins distinct values with `,` — it rejects a custom separator
+  /// alongside `DISTINCT`, so use ``groupConcat(separator:)`` for custom separators.
+  ///
+  /// ```swift
+  /// // SELECT user_id, GROUP_CONCAT(DISTINCT tag) AS tags
+  /// //   FROM user_tags
+  /// //  GROUP BY user_id
+  /// let tag = ColumnExpression<String>("tag")
+  /// let tags = tag.groupConcat(distinct: true)
+  /// ```
+  ///
+  /// - Parameter distinct: Concatenate only distinct values when `true`.
+  public func groupConcat(distinct: Bool) -> GroupConcat {
+    GroupConcat(self, distinct: distinct)
   }
 }
