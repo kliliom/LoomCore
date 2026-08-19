@@ -132,4 +132,34 @@ struct InExpressionTests {
     )
     #expect(result.count == 5)
   }
+
+  // IN predicates are typed Bool (not Bool?) so they compose with the logical
+  // operators like any comparison does.
+  @Test("IN predicate composes with AND")
+  func testInPredicateComposesWithAnd() async throws {
+    let categoryID = ColumnExpression<Int>("category_id")
+    let expr = categoryID.in(array: [2, 3, 4]) && categoryID > 2
+
+    let result = try await db.query(
+      "SELECT category_id FROM products WHERE \(expr) ORDER BY category_id",
+      stepper: { stmt, _ in
+        try Int.column(of: stmt, at: 0)
+      }
+    )
+    #expect(result == [3, 4])
+  }
+
+  @Test("IN predicate negates with NOT")
+  func testInPredicateNegatesWithNot() async throws {
+    let categoryID = ColumnExpression<Int>("category_id")
+    let expr = !categoryID.in(array: [2, 4])
+
+    let result = try await db.query(
+      "SELECT category_id FROM products WHERE \(expr) ORDER BY category_id",
+      stepper: { stmt, _ in
+        try Int.column(of: stmt, at: 0)
+      }
+    )
+    #expect(result == [1, 3, 5])
+  }
 }

@@ -1,19 +1,23 @@
 /// Membership test against a list or subquery, rendering SQL `IN` or `NOT IN`.
 ///
-/// Evaluates to `true` when the needle matches any value in the haystack, `false` when it does
-/// not, and `nil` when the needle is NULL. An empty list is rewritten to an always-false (`IN`)
-/// or always-true (`NOT IN`) predicate, since `IN ()` is not valid SQLite.
+/// Evaluates to `true` when the needle matches any value in the haystack and `false` when it
+/// does not. A NULL needle makes the SQL result NULL, which `WHERE` treats as not matching —
+/// SQL's three-valued logic is a runtime concern, so the predicate is typed `Bool` like the
+/// comparison operators and composes with `&&`, `||`, and `!`. An empty list is rewritten to
+/// an always-false (`IN`) or always-true (`NOT IN`) predicate, since `IN ()` is not valid
+/// SQLite.
 ///
 /// ```swift
 /// let status = ColumnExpression<String>("status")
-/// let active = status.in(values: "active", "pending", "trial")
-/// // ( "status" IN (?, ?, ?) )
+/// let age = ColumnExpression<Int>("age")
+/// let active = status.in(values: "active", "pending", "trial") && age > 18
+/// // ( ( "status" IN (?, ?, ?) ) AND ( "age" > ? ) )
 ///
 /// let archived = status.notIn(array: ["deleted", "banned"])
 /// // ( "status" NOT IN (?, ?) )
 /// ```
 public struct InExpression<T: Bindable>: Expression {
-  public typealias ExpressionValue = Bool?
+  public typealias ExpressionValue = Bool
 
   /// The expression to test (the "needle" to search for).
   let needleExpression: any Expression
