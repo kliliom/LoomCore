@@ -44,6 +44,14 @@ public struct LoomCoreErrorCode: RawRepresentable, Hashable, Sendable {
   /// dropped), leaves a transaction open at the end, or ends the enclosing
   /// ``Database/transaction(kind:_:)`` with a `COMMIT`/`ROLLBACK` of its own.
   public static let invalidScript = LoomCoreErrorCode(rawValue: 7)
+  /// Transaction scope tried to close after losing control of the connection.
+  ///
+  /// Raised in place of the scope's `COMMIT`/`RELEASE` when the database was closed
+  /// mid-flight, or when an enclosing scope exited while this scope was still open —
+  /// typically an un-awaited `Task {}` that outlived the ``Database/transaction(kind:_:)``
+  /// body it was spawned from. The scope's writes were committed or rolled back together
+  /// with the enclosing scope; the refused close never touches the connection.
+  public static let transactionScopeLost = LoomCoreErrorCode(rawValue: 8)
 }
 
 extension LoomCoreErrorCode: LoomError.ErrorCode {}

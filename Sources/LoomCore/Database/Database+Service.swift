@@ -114,8 +114,10 @@ extension Database {
   /// Notifies the participating services that the transaction has committed successfully.
   ///
   /// Called internally by ``transaction(kind:_:)`` after the `COMMIT` statement succeeds.
+  /// Participants shut down while the transaction was in flight are skipped: `shutdown()`
+  /// is a service's final callback.
   func signalTransactionDidCommit(to participants: [Service]) {
-    for service in participants {
+    for service in participants where isRegistered(service) {
       service.transactionDidCommit()
     }
   }
@@ -123,9 +125,18 @@ extension Database {
   /// Notifies the participating services that the transaction has been rolled back.
   ///
   /// Called internally by ``transaction(kind:_:)`` after the `ROLLBACK` statement succeeds.
+  /// Participants shut down while the transaction was in flight are skipped: `shutdown()`
+  /// is a service's final callback.
   func signalTransactionDidRollback(to participants: [Service]) {
-    for service in participants {
+    for service in participants where isRegistered(service) {
       service.transactionDidRollback()
     }
+  }
+
+  /// Whether `service` is still this database's registered instance for its type. Instance
+  /// identity, not type: a same-type instance registered mid-transaction is not the
+  /// participant that received `transactionWillBegin()`.
+  private func isRegistered(_ service: Service) -> Bool {
+    services[ObjectIdentifier(type(of: service))] === service
   }
 }

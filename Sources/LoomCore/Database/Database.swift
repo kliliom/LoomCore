@@ -48,6 +48,10 @@ public final class Database: Sendable {
   /// Monotonic source of waiter identifiers, used to remove cancelled waiters.
   var nextWaiterID: UInt64 = 0
 
+  /// Monotonic source of savepoint names. Per-scope-unique names guarantee a scope's
+  /// machinery statements can never resolve against another scope's savepoint.
+  var nextSavepointID: UInt64 = 0
+
   /// Registered services keyed by their metatype identity.
   ///
   /// Services are singletons per type within a database instance. They are created

@@ -70,7 +70,7 @@ private func isTrailingNoiseByte(_ byte: CChar) -> Bool {
 }
 
 extension Database {
-  func prepare(sql: String) throws -> StatementHandle {
+  func prepare(sql: String, cacheable: Bool = true) throws -> StatementHandle {
     // SQLite's prepare stops at the first zero byte no matter what length is passed, so
     // anything after an embedded NUL — a second statement included — would be silently
     // dropped before the trailing-SQL check below could see it.
@@ -81,7 +81,7 @@ extension Database {
       )
     }
 
-    let useCache = StatementCaching.databases.contains(ObjectIdentifier(self))
+    let useCache = cacheable && StatementCaching.databases.contains(ObjectIdentifier(self))
 
     let dbPtr = try handle.ptr
     let store = handle.resourceStore

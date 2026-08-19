@@ -471,9 +471,9 @@ struct DatabaseGateTests {
       }
     }
 
-    // Depth-based savepoint names recur, so repeated nested transactions reuse
-    // the same cached statements instead of minting unique SQL per iteration.
-    #expect(await cacheCount(on: db) <= 6)
+    // Machinery statements (BEGIN/COMMIT/SAVEPOINT/RELEASE) bypass the statement cache,
+    // so per-scope-unique savepoint names cannot grow it; only the INSERT stays cached.
+    #expect(await cacheCount(on: db) == 1)
   }
 
   @Test("cached scope does not leak to other databases")
@@ -532,9 +532,13 @@ struct DatabaseGateTests {
     }
 
     release.fire()
-    // The orphaned scope's RELEASE fails: its savepoint died with the outer COMMIT.
-    await #expect(throws: (any Error).self) {
+    // The orphaned scope's close is refused: its savepoint's fate was decided by the
+    // outer COMMIT, so its RELEASE must never reach the connection.
+    do {
       try await orphan.value
+      Issue.record("Orphaned scope's close should throw")
+    } catch let error as LoomError {
+      #expect(error.core == .transactionScopeLost)
     }
 
     // The gate must not be wedged and the connection must still be usable.
@@ -543,6 +547,67 @@ struct DatabaseGateTests {
       try Int.column(of: stmt, at: 0)
     }
     #expect(values == [1, 2, 3])
+  }
+
+  @Test("Orphaned scope's close cannot disturb a later transaction's savepoint")
+  func orphanedScopeCannotDisturbForeignSavepoint() async throws {
+    let db = try await Database.openInMemory()
+    try await db.exec("CREATE TABLE t (value INTEGER)")
+    struct IntendedRollback: Error {}
+    let releaseOrphan = Signal()
+    let t2Suspended = Signal()
+    let orphanRefused = Signal()
+
+    // T1 spawns an un-awaited Task holding a savepoint scope open, then commits — the
+    // documented misuse. The orphan's scope-closing RELEASE will run much later.
+    let orphan: Task<Void, any Error> = try await db.transaction { db in
+      let orphan = Task {
+        try await db.transaction { _ in
+          await releaseOrphan.wait()
+        }
+      }
+      var attempts = 0
+      while (db.activeTransactionToken?.depth ?? 0) < 2, attempts < 100_000 {
+        attempts += 1
+        await Task.yield()
+      }
+      return orphan
+    }
+
+    // T2 opens its own nested scope and suspends inside it, so the orphan's close runs
+    // while a foreign savepoint is the connection's most recent one. Historically the
+    // orphan's RELEASE resolved against it, silently committing T2's rolled-back insert.
+    let t2 = Task {
+      try await db.transaction { db in
+        try await db.exec("INSERT INTO t (value) VALUES (1)")
+        do {
+          try await db.transaction { db in
+            try await db.exec("INSERT INTO t (value) VALUES (2)")
+            t2Suspended.fire()
+            await orphanRefused.wait()
+            throw IntendedRollback()
+          }
+        } catch is IntendedRollback {
+          // Expected: the nested scope threw, so its insert must be gone.
+        }
+      }
+    }
+
+    await t2Suspended.wait()
+    releaseOrphan.fire()
+    do {
+      try await orphan.value
+      Issue.record("Orphaned scope's close should be refused")
+    } catch let error as LoomError {
+      #expect(error.core == .transactionScopeLost)
+    }
+    orphanRefused.fire()
+    try await t2.value
+
+    let values = try await db.query("SELECT value FROM t ORDER BY value") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+    #expect(values == [1])
   }
 
   @Test("Unstructured Task inherits the token and joins the transaction")

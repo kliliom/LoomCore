@@ -6,8 +6,8 @@ LoomCore emphasizes safety through Swift's type system and concurrency model. Th
 
 **Important constraints:**
 - All public `Database` operations are `async` — `exec`, `query`, pragma methods, `directAccess`, `cached`, `lastInsertedRowID`, and `transaction` are called as `try await db.…`. Only `close()`, `getService(_:)`, and `shutdownService(_:)` remain synchronous.
-- Nested transactions are supported via `SAVEPOINT`: calling `transaction()` inside an active transaction opens a savepoint scope. A normal return releases the savepoint into the enclosing transaction; a throw rolls back to the savepoint (leaving the enclosing transaction's work intact) and rethrows. Service lifecycle hooks fire only for the outermost physical transaction (the participating set is fixed when it begins), and `kind:` is ignored when nested.
-- While a transaction is in flight — even suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Membership is a task-local token bound around the body, inherited by structured children (`async let`, task groups) and `Task {}`, but NOT by `Task.detached`. An unstructured `Task {}` must complete before the body returns (await its value); a task that outlives the body races the commit and may run outside the transaction. Waiting operations throw `CancellationError` on task cancellation. Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — nothing interleaves mid-statement.
+- Nested transactions are supported via `SAVEPOINT`: calling `transaction()` inside an active transaction opens a savepoint scope. A normal return releases the savepoint into the enclosing transaction; a throw rolls back to the savepoint (leaving the enclosing transaction's work intact) and rethrows. Service lifecycle hooks fire only for the outermost physical transaction (the participating set is fixed when it begins; a service shut down while it is in flight receives no terminal callback), and `kind:` is ignored when nested.
+- While a transaction is in flight — even suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Membership is a task-local token bound around the body, inherited by structured children (`async let`, task groups) and `Task {}`, but NOT by `Task.detached`. An unstructured `Task {}` must complete before the body returns (await its value); a task that outlives the body races the commit and may run outside the transaction, and its own scope close is refused with `LoomCoreErrorCode.transactionScopeLost` — it never touches a transaction opened later on the same connection. Waiting operations throw `CancellationError` on task cancellation. Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — nothing interleaves mid-statement.
 - The `Database` class is `@DatabaseActor` isolated. You cannot call its methods from arbitrary async contexts without hopping to the actor.
 - String interpolation defaults to safe `.bind` mode. Use `.raw` mode only for trusted SQL identifiers (table/column names), never for user input. `.raw` is only available for values conforming to `CustomStringConvertible`; everything else must bind.
 - When using managed indices (`ManagedIndex`), the index auto-increments *after* bind/column operations. Parameters start at 0 (becomes 1 after first bind), columns start at 0.
@@ -123,6 +123,11 @@ parameter placeholder, the script contains an embedded NUL byte, the script leav
 open at the end (balanced `BEGIN … COMMIT` — `sqlite3 .dump` output — is fine), or a script
 statement commits/rolls back the enclosing `transaction { }`. A script-managed transaction
 fires no `Service` lifecycle hooks.
+
+`transaction { }` throws `LoomCoreErrorCode.transactionScopeLost` in place of its
+`COMMIT`/`RELEASE` when the scope lost the connection first: the database was closed
+mid-flight, or an enclosing scope exited while this one was still open (an un-awaited
+`Task {}`). The refused close never touches the connection.
 
 `walCheckpoint(mode:database:)` names the database to checkpoint (`"main"` by default,
 resolved case-insensitively); `nil` or `""` checkpoints every attached database, per

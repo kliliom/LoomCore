@@ -38,20 +38,23 @@ extension Database {
 
   /// Ungated core shared by the public `exec` overloads and the transaction machinery
   /// (BEGIN/COMMIT/ROLLBACK/SAVEPOINT must not gate against their own transaction).
+  /// Machinery statements also pass `cacheable: false`: savepoint names are per-scope
+  /// unique, so caching them would grow the statement cache without ever hitting.
   /// Runs to completion synchronously on the actor, so once past the gate nothing can
   /// interleave mid-statement.
   func execCore(
     raw statement: String,
-    binder: Binder
+    binder: Binder,
+    cacheable: Bool = true
   ) throws {
-    let stmt = try prepare(sql: statement)
+    let stmt = try prepare(sql: statement, cacheable: cacheable)
     try binder(stmt)
 
     try check(sqlite3_step(stmt.stmtPtr), db: stmt.dbPtr, is: SQLITE_DONE)
   }
 
-  func execCore(raw statement: String) throws {
-    try execCore(raw: statement, binder: { _ in })
+  func execCore(raw statement: String, cacheable: Bool = true) throws {
+    try execCore(raw: statement, binder: { _ in }, cacheable: cacheable)
   }
 }
 

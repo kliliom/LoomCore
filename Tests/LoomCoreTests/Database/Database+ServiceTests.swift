@@ -232,15 +232,58 @@ struct DatabaseServiceTests {
     try await db.transaction { db in
       try await db.exec("INSERT INTO test (value) VALUES (1)")
 
-      // Note: Nested transactions just log a warning and execute in the current transaction
+      // Nested transactions open a SAVEPOINT scope inside the outer transaction; service
+      // hooks describe the physical transaction, so only the outermost fires them.
       try await db.transaction { db in
         try await db.exec("INSERT INTO test (value) VALUES (2)")
       }
     }
 
-    // Both inserts happen in the same transaction
-    #expect(service.willBeginCount == 1)  // Only outer transaction actually begins
+    #expect(service.willBeginCount == 1)  // Only the outermost transaction begins
     #expect(service.didCommitCount == 1)  // One commit
     #expect(service.didRollbackCount == 0)  // No rollback
+  }
+
+  @Test("Service shut down mid-transaction receives no commit callback")
+  func testServiceShutdownMidTransactionSkipsCommit() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    let service = db.getService(TrackingService.self)
+
+    try await db.transaction { db in
+      try await db.exec("INSERT INTO test (value) VALUES (1)")
+      // Task.detached does not inherit the transaction token, and shutdownService is
+      // ungated, so the shutdown provably completes while the transaction is in flight.
+      await Task.detached { @DatabaseActor in
+        db.shutdownService(TrackingService.self)
+      }.value
+    }
+
+    #expect(service.willBeginCount == 1)
+    #expect(service.shutdownCalled)
+    // shutdown() is the service's final callback — no commit after it.
+    #expect(service.didCommitCount == 0)
+  }
+
+  @Test("Service shut down mid-transaction receives no rollback callback")
+  func testServiceShutdownMidTransactionSkipsRollback() async throws {
+    struct BodyFailure: Error {}
+
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+    let service = db.getService(TrackingService.self)
+
+    await #expect(throws: BodyFailure.self) {
+      try await db.transaction { db in
+        try await db.exec("INSERT INTO test (value) VALUES (1)")
+        db.shutdownService(TrackingService.self)
+        throw BodyFailure()
+      }
+    }
+
+    #expect(service.willBeginCount == 1)
+    #expect(service.shutdownCalled)
+    // shutdown() is the service's final callback — no rollback after it.
+    #expect(service.didRollbackCount == 0)
   }
 }

@@ -15,10 +15,10 @@
 ///   savepoint scope is open, because the innermost token is what the database advertises as
 ///   active.
 ///
-/// `depth` counts enclosing scopes on the same database (outermost = 1). It names savepoints
-/// (`loom_sp_<depth>`): sibling scopes serialize, so at most one scope per depth is open at a
-/// time, and the recurring names keep the machinery statements cache-friendly instead of
-/// minting an unbounded set of unique SQL strings.
+/// `depth` counts enclosing scopes on the same database (outermost = 1). It exists for
+/// nesting diagnostics; savepoints are named from `Database.nextSavepointID`, per-scope
+/// unique and excluded from the statement cache, so a scope's machinery statements can
+/// never resolve against another scope's savepoint.
 final class TransactionToken: Sendable {
   let parent: TransactionToken?
 
