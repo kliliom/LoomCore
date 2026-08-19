@@ -8,6 +8,7 @@ import SQLite3
 /// detail; otherwise it falls back to `sqlite3_errstr()`.
 ///
 /// ```swift
+/// // doc-check: skip
 /// try check(sqlite3_step(statement), db: db, is: SQLITE_DONE)
 /// ```
 @DatabaseActor
@@ -32,6 +33,7 @@ func check(
 /// `sqlite3_errstr()`.
 ///
 /// ```swift
+/// // doc-check: skip
 /// let code = try check(sqlite3_step(statement), db: db, in: SQLITE_ROW, SQLITE_DONE)
 /// if code == SQLITE_ROW {
 ///   // read column values

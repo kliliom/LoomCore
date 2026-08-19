@@ -8,7 +8,11 @@
 /// let normalized = email.lower()
 /// // SQL: LOWER("email")
 ///
-/// try await db.query("SELECT * FROM users WHERE \(email.lower()) = \("alice@example.com")")
+/// let rows = try await db.query(
+///   "SELECT id FROM users WHERE \(email.lower()) = \("alice@example.com")"
+/// ) { stmt, _ in
+///   try Int64.column(of: stmt, at: 0)
+/// }
 /// ```
 public struct Lower: Function {
   public typealias ExpressionValue = String?
@@ -32,7 +36,9 @@ extension Expression {
   ///
   /// ```swift
   /// let name = ColumnExpression<String>("name")
-  /// let rows = try await db.query("SELECT * FROM users WHERE \(name.lower()) LIKE \("a%")")
+  /// let rows = try await db.query("SELECT id FROM users WHERE \(name.lower()) LIKE \("a%")") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public func lower() -> Lower {
     Lower(self)

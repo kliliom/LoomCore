@@ -3,7 +3,7 @@
 /// The result is optional because `MAX` returns `NULL` over an empty set.
 ///
 /// ```swift
-/// let users = ColumnExpression<Int>("age", in: "users")
+/// let users = ColumnExpression<Int>("age", of: "users")
 /// let oldest = Max(users)
 /// // SQL: MAX("users"."age")
 /// ```
@@ -11,8 +11,9 @@
 /// Prefer the `max()` method on `Expression` for fluent call sites:
 ///
 /// ```swift
-/// let stats = try await db.query("SELECT \(users.max()) FROM users") { row in
-///   try Int?.column(of: row, at: 0)
+/// let users = ColumnExpression<Int>("age", of: "users")
+/// let stats = try await db.query("SELECT \(users.max()) FROM users") { stmt, _ in
+///   try Int?.column(of: stmt, at: 0)
 /// }
 /// ```
 public struct Max<T: Bindable>: Function {
@@ -36,7 +37,7 @@ extension Expression where ExpressionValue: Bindable {
   /// Wraps the expression in a `MAX()` aggregate.
   ///
   /// ```swift
-  /// let price = ColumnExpression<Double>("price", in: "orders")
+  /// let price = ColumnExpression<Double>("price", of: "orders")
   /// let topPrice = price.max()
   /// // SQL: MAX("orders"."price")
   /// ```

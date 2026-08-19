@@ -9,7 +9,7 @@ import SQLite3
 ///
 /// ```swift
 /// do {
-///   try await db.exec("INSERT INTO users (id, name) VALUES (?, ?)", 1, "Alice")
+///   try await db.exec(raw: "INSERT INTO users (id, name) VALUES (?, ?)", binding: 1, "Alice")
 /// } catch let error as LoomError where error.sqlite == .constraint {
 ///   // Unique constraint violation — surface a friendly message to the caller.
 /// }
@@ -137,6 +137,10 @@ extension LoomError {
   /// through the throwing API surface.
   ///
   /// ```swift
+  /// import SQLite3
+  ///
+  /// let stmt: OpaquePointer? = nil
+  /// let handle: OpaquePointer? = nil
   /// guard sqlite3_step(stmt) == SQLITE_DONE else {
   ///   let raw = sqlite3_errcode(handle)
   ///   let msg = String(cString: sqlite3_errmsg(handle))
@@ -152,13 +156,16 @@ extension LoomError {
   /// Returns the underlying ``SQLiteResultCode`` when the error originated from SQLite, otherwise `nil`.
   ///
   /// ```swift
+  /// func showDuplicateMessage() {}
+  /// func showReadOnlyMessage() {}
+  ///
   /// do {
-  ///   try await db.exec("INSERT INTO users (id) VALUES (?)", 1)
+  ///   try await db.exec(raw: "INSERT INTO users (id) VALUES (?)", binding: 1)
   /// } catch let error as LoomError {
   ///   switch error.sqlite {
   ///   case .constraint: showDuplicateMessage()
   ///   case .readOnly:   showReadOnlyMessage()
-  ///   default:          rethrow(error)
+  ///   default:          throw error
   ///   }
   /// }
   /// ```

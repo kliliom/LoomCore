@@ -4,10 +4,9 @@
 ///
 /// ```swift
 /// let name = ColumnExpression<String>("name")
-/// let users = try await db.query(
-///   "SELECT \(name) FROM users WHERE \(name.length()) > \(10)",
-///   read: { try String.column(of: $0, at: 0) }
-/// )
+/// let users = try await db.query("SELECT \(name) FROM users WHERE \(name.length()) > \(10)") { stmt, _ in
+///   try String.column(of: stmt, at: 0)
+/// }
 /// ```
 ///
 /// Generates SQL of the form `LENGTH("name")`.
@@ -32,7 +31,8 @@ extension Expression {
   ///
   /// ```swift
   /// let bio = ColumnExpression<String>("bio")
-  /// let hasBio = bio.length() > 0
+  /// let bioLength = bio.length()
+  /// // SQL: LENGTH("bio")
   /// ```
   public func length() -> Length {
     Length(self)

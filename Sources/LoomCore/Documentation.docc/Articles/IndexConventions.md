@@ -13,12 +13,20 @@ LoomCore preserves these conventions exactly rather than normalizing them, becau
 
 ```swift
 // Parameter indices are 1-based:
-try "Alice".bind(to: stmt, at: 1)   // leftmost ?
-try 30.bind(to: stmt, at: 2)        // second ?
+try await db.exec(
+  raw: "INSERT INTO users (name, age) VALUES (?, ?)",
+  binder: { stmt in
+    try "Alice".bind(to: stmt, at: 1)  // leftmost ?
+    try 30.bind(to: stmt, at: 2)       // second ?
+  }
+)
 
 // Column indices are 0-based:
-let name = try String.column(of: stmt, at: 0)  // leftmost column
-let age  = try Int.column(of: stmt, at: 1)     // second column
+let rows = try await db.query(raw: "SELECT name, age FROM users") { stmt, _ in
+  let name = try String.column(of: stmt, at: 0)  // leftmost column
+  let age  = try Int.column(of: stmt, at: 1)     // second column
+  return (name, age)
+}
 ```
 
 ## Avoiding off-by-one errors
@@ -26,7 +34,14 @@ let age  = try Int.column(of: stmt, at: 1)     // second column
 For multi-column statements, the safest pattern is ``ManagedIndex``. It auto-increments around binds and column reads — for parameters it increments *before* binding, so the first bind hits index 1; for columns it increments *after* reading, so the first read hits index 0.
 
 ```swift
-try await db.query(
+struct User {
+  let id: Int
+  let name: String
+  let email: String
+  let age: Int
+}
+
+let users = try await db.query(
   raw: "SELECT id, name, email, age FROM users WHERE status = ?",
   binder: { stmt, index in
     try "active".bind(to: stmt, at: &index)        // → param 1

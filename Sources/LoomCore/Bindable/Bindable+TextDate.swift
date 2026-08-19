@@ -12,6 +12,7 @@ import SQLite3
 /// try await db.exec("CREATE TABLE events (name TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
 /// try await db.exec("INSERT INTO events (name, created_at) VALUES (\("deploy"), \(TextDate(Date())))")
 ///
+/// let cutoff = Date().addingTimeInterval(-3600)
 /// let recent = try await db.query(
 ///   "SELECT name FROM events WHERE created_at > \(TextDate(cutoff))"
 /// ) { stmt, _ in

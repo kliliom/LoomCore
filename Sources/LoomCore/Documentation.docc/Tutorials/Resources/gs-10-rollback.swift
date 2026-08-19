@@ -9,6 +9,8 @@ struct Notes {
         let db = try await Database.openInMemory()
         // ... schema setup elided ...
 
+        let noteID = 1
+
         do {
             try await db.transaction { db in
                 try await db.exec("DELETE FROM notes WHERE id = \(noteID)")

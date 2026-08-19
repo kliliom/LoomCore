@@ -10,6 +10,10 @@ extension Database {
   /// return the same instance.
   ///
   /// ```swift
+  /// struct TableChange {
+  ///   let table: String
+  /// }
+  ///
   /// final class ChangeTracker: Database.Service {
   ///   private(set) var pendingChanges: [TableChange] = []
   ///   private var snapshot: [TableChange] = []
@@ -19,7 +23,7 @@ extension Database {
   ///   }
   ///
   ///   override func transactionDidCommit() {
-  ///     NotificationCenter.default.post(name: .databaseDidChange, object: pendingChanges)
+  ///     NotificationCenter.default.post(name: .init("databaseDidChange"), object: pendingChanges)
   ///     pendingChanges.removeAll()
   ///   }
   ///
@@ -28,7 +32,7 @@ extension Database {
   ///   }
   /// }
   ///
-  /// let tracker = db.getService(ChangeTracker.self)
+  /// let tracker = await db.getService(ChangeTracker.self)
   /// ```
   ///
   /// All callbacks run on ``DatabaseActor``, so service state is serialized with database access
@@ -75,8 +79,8 @@ extension Database {
   /// ```swift
   /// final class QueryCache: Database.Service { /* ... */ }
   ///
-  /// let cache = db.getService(QueryCache.self)
-  /// let same = db.getService(QueryCache.self)  // identical instance
+  /// let cache = await db.getService(QueryCache.self)
+  /// let same = await db.getService(QueryCache.self)  // identical instance
   /// ```
   public func getService<T: Service>(_ type: T.Type) -> T {
     guard let service = services[ObjectIdentifier(type)] as? T else {

@@ -6,8 +6,10 @@
 ///
 /// ```swift
 /// let name = ColumnExpression<String>("name")
-/// let rows = try database.query("SELECT \(name.upper()) FROM \("users")")
-/// // SELECT UPPER("name") FROM "users"
+/// let rows = try await db.query("SELECT \(name.upper()) FROM users") { stmt, _ in
+///   try String?.column(of: stmt, at: 0)
+/// }
+/// // SELECT UPPER("name") FROM users
 /// ```
 public struct Upper: Function {
   public typealias ExpressionValue = String?
@@ -32,9 +34,11 @@ extension Expression {
   /// ```swift
   /// let email = ColumnExpression<String>("email")
   /// let normalized = email.upper()
-  /// let matches = try database.query(
-  ///   "SELECT * FROM \("users") WHERE \(normalized) = \("ALICE@EXAMPLE.COM")"
-  /// )
+  /// let matches = try await db.query(
+  ///   "SELECT id FROM users WHERE \(normalized) = \("ALICE@EXAMPLE.COM")"
+  /// ) { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public func upper() -> Upper {
     Upper(self)

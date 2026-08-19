@@ -11,8 +11,8 @@ extension Database {
   ///
   /// ```swift
   /// let userID = try await db.lastInsertedRowID {
-  ///   try await db.exec("INSERT INTO users (name, email) VALUES (?, ?)", "Alice", "alice@example.com")
-  ///   try await db.exec("INSERT INTO audit_log (action, user) VALUES (?, ?)", "create", "Alice")
+  ///   try await db.exec(raw: "INSERT INTO users (name, email) VALUES (?, ?)", binding: "Alice", "a@example.com")
+  ///   try await db.exec(raw: "INSERT INTO audit_log (action, user) VALUES (?, ?)", binding: "create", "Alice")
   /// }
   /// // userID is the ROWID of the audit_log insert — the last one in the block.
   /// ```

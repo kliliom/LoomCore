@@ -6,6 +6,9 @@
 ///
 /// ```swift
 /// let total = Sum(ColumnExpression<Int>("price"))
-/// let rows = try await db.query("SELECT \(total) FROM orders WHERE \(ColumnExpression<Int>("status") == 1)")
+/// let status = ColumnExpression<Int>("status")
+/// let rows = try await db.query("SELECT \(total) FROM orders WHERE \(status == 1)") { stmt, _ in
+///   try Int?.column(of: stmt, at: 0)
+/// }
 /// ```
 public protocol Function<ExpressionValue>: Expression {}

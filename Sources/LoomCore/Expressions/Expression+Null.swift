@@ -19,9 +19,10 @@ extension Expression {
   /// ```swift
   /// let email = ColumnExpression<String?>("email")
   /// let unverified = try await db.query(
-  ///   "SELECT id FROM users WHERE \(email.isNull())",
-  ///   as: Int64.self
-  /// )
+  ///   "SELECT id FROM users WHERE \(email.isNull())"
+  /// ) { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public func isNull() -> UnaryOperation<Self, Bool> {
     UnaryOperation(operand: self, sqlOperator: "IS NULL", isPrefix: false)
@@ -32,9 +33,10 @@ extension Expression {
   /// ```swift
   /// let deletedAt = ColumnExpression<Date?>("deleted_at")
   /// let activeIDs = try await db.query(
-  ///   "SELECT id FROM users WHERE \(deletedAt.isNotNull())",
-  ///   as: Int64.self
-  /// )
+  ///   "SELECT id FROM users WHERE \(deletedAt.isNotNull())"
+  /// ) { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public func isNotNull() -> UnaryOperation<Self, Bool> {
     UnaryOperation(operand: self, sqlOperator: "IS NOT NULL", isPrefix: false)

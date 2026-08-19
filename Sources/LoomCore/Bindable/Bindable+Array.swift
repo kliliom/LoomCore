@@ -12,7 +12,8 @@ import SQLite3
 ///   let tags: [String]
 /// }
 ///
-/// try db.execute(
+/// let post = Post(id: 1, tags: ["swift", "sqlite"])
+/// try await db.exec(
 ///   "INSERT INTO posts (id, tags) VALUES (\(post.id), \(post.tags))"
 /// )
 /// ```

@@ -5,12 +5,12 @@
 LoomCore emphasizes safety through Swift's type system and concurrency model. The library prevents SQL injection via automatic parameter binding in string interpolation, prevents race conditions via actor isolation, and prevents type errors via the `Bindable` protocol. All `Database` methods and `Bindable` operations are isolated to `DatabaseActor`, which means you cannot accidentally perform unsynchronized access to SQLite.
 
 **Important constraints:**
-- All public `Database` operations are `async` — `exec`, `query`, pragma methods, `directAccess`, `cached`, `lastInsertedRowID`, and `transaction` are called as `try await db.…`. Only `close()`, `getService(_:)`, and `shutdownService(_:)` remain synchronous.
+- All public `Database` operations are `async` — `exec`, `execScript(_:)`, `query`, pragma methods, `walCheckpoint(mode:database:)`, `directAccess`, `cached`, `lastInsertedRowID`, and `transaction` are called as `try await db.…`. Only `close()`, `getService(_:)`, `shutdownService(_:)`, and the static `Database.open(url:)` / `Database.openInMemory()` remain synchronous — but they are `@DatabaseActor`-isolated, so call sites outside the actor still write `try await` / `await` to hop onto it.
 - Nested transactions are supported via `SAVEPOINT`: calling `transaction()` inside an active transaction opens a savepoint scope. A normal return releases the savepoint into the enclosing transaction; a throw rolls back to the savepoint (leaving the enclosing transaction's work intact) and rethrows. Service lifecycle hooks fire only for the outermost physical transaction (the participating set is fixed when it begins; a service shut down while it is in flight receives no terminal callback), and `kind:` is ignored when nested.
 - While a transaction is in flight — even suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Membership is a task-local token bound around the body, inherited by structured children (`async let`, task groups) and `Task {}`, but NOT by `Task.detached`. An unstructured `Task {}` must complete before the body returns (await its value); a task that outlives the body races the commit and may run outside the transaction, and its own scope close is refused with `LoomCoreErrorCode.transactionScopeLost` — it never touches a transaction opened later on the same connection. Waiting operations throw `CancellationError` on task cancellation. Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — nothing interleaves mid-statement.
 - The `Database` class is `@DatabaseActor` isolated. You cannot call its methods from arbitrary async contexts without hopping to the actor.
 - String interpolation defaults to safe `.bind` mode. Use `.raw` mode only for trusted SQL identifiers (table/column names), never for user input. `.raw` is only available for values conforming to `CustomStringConvertible`; everything else must bind.
-- When using managed indices (`ManagedIndex`), the index auto-increments *after* bind/column operations. Parameters start at 0 (becomes 1 after first bind), columns start at 0.
+- When using managed indices (`ManagedIndex`), the index auto-increments around bind/column operations — for parameters it increments *before* binding (index starts at 0, so the first bind uses 1); for columns it increments *after* reading (so the first read uses 0). This matches SQLite's 1-based parameter / 0-based column convention.
 
 **Platform support:** Swift 6.0+, iOS 16+, macOS 13+, tvOS 16+, visionOS 1+, watchOS 9+
 
@@ -20,6 +20,7 @@ LoomCore emphasizes safety through Swift's type system and concurrency model. Th
 
 Add to your `Package.swift`:
 
+<!-- doc-check: skip -->
 ```swift
 dependencies: [
     .package(url: "https://github.com/kliliom/loom-core.git", from: "1.0.0")
@@ -34,7 +35,7 @@ let db = try await Database.openInMemory()
 
 // File-based database
 let fileURL = URL(fileURLWithPath: "/path/to/database.sqlite")
-let db = try await Database.open(url: fileURL)
+let fileDB = try await Database.open(url: fileURL)
 ```
 
 ### Basic operations
@@ -85,14 +86,15 @@ try await db.transaction { db in
 
 - **`Database`** — Main interface for all database operations. Actor-isolated, methods include `query()`, `exec()`, `transaction()`.
 - **`SQLStatement`** — SQL string with bound parameters. Created via string interpolation or `SQLStatement.raw()` for static SQL.
-- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date, plus the TextDate wrapper for datetime-TEXT columns) and supports JSON encoding via `Codable` conformance.
+- **`Bindable`** — Protocol for types that can be bound as parameters or extracted as columns. Includes Swift standard types (String, Int, Double, Bool, Data, UUID, Date, plus the TextDate wrapper for datetime-TEXT columns); your own types get JSON-as-TEXT storage by declaring `Codable, Bindable`.
 - **`Expression`** — Protocol for SQL expressions. Bindable types automatically conform. Used for building complex SQL expressions with operators.
+- **`ColumnExpression<T>`** — Typed column reference for the expression DSL: `ColumnExpression<String>("email")` or `ColumnExpression<String>("email", of: "users")`. Renders as a quoted identifier (`"email"` / `"users"."email"`), conforms to `Expression`, and combines with operators, predicates, and functions.
 - **`DatabaseActor`** — Global actor that serializes all database access. Applied automatically to `Database` and binding operations.
 
 ### Database operations
 
 **Query methods (all `async throws`):**
-```swift
+```text
 // String interpolation (recommended)
 db.query(_:stepper:) async throws -> [R]
 db.query(_:stepper:) async throws -> [R]  // With ManagedStepper
@@ -106,7 +108,7 @@ db.query(raw:binding:_:stepper:) async throws -> [R]
 ```
 
 **Exec methods (all `async throws`):**
-```swift
+```text
 db.exec(_:)                    // SQLStatement
 db.exec(raw:binder:)           // Manual binding
 db.exec(raw:)                  // No parameters
@@ -136,7 +138,7 @@ resolved case-insensitively); `nil` or `""` checkpoints every attached database,
 `tableList(schema:)` matches the schema name case-insensitively.
 
 **Other methods:**
-```swift
+```text
 // Atomic block; body may suspend; nested calls open SAVEPOINT scopes
 func transaction<T>(kind: TransactionKind = .deferred,
                     _ block: @DatabaseActor (Database) async throws -> T) async throws -> T
@@ -149,14 +151,14 @@ db.close()                     // Explicit cleanup (synchronous)
 ### Binding and extraction
 
 **Parameter binding (1-based index):**
-```swift
+```text
 try String.bind(to: stmt, value: "text", at: 1)  // Leftmost parameter
 try value.bind(to: stmt, at: 1)                   // Instance method
 try value.bind(to: stmt, at: &index)              // Managed index
 ```
 
 **Column extraction (0-based index):**
-```swift
+```text
 let value = try String.column(of: stmt, at: 0)    // Leftmost column
 try variable.column(of: stmt, at: 0)              // Mutating instance method
 let value = try String.column(of: stmt, at: &index)  // Managed index
@@ -166,36 +168,59 @@ let value = try String.column(of: stmt, at: &index)  // Managed index
 
 **String interpolation:**
 ```swift
+let table = "users"  // Trusted identifier, not user input
+let minAge = 21
 let stmt: SQLStatement = "SELECT * FROM \(table, mode: .raw) WHERE age > \(minAge)"
 // Produces: "SELECT * FROM users WHERE age > ?"
 ```
 
-**Combining statements:**
+**Combining statements** (`+` and `+=` join the SQL with a single space and concatenate the bound parameters):
 ```swift
 var stmt: SQLStatement = "SELECT * FROM users"
 stmt += "WHERE age > \(25)"
-let combined = stmt1 + stmt2
+
+let orderBy: SQLStatement = "ORDER BY name"
+let combined = stmt + orderBy
 ```
 
 ### Expression operators
 
-Bindable types support SQL operators:
+Bindable types and `ColumnExpression` support SQL operators; the resulting expressions interpolate into statements with their values bound:
 ```swift
-let expr = age > 21 && status == "active"  // Expression<Bool>
-let calc = (price * quantity) + tax        // Expression<Double>
+let age = ColumnExpression<Int>("age")
+let status = ColumnExpression<String>("status")
+let price = ColumnExpression<Double>("price")
+let quantity = ColumnExpression<Double>("quantity")
+let tax = ColumnExpression<Double>("tax")
+
+let expr = age > 21 && status == "active"  // ( ( "age" > ? ) AND ( "status" = ? ) )
+let calc = (price * quantity) + tax        // ( ( "price" * "quantity" ) + "tax" )
+
+let names = try await db.query("SELECT name FROM users WHERE \(expr)") { stmt, _ in
+    try String.column(of: stmt, at: 0)
+}
 ```
+
+Predicates: `.like(_:escape:)` / `.notLike(_:escape:)` (SQL `LIKE`), `.isNull()` / `.isNotNull()`, and `.in(array:)` / `.notIn(array:)` / `.in(values:)` / `.in(subquery:)` (render `IN (…)` via `InExpression`). Aggregate functions: `Count`, `Sum`, `Avg`, `Min`, `Max` (also as `.count()`, `.sum()`, `.avg()`, `.min()`, `.max()` on expressions). Scalar functions include `Locate` (`.locate(_:)`, SQLite `instr()`), `Length`, `Upper`, `Lower`, `Trim`, `Substring`, `Concat`, `GroupConcat`, `IfNull`, and `CAST` via `CastExpression`.
 
 ## Examples
 
 ### Managed indices (recommended for multi-column operations)
 
 ```swift
+struct User {
+    let id: Int
+    let name: String
+    let email: String
+    let age: Int
+}
+
 let users = try await db.query(
     raw: "SELECT id, name, email, age FROM users WHERE status = ?",
     binder: { stmt, index in
-        try "active".bind(to: stmt, at: &index)  // Auto-increments to 1
+        try "active".bind(to: stmt, at: &index)  // Increments before binding: param 1
     },
-    stepper: { stmt, index, stop in
+    stepper: { stmt, index, _ in
         let id = try Int.column(of: stmt, at: &index)       // Reads column 0
         let name = try String.column(of: stmt, at: &index)   // Reads column 1
         let email = try String.column(of: stmt, at: &index)  // Reads column 2
@@ -220,6 +245,7 @@ let firstMatch = try await db.query("SELECT name FROM users WHERE age > \(21)") 
 ### Optional values and NULL
 
 ```swift
+let name = "Alice"
 let email: String? = nil
 try await db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
 
@@ -249,6 +275,7 @@ try await db.exec("CREATE TABLE events (name TEXT, created_at TEXT DEFAULT CURRE
 try await db.exec("INSERT INTO events (name, created_at) VALUES (\("deploy"), \(Date().textDate))")
 
 // Compare against CURRENT_TIMESTAMP-written values
+let cutoff = Date().addingTimeInterval(-3600)
 let recent = try await db.query("SELECT name FROM events WHERE created_at > \(TextDate(cutoff))") { stmt, _ in
     try String.column(of: stmt, at: 0)
 }
@@ -268,7 +295,7 @@ text, and `.nullValue` for NULL (use `TextDate?` for nullable columns).
 ### Codable types (automatic JSON encoding)
 
 ```swift
-struct Metadata: Codable {
+struct Metadata: Codable, Bindable {
     let createdAt: Date
     let tags: [String]
 }
@@ -299,10 +326,9 @@ let bad: SQLStatement = "SELECT * FROM \(userInput, mode: .raw)"  // DANGEROUS
 ### Services (transaction lifecycle hooks)
 
 ```swift
-class CacheInvalidationService: Database.Service {
+final class CacheInvalidationService: Database.Service {
     override func transactionDidCommit() {
         // Clear caches after successful commit
-        cache.clear()
     }
 
     override func transactionDidRollback() {
@@ -310,8 +336,8 @@ class CacheInvalidationService: Database.Service {
     }
 }
 
-// Register and use service (synchronous, on DatabaseActor)
-let service = db.getService(CacheInvalidationService.self)
+// Register and use service (synchronous, but @DatabaseActor-isolated — await hops to the actor)
+let service = await db.getService(CacheInvalidationService.self)
 // Service receives lifecycle callbacks automatically — only for the
 // outermost physical transaction, never for nested SAVEPOINT scopes
 ```
@@ -320,78 +346,92 @@ let service = db.getService(CacheInvalidationService.self)
 
 ### Essential API documentation
 
-- `Sources/Database/Database.swift` — Core `Database` class definition, opening databases, resource management, actor isolation
-- `Sources/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
-- `Sources/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL)
-- `Sources/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting
-- `Sources/Database/Database+Gate.swift` — Transaction gate: suspends operations from tasks outside the active transaction until commit/rollback
-- `Sources/Database/TransactionToken.swift` — Task-local transaction membership token (inherited by structured children and `Task {}`, not `Task.detached`)
-- `Sources/Bindable/Bindable.swift` — Core `Bindable` protocol, bind/column methods, index conventions (1-based vs 0-based), managed indices
-- `Sources/Statement/SQLStatement.swift` — SQL statement construction, string interpolation, raw mode, statement composition
-- `Sources/Statement/SQLBuilder.swift` — String interpolation internals, append modes (bind vs raw), how parameter binding works
-- `Sources/Expressions/Expression.swift` — Expression protocol for SQL building, operator overloading foundation
-- `Sources/Database/DatabaseActor.swift` — Global actor definition, thread safety guarantees, what gets serialized
+- `Sources/LoomCore/Database/Database.swift` — Core `Database` class definition, resource management, actor isolation
+- `Sources/LoomCore/Database/Database+Open.swift` — `Database.open(url:)` / `Database.openInMemory()` factory methods
+- `Sources/LoomCore/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
+- `Sources/LoomCore/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL), `execScript(_:)`
+- `Sources/LoomCore/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting
+- `Sources/LoomCore/Database/Database+Gate.swift` — Transaction gate: suspends operations from tasks outside the active transaction until commit/rollback
+- `Sources/LoomCore/Database/TransactionToken.swift` — Task-local transaction membership token (inherited by structured children and `Task {}`, not `Task.detached`)
+- `Sources/LoomCore/Database/Database+Binder.swift` — `ManagedIndex` and the `Binder`/`Stepper`/`ManagedBinder`/`ManagedStepper` typealiases
+- `Sources/LoomCore/Bindable/Bindable.swift` — Core `Bindable` protocol, bind/column methods, index conventions (1-based vs 0-based), managed indices
+- `Sources/LoomCore/Statement/SQLStatement.swift` — SQL statement construction, string interpolation, raw mode, statement composition
+- `Sources/LoomCore/Statement/SQLBuilder.swift` — String interpolation internals, append modes (bind vs raw), how parameter binding works
+- `Sources/LoomCore/Expressions/Expression.swift` — Expression protocol for SQL building, operator overloading foundation
+- `Sources/LoomCore/Expressions/ColumnExpression.swift` — Typed column references (quoted identifiers) for the expression DSL
+- `Sources/LoomCore/Database/DatabaseActor.swift` — Global actor definition, thread safety guarantees, what gets serialized
 
 ### Type-specific bindings (examples)
 
-- `Sources/Bindable/Bindable+String.swift` — String binding, TEXT storage, SQL escaping
-- `Sources/Bindable/Bindable+Numbers.swift` — Int, Double, Float, Bool bindings, INTEGER/REAL storage
-- `Sources/Bindable/Bindable+Optional.swift` — NULL handling, optional value binding/extraction
-- `Sources/Bindable/Bindable+Codable.swift` — JSON encoding/decoding for Codable types stored as TEXT (reads legacy BLOB too)
-- `Sources/Bindable/Bindable+Date.swift` — Date storage (Unix timestamp as REAL), datetime TEXT parsing, time zone handling
-- `Sources/Bindable/Bindable+TextDate.swift` — TextDate wrapper: datetime TEXT storage (`YYYY-MM-DD HH:MM:SS.SSS` UTC) for TEXT-affinity columns
-- `Sources/Bindable/Bindable+UUID.swift` — UUID storage (16-byte BLOB, reads textual UUIDs too)
-- `Sources/Bindable/Bindable+Data.swift` — Binary data (BLOB) binding and extraction
+- `Sources/LoomCore/Bindable/Bindable+String.swift` — String binding, TEXT storage, SQL escaping
+- `Sources/LoomCore/Bindable/Bindable+Numbers.swift` — Int, Double, Float, Bool bindings, INTEGER/REAL storage
+- `Sources/LoomCore/Bindable/Bindable+Optional.swift` — NULL handling, optional value binding/extraction
+- `Sources/LoomCore/Bindable/Bindable+Codable.swift` — JSON encoding/decoding for Codable types stored as TEXT (reads legacy BLOB too)
+- `Sources/LoomCore/Bindable/Bindable+Date.swift` — Date storage (Unix timestamp as REAL), datetime TEXT parsing, time zone handling
+- `Sources/LoomCore/Bindable/Bindable+TextDate.swift` — TextDate wrapper: datetime TEXT storage (`YYYY-MM-DD HH:MM:SS.SSS` UTC) for TEXT-affinity columns
+- `Sources/LoomCore/Bindable/Bindable+UUID.swift` — UUID storage (16-byte BLOB, reads textual UUIDs too)
+- `Sources/LoomCore/Bindable/Bindable+Data.swift` — Binary data (BLOB) binding and extraction
+- `Sources/LoomCore/Bindable/ColumnDecoding.swift` — Strict column decoding: storage-class validation and NULL checks shared by column readers
 
 ### Expression building
 
-- `Sources/Expressions/Expression+Comparison.swift` — Comparison operators (==, !=, <, >, <=, >=)
-- `Sources/Expressions/Expression+Logical.swift` — Logical operators (&&, ||, !)
-- `Sources/Expressions/Expression+Arithmetic.swift` — Arithmetic operators (+, -, *, /)
-- `Sources/Expressions/Function+Count.swift` — COUNT() aggregate function
-- `Sources/Expressions/Function+Sum.swift` — SUM() aggregate function
-- `Sources/Expressions/CastExpression.swift` — Type casting in SQL (CAST expression)
+- `Sources/LoomCore/Expressions/Expression+Comparison.swift` — Comparison operators (==, !=, <, >, <=, >=)
+- `Sources/LoomCore/Expressions/Expression+Logical.swift` — Logical operators (&&, ||, !)
+- `Sources/LoomCore/Expressions/Expression+Arithmetic.swift` — Arithmetic operators (+, -, *, /)
+- `Sources/LoomCore/Expressions/Expression+Like.swift` — LIKE / NOT LIKE predicates (`.like(_:escape:)`, `.notLike(_:escape:)`)
+- `Sources/LoomCore/Expressions/Expression+Null.swift` — IS NULL / IS NOT NULL predicates (`.isNull()`, `.isNotNull()`)
+- `Sources/LoomCore/Expressions/InExpression.swift` — IN / NOT IN over arrays, variadic values, and subqueries
+- `Sources/LoomCore/Expressions/Function+Count.swift` — COUNT() aggregate function
+- `Sources/LoomCore/Expressions/Function+Sum.swift` — SUM() aggregate function
+- `Sources/LoomCore/Expressions/Function+Avg.swift` — AVG() aggregate function
+- `Sources/LoomCore/Expressions/Function+Min.swift` — MIN() aggregate function
+- `Sources/LoomCore/Expressions/Function+Max.swift` — MAX() aggregate function
+- `Sources/LoomCore/Expressions/CastExpression.swift` — Type casting in SQL (CAST expression)
 
 ### Error handling
 
-- `Sources/Utilities/LoomError.swift` — Unified error type, SQLite error code wrapping
-- `Sources/Utilities/SQLiteResultCode.swift` — SQLite result codes (SQLITE_OK, SQLITE_ROW, SQLITE_DONE, etc.)
-- `Sources/Utilities/LoomCoreErrorCode.swift` — Library-specific error codes
+- `Sources/LoomCore/Utilities/LoomError.swift` — Unified error type, SQLite error code wrapping
+- `Sources/LoomCore/Utilities/SQLiteResultCode.swift` — SQLite result codes (SQLITE_OK, SQLITE_ROW, SQLITE_DONE, etc.)
+- `Sources/LoomCore/Utilities/LoomCoreErrorCode.swift` — Library-specific error codes
 
 ### Advanced features
 
-- `Sources/Database/Database+Service.swift` — Service base class, transaction lifecycle hooks, singleton-per-type pattern
-- `Sources/Database/Database+Cached.swift` — Statement caching scope, enabled per task tree via a task-local
-- `Sources/Database/Database+Pragmas.swift` — PRAGMA helpers for common SQLite configuration
+- `Sources/LoomCore/Database/Database+Service.swift` — Service base class, transaction lifecycle hooks, singleton-per-type pattern
+- `Sources/LoomCore/Database/Database+Cached.swift` — Statement caching scope, enabled per task tree via a task-local
+- `Sources/LoomCore/Database/Database+Pragmas.swift` — PRAGMA helpers for common SQLite configuration
+- `Sources/LoomCore/Database/Database+LastInsertedRowID.swift` — `lastInsertedRowID { }` block: ROWID of the last insert inside it
+- `Sources/LoomCore/Database/Database+DirectAccess.swift` — `directAccess { ptr in }`: raw `sqlite3*` access on the actor
 
 ## Test Examples
 
-- `Tests/Database/Database+QueryTests.swift` — Query patterns, stepper usage, early termination examples
-- `Tests/Database/Database+TransactionTests.swift` — Transaction usage, rollback behavior, savepoint nesting, gating
-- `Tests/Statement/SQLStatementTests.swift` — String interpolation examples, raw mode usage, statement composition
-- `Tests/Bindable/BindableTests.swift` — Type binding examples, index management patterns
-- `Tests/Bindable/Bindable+OptionalTests.swift` — NULL handling patterns, optional value workflows
+- `Tests/LoomCoreTests/Database/Database+QueryTests.swift` — Query patterns, stepper usage, early termination examples
+- `Tests/LoomCoreTests/Database/Database+TransactionTests.swift` — Transaction usage, rollback behavior, savepoint nesting, gating
+- `Tests/LoomCoreTests/Statement/SQLStatementTests.swift` — String interpolation examples, raw mode usage, statement composition
+- `Tests/LoomCoreTests/Bindable/BindableTests.swift` — Type binding examples, index management patterns
+- `Tests/LoomCoreTests/Bindable/Bindable+OptionalTests.swift` — NULL handling patterns, optional value workflows
 
 ## Optional Resources
 
 ### Advanced topics
 
-- `Sources/Database/DatabaseHandle.swift` — Raw SQLite handle management, statement cache internals, resource cleanup timing
-- `Sources/Database/Database+Prepare.swift` — Statement preparation, cache hits/misses
-- `Sources/Utilities/Check.swift` — SQLite error checking helpers, result code validation
+- `Sources/LoomCore/Database/DatabaseHandle.swift` — Raw SQLite handle management, statement cache internals, resource cleanup timing
+- `Sources/LoomCore/Database/Database+Prepare.swift` — Statement preparation, cache hits/misses
+- `Sources/LoomCore/Utilities/Check.swift` — SQLite error checking helpers, result code validation
 
 ### Specialized bindings
 
-- `Sources/Bindable/Bindable+Array.swift` — Array storage (JSON-encoded)
-- `Sources/Bindable/Bindable+Dictionary.swift` — Dictionary storage (JSON-encoded)
-- `Sources/Bindable/Bindable+RawRepresentable.swift` — Enum storage (via rawValue)
+- `Sources/LoomCore/Bindable/Bindable+Array.swift` — Array storage (JSON-encoded)
+- `Sources/LoomCore/Bindable/Bindable+Dictionary.swift` — Dictionary storage (JSON-encoded)
+- `Sources/LoomCore/Bindable/Bindable+RawRepresentable.swift` — Enum storage (via rawValue)
 
 ### Additional SQL functions
 
-- `Sources/Expressions/Function+Concat.swift` — String concatenation
-- `Sources/Expressions/Function+Substring.swift` — Substring extraction
-- `Sources/Expressions/Function+Trim.swift` — Whitespace trimming
-- `Sources/Expressions/Function+Upper.swift`, `Function+Lower.swift` — Case conversion
-- `Sources/Expressions/Function+Length.swift` — String length
-- `Sources/Expressions/Function+GroupConcat.swift` — GROUP_CONCAT aggregate
-- `Sources/Expressions/IfNullExpression.swift` — IFNULL/COALESCE handling
+- `Sources/LoomCore/Expressions/Function+Concat.swift` — String concatenation
+- `Sources/LoomCore/Expressions/Function+Substring.swift` — Substring extraction
+- `Sources/LoomCore/Expressions/Function+Trim.swift` — Whitespace trimming
+- `Sources/LoomCore/Expressions/Function+Upper.swift` — Uppercase conversion
+- `Sources/LoomCore/Expressions/Function+Lower.swift` — Lowercase conversion
+- `Sources/LoomCore/Expressions/Function+Length.swift` — String length
+- `Sources/LoomCore/Expressions/Function+Locate.swift` — Substring position (SQLite `instr()`)
+- `Sources/LoomCore/Expressions/Function+GroupConcat.swift` — GROUP_CONCAT aggregate
+- `Sources/LoomCore/Expressions/IfNullExpression.swift` — IFNULL/COALESCE handling

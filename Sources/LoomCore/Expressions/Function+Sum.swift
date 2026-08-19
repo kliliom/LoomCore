@@ -4,9 +4,11 @@
 /// `NULL` when applied to an empty set.
 ///
 /// ```swift
-/// let total = try await db.queryOne(
-///   "SELECT \(Sum(ColumnExpression<Int>("amount"))) FROM \(raw: "orders") WHERE \(ColumnExpression<String>("status")) = \("paid")"
-/// )
+/// let amount = ColumnExpression<Int>("amount")
+/// let status = ColumnExpression<String>("status")
+/// let total = try await db.query("SELECT \(Sum(amount)) FROM orders WHERE \(status == "paid")") { stmt, _ in
+///   try Int?.column(of: stmt, at: 0)
+/// }.first
 /// ```
 ///
 /// Prefer the `sum()` method on an existing expression for readability:

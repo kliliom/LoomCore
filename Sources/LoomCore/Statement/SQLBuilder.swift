@@ -15,6 +15,7 @@
 /// Manual construction is supported for composing fragments programmatically:
 ///
 /// ```swift
+/// let userId = 42
 /// var builder = SQLBuilder()
 /// builder.appendLiteral("SELECT * FROM users WHERE id = ")
 /// builder.appendInterpolation(userId)
@@ -65,7 +66,7 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// var builder = SQLBuilder()
   /// builder.appendLiteral("SELECT * FROM users WHERE name = ?")
   /// builder.appendBinder { stmt, index in
-  ///   try String.bind("Alice", to: stmt, at: &index)
+  ///   try String.bind(to: stmt, value: "Alice", at: &index)
   /// }
   /// ```
   public mutating func appendBinder(_ binder: @escaping Database.ManagedBinder) {
@@ -127,6 +128,7 @@ public struct SQLBuilder: StringInterpolationProtocol {
   ///
   /// ```swift
   /// let nickname: String? = nil
+  /// let userId = 42
   /// let stmt: SQLStatement = "UPDATE users SET nickname = \(nickname) WHERE id = \(userId)"
   /// // Binds NULL for the first parameter.
   /// ```
@@ -142,6 +144,7 @@ extension SQLBuilder {
   /// Builds a ``SQLStatement`` from the accumulated fragments and binders.
   ///
   /// ```swift
+  /// let userId = 42
   /// var builder = SQLBuilder()
   /// builder.appendLiteral("SELECT * FROM users WHERE id = ")
   /// builder.appendInterpolation(userId)

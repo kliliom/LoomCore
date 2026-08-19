@@ -7,6 +7,12 @@ Atomic operations, savepoint nesting, transaction gating, and lifecycle hooks fo
 A transaction wraps a block of operations so they either all succeed and commit, or none of them are visible (rollback). LoomCore exposes this with a single method — the block is async, receives the database it runs on, and may suspend freely:
 
 ```swift
+let fromID = 1
+let toID = 2
+let fromBalance = 90.0
+let toBalance = 210.0
+let journalID = 7
+
 try await db.transaction { db in
   try await db.exec("INSERT INTO accounts (id, balance) VALUES (\(fromID), \(fromBalance))")
   try await db.exec("INSERT INTO accounts (id, balance) VALUES (\(toID), \(toBalance))")
@@ -37,6 +43,11 @@ try await db.transaction(kind: .immediate) { db in
 Calling ``Database/transaction(kind:_:)`` from inside an active transaction opens a `SAVEPOINT` scope. If the nested block returns normally, the savepoint is released and its work joins the enclosing transaction. If it throws, LoomCore rolls back to the savepoint — undoing only the nested block's work, leaving the enclosing transaction intact — and rethrows the error:
 
 ```swift
+struct NoteRejected: Error {}
+
+let orderID = 1
+let note = "gift wrap, please"
+
 try await db.transaction { db in
   try await db.exec("INSERT INTO orders (id) VALUES (\(orderID))")
 
@@ -72,6 +83,15 @@ Once past the gate, an operation runs to completion synchronously on `DatabaseAc
 Subclass ``Database/Service`` to react to transaction lifecycle events. Common uses are cache invalidation, change notifications, and audit logging:
 
 ```swift
+@DatabaseActor
+final class Cache {
+  private var entries: [String: Int] = [:]
+
+  func invalidateAll() {
+    entries.removeAll()
+  }
+}
+
 final class CacheInvalidator: Database.Service {
   let cache = Cache()
 
@@ -80,7 +100,7 @@ final class CacheInvalidator: Database.Service {
   }
 }
 
-let invalidator = db.getService(CacheInvalidator.self)
+let invalidator = await db.getService(CacheInvalidator.self)
 ```
 
 Services are singletons per `Database` instance and per service type. The first ``Database/getService(_:)`` call constructs the service via the inherited `init(database:)`; subsequent calls return the same instance. Use stored-property defaults (or override `init(database:)` to set them up) for any per-service state.

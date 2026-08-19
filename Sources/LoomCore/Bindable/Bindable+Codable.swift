@@ -13,7 +13,9 @@ extension Bindable where Self: Codable {
   ///   let avatarURL: URL?
   /// }
   ///
-  /// try db.execute(
+  /// let userID = 1
+  /// let profile = Profile(displayName: "Alice", avatarURL: nil)
+  /// try await db.exec(
   ///   "INSERT INTO users (id, profile) VALUES (\(userID), \(profile))"
   /// )
   /// ```

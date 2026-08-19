@@ -6,13 +6,10 @@
 /// `String`-valued expression — direct construction is rarely needed.
 ///
 /// ```swift
-/// struct User: Codable { let id: Int64; let email: String }
-///
 /// let email = ColumnExpression<String>("email")
-/// let admins = try await db.query(
-///   "SELECT id, email FROM users WHERE \(email.like("admin@%"))",
-///   as: User.self
-/// )
+/// let admins = try await db.query("SELECT id FROM users WHERE \(email.like("admin@%"))") { stmt, _ in
+///   try Int64.column(of: stmt, at: 0)
+/// }
 /// ```
 public struct LikeExpression<Left: Expression, Right: Expression>: Expression
 where Left.ExpressionValue == String, Right.ExpressionValue == String {
@@ -74,17 +71,17 @@ extension Expression where ExpressionValue == String {
   /// let email = ColumnExpression<String>("email")
   ///
   /// // Find all admin addresses.
-  /// let admins = try await db.query(
-  ///   "SELECT id FROM users WHERE \(email.like("admin@%"))",
-  ///   as: Int64.self
-  /// )
+  /// let admins = try await db.query("SELECT id FROM users WHERE \(email.like("admin@%"))") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   ///
   /// // Find rows whose comment column literally contains "100%".
   /// let comment = ColumnExpression<String>("comment")
   /// let promos = try await db.query(
-  ///   "SELECT id FROM offers WHERE \(comment.like("%100\\%%", escape: "\\"))",
-  ///   as: Int64.self
-  /// )
+  ///   "SELECT id FROM offers WHERE \(comment.like("%100\\%%", escape: "\\"))"
+  /// ) { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public func like<R: Expression>(_ pattern: R, escape: Character? = nil) -> LikeExpression<Self, R>
   where R.ExpressionValue == String {
@@ -101,9 +98,10 @@ extension Expression where ExpressionValue == String {
   ///
   /// // Find users whose address is not on the corporate domain.
   /// let external = try await db.query(
-  ///   "SELECT id FROM users WHERE \(email.notLike("%@example.com"))",
-  ///   as: Int64.self
-  /// )
+  ///   "SELECT id FROM users WHERE \(email.notLike("%@example.com"))"
+  /// ) { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public func notLike<R: Expression>(_ pattern: R, escape: Character? = nil) -> LikeExpression<Self, R>
   where R.ExpressionValue == String {

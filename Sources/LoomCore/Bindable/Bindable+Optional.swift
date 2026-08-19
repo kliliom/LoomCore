@@ -8,8 +8,10 @@ import SQLite3
 ///
 /// ```swift
 /// let nickname: String? = nil
-/// let users = ColumnExpression<String?>("nickname")
-/// try db.fetch(SQLStatement("SELECT id FROM users WHERE \(users) IS \(nickname)"))
+/// let column = ColumnExpression<String?>("nickname")
+/// let ids = try await db.query("SELECT id FROM users WHERE \(column) IS \(nickname)") { stmt, _ in
+///   try Int64.column(of: stmt, at: 0)
+/// }
 /// ```
 extension Optional: Expression where Wrapped: Bindable {
   public typealias ExpressionValue = Self
@@ -33,7 +35,7 @@ extension Optional: Expression where Wrapped: Bindable {
 /// }
 ///
 /// let profile = Profile(id: 1, bio: nil)
-/// try db.execute("UPDATE profiles SET bio = \(profile.bio) WHERE id = \(profile.id)")
+/// try await db.exec("UPDATE profiles SET bio = \(profile.bio) WHERE id = \(profile.id)")
 /// ```
 extension Optional: Bindable where Wrapped: Bindable {
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {

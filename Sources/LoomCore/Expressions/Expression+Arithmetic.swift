@@ -16,10 +16,9 @@ extension Expression where ExpressionValue: Numeric {
   /// ```swift
   /// let subtotal = ColumnExpression<Double>("subtotal")
   /// let tax = ColumnExpression<Double>("tax")
-  /// let invoices = try await db.query(
-  ///   sql: "SELECT \(subtotal + tax) AS total FROM \(raw: "invoices")",
-  ///   step: { stmt, _ in Double.column(of: stmt, at: 0) }
-  /// )
+  /// let invoices = try await db.query("SELECT \(subtotal + tax) AS total FROM invoices") { stmt, _ in
+  ///   try Double.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func + <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, ExpressionValue>
   where R.ExpressionValue == ExpressionValue {

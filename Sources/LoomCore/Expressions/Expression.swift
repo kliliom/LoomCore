@@ -36,7 +36,7 @@ extension Expression {
   /// value type but differ in their concrete representation:
   ///
   /// ```swift
-  /// let filters: [any Expression<Bool>] = [
+  /// let filters: [any LoomCore.Expression<Bool>] = [
   ///   (ColumnExpression<Int>("age") > 21).eraseToAnyExpression(),
   ///   ColumnExpression<Bool>("is_active").eraseToAnyExpression(),
   /// ]

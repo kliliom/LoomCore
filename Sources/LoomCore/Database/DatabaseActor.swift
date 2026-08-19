@@ -8,16 +8,20 @@
 /// non-isolated contexts must hop to the actor with `await`.
 ///
 /// ```swift
+/// struct User {
+///   let id: Int64
+///   let name: String
+/// }
+///
 /// @DatabaseActor
 /// func loadActiveUsers(from db: Database) async throws -> [User] {
-///   try await db.query("SELECT id, name FROM users WHERE active = \(true)") { row in
-///     User(id: try row.column(at: 0), name: try row.column(at: 1))
+///   try await db.query("SELECT id, name FROM users WHERE active = \(true)") { stmt, index, _ in
+///     User(id: try Int64.column(of: stmt, at: &index), name: try String.column(of: stmt, at: &index))
 ///   }
 /// }
 ///
-/// Task {
-///   let users = try await loadActiveUsers(from: db)
-/// }
+/// let db = try await Database.openInMemory()
+/// let users = try await loadActiveUsers(from: db)
 /// ```
 ///
 /// ## Isolated surface

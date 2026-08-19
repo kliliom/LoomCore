@@ -5,9 +5,9 @@
 /// ```swift
 /// let title = ColumnExpression<String>("title")
 /// let position = title.locate("Swift")
-/// let rows = try await db.query(
-///   "SELECT \(title), \(position) FROM \(raw: "articles") WHERE \(position) > 0"
-/// )
+/// let rows = try await db.query("SELECT \(title) FROM articles WHERE \(position) > 0") { stmt, _ in
+///   try String.column(of: stmt, at: 0)
+/// }
 /// ```
 ///
 /// Renders as `INSTR("title", ?)`.
@@ -39,9 +39,9 @@ extension Expression where ExpressionValue == String {
   /// ```swift
   /// let email = ColumnExpression<String>("email")
   /// let atSign = email.locate("@")
-  /// let rows = try await db.query(
-  ///   "SELECT \(email) FROM \(raw: "users") WHERE \(atSign) > 0"
-  /// )
+  /// let rows = try await db.query("SELECT \(email) FROM users WHERE \(atSign) > 0") { stmt, _ in
+  ///   try String.column(of: stmt, at: 0)
+  /// }
   /// ```
   ///
   /// - Returns: `Locate` yielding the 1-based index, 0 when absent, or `nil` when either side is NULL.

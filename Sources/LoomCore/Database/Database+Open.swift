@@ -12,7 +12,7 @@ extension Database {
   /// ```swift
   /// let db = try await Database.openInMemory()
   /// try await db.exec("CREATE TABLE event (id INTEGER PRIMARY KEY, payload TEXT)")
-  /// try await db.exec("INSERT INTO event (payload) VALUES (?)", "login")
+  /// try await db.exec(raw: "INSERT INTO event (payload) VALUES (?)", binding: "login")
   /// ```
   ///
   /// - Throws: ``LoomError`` if the SQLite connection cannot be established.

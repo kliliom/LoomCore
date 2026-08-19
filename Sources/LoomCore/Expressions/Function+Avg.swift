@@ -4,11 +4,13 @@
 /// set or a group containing only `NULL` values.
 ///
 /// ```swift
-/// let orders = ColumnExpression<Int>("amount", in: "orders")
+/// let orders = ColumnExpression<Int>("amount", of: "orders")
 /// let avgAmount = orders.avg()
 /// // SQL: AVG("orders"."amount")
 ///
-/// let row = try db.queryOne(sql: "SELECT \(avgAmount) FROM orders")
+/// let rows = try await db.query("SELECT \(avgAmount) FROM orders") { stmt, _ in
+///   try Double?.column(of: stmt, at: 0)
+/// }
 /// ```
 public struct Avg: Function {
   public typealias ExpressionValue = Double?
@@ -31,8 +33,8 @@ extension Expression {
   /// Wraps this expression in an `AVG()` aggregate.
   ///
   /// ```swift
-  /// let salary = ColumnExpression<Int>("salary", in: "employees")
-  /// let department = ColumnExpression<String>("department", in: "employees")
+  /// let salary = ColumnExpression<Int>("salary", of: "employees")
+  /// let department = ColumnExpression<String>("department", of: "employees")
   ///
   /// let stmt: SQLStatement = """
   ///   SELECT \(department), \(salary.avg())

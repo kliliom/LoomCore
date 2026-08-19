@@ -36,6 +36,11 @@ extension Database {
   /// `await`s.
   ///
   /// ```swift
+  /// enum TransferError: Error { case insufficientFunds }
+  ///
+  /// let fromID = 1
+  /// let toID = 2
+  /// let amount = 100
   /// try await db.transaction { db in
   ///   let balances = try await db.query("SELECT balance FROM accounts WHERE id = \(fromID)") { stmt, _ in
   ///     try Int.column(of: stmt, at: 0)

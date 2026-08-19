@@ -49,6 +49,8 @@ try await db.query("SELECT \(nameColumn) FROM users") { stmt, _ in
 ``SQLStatement`` values can be combined while preserving parameter ordering:
 
 ```swift
+let minAge = 18
+
 var stmt: SQLStatement = "SELECT * FROM users"
 stmt += "WHERE age > \(minAge)"
 stmt += "ORDER BY name"

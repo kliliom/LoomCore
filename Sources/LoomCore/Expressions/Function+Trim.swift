@@ -8,7 +8,9 @@
 /// let name = ColumnExpression<String>("name")
 /// let users = try await db.query(
 ///   "SELECT \(name.trim()) FROM users WHERE \(name.trim()) != ''"
-/// ) { String?.column(of: $0, at: 0) }
+/// ) { stmt, _ in
+///   try String?.column(of: stmt, at: 0)
+/// }
 /// ```
 public struct Trim: Function {
   public typealias ExpressionValue = String?

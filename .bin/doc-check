@@ -1,0 +1,34 @@
+#! /bin/bash
+
+# Check documentation for drift against the code:
+#   - llms.txt file paths must exist on disk
+#   - tutorial @Code chains must typecheck at every step
+#   - ```swift fences in doc comments and markdown must typecheck against the built module
+# Usage: .bin/doc-check
+# Exit codes: 0 = clean, 1 = documentation failures, 2 = infrastructure failure
+
+set -eu
+
+# Set working directory to the repository root
+cd "${0%/*}/.."
+
+# Build first so snippets are checked against the current sources
+swift build
+
+BIN_PATH="$(swift build --show-bin-path)"
+MODULES="$BIN_PATH/Modules"
+TRIPLE_BASE="$(basename "$(dirname "$BIN_PATH")")"
+MACOS_MIN="$(sed -n 's/.*\.macOS(\.v\([0-9][0-9]*\)).*/\1/p' Package.swift)"
+
+if [ -z "$TRIPLE_BASE" ] || [ -z "$MACOS_MIN" ]; then
+    echo "doc-check: fatal: could not derive target triple from build path and Package.swift"
+    exit 2
+fi
+
+TARGET="${TRIPLE_BASE}${MACOS_MIN}.0"
+SCRATCH=".build/doc-check"
+
+rm -rf "$SCRATCH"
+mkdir -p "$SCRATCH"
+
+exec xcrun swift .bin/doc-check.swift --modules "$MODULES" --target "$TARGET" --scratch "$SCRATCH"

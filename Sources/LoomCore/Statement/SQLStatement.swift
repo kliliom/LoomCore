@@ -14,7 +14,9 @@
 ///   """
 /// // sql:     "SELECT id, name FROM users WHERE name = ? AND age > ?"
 /// // binders: ["Alice", 21]
-/// for try await row in db.query(stmt) { ... }
+/// let rows = try await db.query(stmt) { stmt, _ in
+///   try Int64.column(of: stmt, at: 0)
+/// }
 /// ```
 ///
 /// ## Raw mode for trusted identifiers
@@ -155,6 +157,7 @@ extension SQLStatement {
   /// `WHERE`, an optional `ORDER BY`:
   ///
   /// ```swift
+  /// let search: String? = "Ali"
   /// var stmt: SQLStatement = "SELECT id, name FROM users"
   /// if let search {
   ///   stmt = stmt + "WHERE name LIKE \(search + "%")"

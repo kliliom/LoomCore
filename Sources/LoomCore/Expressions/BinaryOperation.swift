@@ -13,8 +13,8 @@
 /// let stock = ColumnExpression<Int>("stock")
 ///
 /// let inStockBudget = (price <= 100) && (stock > 0)
-/// let rows = try await db.query("SELECT * FROM products WHERE \(inStockBudget)") { row in
-///   try row.string(at: 0)
+/// let rows = try await db.query("SELECT name FROM products WHERE \(inStockBudget)") { stmt, _ in
+///   try String.column(of: stmt, at: 0)
 /// }
 /// ```
 public struct BinaryOperation<Left: Expression, Right: Expression, Result>: Expression {

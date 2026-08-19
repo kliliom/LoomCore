@@ -82,9 +82,10 @@ public final class Database: Sendable {
   /// are destroyed. Only new operations throw.
   ///
   /// ```swift
+  /// let tempURL = URL(fileURLWithPath: "/tmp/scratch.sqlite")
   /// let db = try await Database.open(url: tempURL)
   /// defer { Task { @DatabaseActor in db.close() } }
-  /// try await db.exec("…")
+  /// try await db.exec("CREATE TABLE scratch (id INTEGER PRIMARY KEY)")
   /// ```
   public func close() {
     handle.close()

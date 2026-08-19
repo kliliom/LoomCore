@@ -9,7 +9,9 @@
 /// ```swift
 /// let price = ColumnExpression<Int>("price")
 /// let cost = ColumnExpression<Int>("cost")
-/// let rows = try database.query("SELECT * FROM products WHERE \(price >= 1000) AND \(price > cost)")
+/// let rows = try await db.query("SELECT id FROM products WHERE \(price >= 1000) AND \(price > cost)") { stmt, _ in
+///   try Int64.column(of: stmt, at: 0)
+/// }
 /// ```
 
 extension Expression where ExpressionValue: Equatable {
@@ -17,7 +19,9 @@ extension Expression where ExpressionValue: Equatable {
   ///
   /// ```swift
   /// let status = ColumnExpression<String>("status")
-  /// let active = try database.query("SELECT * FROM orders WHERE \(status == "active")")
+  /// let active = try await db.query("SELECT id FROM orders WHERE \(status == "active")") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func == <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
@@ -28,7 +32,9 @@ extension Expression where ExpressionValue: Equatable {
   ///
   /// ```swift
   /// let status = ColumnExpression<String>("status")
-  /// let nonArchived = try database.query("SELECT * FROM orders WHERE \(status != "archived")")
+  /// let nonArchived = try await db.query("SELECT id FROM orders WHERE \(status != "archived")") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func != <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
@@ -41,7 +47,9 @@ extension Expression where ExpressionValue: Comparable {
   ///
   /// ```swift
   /// let stock = ColumnExpression<Int>("stock")
-  /// let lowStock = try database.query("SELECT * FROM products WHERE \(stock < 10)")
+  /// let lowStock = try await db.query("SELECT id FROM products WHERE \(stock < 10)") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func < <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
@@ -52,7 +60,9 @@ extension Expression where ExpressionValue: Comparable {
   ///
   /// ```swift
   /// let age = ColumnExpression<Int>("age")
-  /// let adults = try database.query("SELECT * FROM users WHERE \(age > 17)")
+  /// let adults = try await db.query("SELECT id FROM users WHERE \(age > 17)") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func > <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
@@ -63,7 +73,9 @@ extension Expression where ExpressionValue: Comparable {
   ///
   /// ```swift
   /// let price = ColumnExpression<Int>("price")
-  /// let affordable = try database.query("SELECT * FROM products WHERE \(price <= 5000)")
+  /// let affordable = try await db.query("SELECT id FROM products WHERE \(price <= 5000)") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func <= <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {
@@ -74,7 +86,9 @@ extension Expression where ExpressionValue: Comparable {
   ///
   /// ```swift
   /// let score = ColumnExpression<Int>("score")
-  /// let passing = try database.query("SELECT * FROM exams WHERE \(score >= 60)")
+  /// let passing = try await db.query("SELECT id FROM exams WHERE \(score >= 60)") { stmt, _ in
+  ///   try Int64.column(of: stmt, at: 0)
+  /// }
   /// ```
   public static func >= <R: Expression>(lhs: Self, rhs: R) -> BinaryOperation<Self, R, Bool>
   where R.ExpressionValue == ExpressionValue {

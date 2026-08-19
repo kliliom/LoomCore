@@ -153,9 +153,9 @@ extension Expression {
   ///
   /// ```swift
   /// let userId = ColumnExpression<Int>("user_id")
-  /// let activeUserIds: any Expression<Int> = activeUsersSubquery
+  /// let activeUserIds = ColumnExpression<Int>("id", of: "active_users")
   /// let isActive = userId.in(subquery: activeUserIds)
-  /// // ( "user_id" IN ( SELECT id FROM users WHERE ... ) )
+  /// // ( "user_id" IN ( "active_users"."id" ) )
   /// ```
   public func `in`<T: Bindable>(subquery: any Expression<T>) -> InExpression<T> {
     InExpression(needleExpression: self, haystackExpression: subquery, isNegated: false)
@@ -165,6 +165,7 @@ extension Expression {
   ///
   /// ```swift
   /// let userId = ColumnExpression<Int>("user_id")
+  /// let activeUserIds = ColumnExpression<Int>("id", of: "active_users")
   /// let isInactive = userId.notIn(subquery: activeUserIds)
   /// ```
   public func notIn<T: Bindable>(subquery: any Expression<T>) -> InExpression<T> {

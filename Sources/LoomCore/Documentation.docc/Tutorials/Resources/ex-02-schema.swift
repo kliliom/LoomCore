@@ -24,7 +24,7 @@ extension Database {
               category_id BLOB NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
               title TEXT NOT NULL,
               completed_at REAL,
-              metadata BLOB
+              metadata TEXT
             )
             """
         )

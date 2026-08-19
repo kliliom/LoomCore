@@ -66,10 +66,12 @@ extension Database {
 /// SQLite's 1-based parameter numbering:
 ///
 /// ```swift
-/// var index = ManagedIndex()
-/// try "Alice".bind(to: stmt, at: &index)             // binds at 1
-/// try 25.bind(to: stmt, at: &index)                  // binds at 2
-/// try "alice@example.com".bind(to: stmt, at: &index) // binds at 3
+/// let binder: Database.Binder = { stmt in
+///   var index = ManagedIndex()
+///   try "Alice".bind(to: stmt, at: &index)             // binds at 1
+///   try 25.bind(to: stmt, at: &index)                  // binds at 2
+///   try "alice@example.com".bind(to: stmt, at: &index) // binds at 3
+/// }
 /// ```
 ///
 /// ## Column extraction
@@ -78,10 +80,13 @@ extension Database {
 /// SQLite's 0-based column numbering:
 ///
 /// ```swift
-/// var index = ManagedIndex()
-/// let name = try String.column(of: stmt, at: &index)  // reads column 0
-/// let age = try Int.column(of: stmt, at: &index)      // reads column 1
-/// let email = try String.column(of: stmt, at: &index) // reads column 2
+/// let stepper: Database.Stepper<(String, Int, String)> = { stmt, _ in
+///   var index = ManagedIndex()
+///   let name = try String.column(of: stmt, at: &index)  // reads column 0
+///   let age = try Int.column(of: stmt, at: &index)      // reads column 1
+///   let email = try String.column(of: stmt, at: &index) // reads column 2
+///   return (name, age, email)
+/// }
 /// ```
 public struct ManagedIndex {
   /// Current position, advanced by binding and extraction operations.

@@ -12,7 +12,8 @@ import SQLite3
 ///   let flags: [String: Bool]
 /// }
 ///
-/// try db.execute(
+/// let flags = FeatureFlags(userID: 1, flags: ["darkMode": true])
+/// try await db.exec(
 ///   "INSERT INTO feature_flags (user_id, flags) VALUES (\(flags.userID), \(flags.flags))"
 /// )
 /// ```

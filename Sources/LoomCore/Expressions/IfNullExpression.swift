@@ -12,17 +12,14 @@
 /// let name = ColumnExpression<String>("name")
 /// let nickname = ColumnExpression<String?>("nickname")
 ///
-/// let rows = try database.query(
-///   """
-///   SELECT \(name), \(nickname.ifNull(name)) AS display_name FROM users
-///   """,
-///   rowMapper: { stmt, index in
-///     UserRow(
-///       name: try String.column(of: stmt, at: &index),
-///       displayName: try String.column(of: stmt, at: &index)
-///     )
-///   }
-/// )
+/// let rows = try await db.query(
+///   "SELECT \(name), \(nickname.ifNull(name)) AS display_name FROM users"
+/// ) { stmt, index, _ in
+///   UserRow(
+///     name: try String.column(of: stmt, at: &index),
+///     displayName: try String.column(of: stmt, at: &index)
+///   )
+/// }
 /// ```
 public struct IfNullExpression<Operand: Expression, Fallback: Expression, Result>: Expression {
   public typealias ExpressionValue = Result
@@ -57,10 +54,11 @@ extension Expression {
   /// let username = ColumnExpression<String>("username")
   /// let displayName = nickname.ifNull(username)
   ///
-  /// let names = try database.query(
-  ///   "SELECT \(displayName) FROM users ORDER BY \(username)",
-  ///   rowMapper: { stmt, index in try String.column(of: stmt, at: &index) }
-  /// )
+  /// let names = try await db.query(
+  ///   "SELECT \(displayName) FROM users ORDER BY \(username)"
+  /// ) { stmt, index, _ in
+  ///   try String.column(of: stmt, at: &index)
+  /// }
   /// ```
   public func ifNull<F: Expression, T>(_ fallbackExpr: F) -> IfNullExpression<Self, F, T>
   where ExpressionValue == T?, F.ExpressionValue == T {

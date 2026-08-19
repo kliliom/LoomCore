@@ -4,12 +4,12 @@
 /// via `COUNT(DISTINCT ...)`.
 ///
 /// ```swift
-/// let users = ColumnExpression<String>("users", "name")
+/// let users = ColumnExpression<String>("name", of: "users")
 /// let total = Count(users)                    // COUNT("users"."name")
 /// let unique = Count(users, distinct: true)   // COUNT(DISTINCT "users"."name")
 ///
-/// try await db.query("SELECT \(total) FROM users") { stmt in
-///   Int.column(of: stmt, at: 0)
+/// let counts = try await db.query("SELECT \(total) FROM users") { stmt, _ in
+///   try Int.column(of: stmt, at: 0)
 /// }
 /// ```
 public struct Count: Function {
@@ -41,7 +41,7 @@ extension Expression {
   /// Wraps this expression in a `COUNT` aggregate.
   ///
   /// ```swift
-  /// let email = ColumnExpression<String>("users", "email")
+  /// let email = ColumnExpression<String>("email", of: "users")
   /// let distinctEmails = email.count(distinct: true)
   /// // SELECT COUNT(DISTINCT "users"."email") FROM users
   /// ```

@@ -60,7 +60,8 @@ extension LoomError {
   /// Builds a `LoomError` carrying a `LoomCoreErrorCode`.
   ///
   /// ```swift
-  /// guard let path = url.path else {
+  /// let url = URL(fileURLWithPath: "/tmp/app.sqlite")
+  /// guard url.isFileURL else {
   ///   throw LoomError.core(.invalidDatabasePath, message: "URL has no filesystem path: \(url)")
   /// }
   /// ```
@@ -73,10 +74,14 @@ extension LoomError {
   /// Underlying `LoomCoreErrorCode`, or `nil` if this error originated from a different code domain.
   ///
   /// ```swift
-  /// catch let error as LoomError {
+  /// func reconnect() async {}
+  ///
+  /// do {
+  ///   try await db.exec("SELECT 1")
+  /// } catch let error as LoomError {
   ///   switch error.core {
   ///   case .databaseClosed: await reconnect()
-  ///   case .typeMappingFailed: log.warning("schema drift: \(error.message)")
+  ///   case .typeMappingFailed: print("schema drift: \(error.message)")
   ///   default: throw error
   ///   }
   /// }

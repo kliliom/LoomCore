@@ -51,6 +51,11 @@ The cache is captured via a small reference-counted `ResourceStore` so it surviv
 `Database` is `Sendable`, so it can be passed across actor boundaries. The methods that mutate it are isolated to ``DatabaseActor``:
 
 ```swift
+struct User: Sendable {
+  let id: Int
+  let name: String
+}
+
 @MainActor
 final class UserStore {
   let db: Database

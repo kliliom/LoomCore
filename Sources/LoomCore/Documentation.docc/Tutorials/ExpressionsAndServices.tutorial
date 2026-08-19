@@ -27,7 +27,7 @@
 
   @Section(title: "Model rows with Codable") {
     @ContentAndMedia {
-      `Codable` types become ``Bindable`` with a one-line conformance. Their values are JSON-encoded and stored as BLOB. This is ideal for opaque payloads — fields you do not query into directly.
+      `Codable` types become ``Bindable`` with a one-line conformance. Their values are JSON-encoded and stored as TEXT — precisely so SQLite's JSON functions (`json_extract`, `->`, `->>`) can query into them directly when you need to.
     }
 
     @Steps {
@@ -44,7 +44,7 @@
       }
 
       @Step {
-        Insert a row. The interpolated `metadata` is JSON-encoded by `Bindable`'s `Codable` conformance and bound as a parameter — there is no manual `JSONEncoder` call.
+        Insert a row. The interpolated `metadata` is JSON-encoded by `Bindable`'s `Codable` conformance and bound as a parameter — there is no manual `JSONEncoder` call. The write is wrapped in `db.transaction` so that the commit notifies the services we build at the end of this tutorial.
 
         @Code(name: "TaskStore.swift", file: ex-05-insert.swift, previousFile: ex-04-models.swift)
       }
@@ -102,7 +102,7 @@
       }
 
       @Step {
-        Use the cache from your store. Every committed write — single statement or transaction — goes through the service and refreshes the cache on the next read.
+        Use the cache from your store. Only writes wrapped in an outermost `db.transaction { db in … }` that commits notify the service — a bare `exec` outside a transaction fires no callbacks. That is why `add` wraps its INSERT in a transaction: every committed `add` invalidates the cache, and the next read recomputes it.
 
         @Code(name: "TaskStore.swift", file: ex-12-cached-query.swift, previousFile: ex-09-in.swift)
       }

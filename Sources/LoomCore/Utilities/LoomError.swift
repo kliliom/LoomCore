@@ -8,10 +8,11 @@ import SQLite3
 /// `Error` type while remaining identifiable by their code.
 ///
 /// ```swift
+/// let name = "Alice"
 /// do {
-///   try await database.execute("INSERT INTO users (name) VALUES (\(name))")
+///   try await db.exec("INSERT INTO users (name) VALUES (\(name))")
 /// } catch let error as LoomError {
-///   logger.error("\(error.message)")
+///   print(error.message)
 ///   throw error
 /// }
 /// ```

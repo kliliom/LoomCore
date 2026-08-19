@@ -41,7 +41,7 @@ struct Profile: Codable, Bindable {
 }
 
 try await db.exec(
-  "CREATE TABLE accounts (id INTEGER PRIMARY KEY, profile BLOB)"
+  "CREATE TABLE accounts (id INTEGER PRIMARY KEY, profile TEXT)"
 )
 
 let profile = Profile(
@@ -59,13 +59,17 @@ Encoding uses `JSONEncoder` and stores JSON TEXT, so stored values work directly
 Non-optional ``Bindable`` types throw ``LoomError`` with code ``LoomCoreErrorCode/nullValue`` if the column contains NULL:
 
 ```swift
-let name = try String.column(of: stmt, at: 0)  // throws if NULL
+let names = try await db.query(raw: "SELECT name FROM accounts") { stmt, _ in
+  try String.column(of: stmt, at: 0)  // throws if NULL
+}
 ```
 
 Use `Optional<T>` to handle NULL explicitly:
 
 ```swift
-let avatarURL = try Optional<URL>.column(of: stmt, at: 0)  // nil if NULL
+let avatarURLs = try await db.query(raw: "SELECT avatar_url FROM accounts") { stmt, _ in
+  try Optional<String>.column(of: stmt, at: 0)  // nil if NULL
+}
 ```
 
 `Optional` checks `sqlite3_column_type == SQLITE_NULL` before delegating to the wrapped type.

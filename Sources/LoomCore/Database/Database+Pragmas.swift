@@ -459,7 +459,8 @@ extension Database {
   /// a transaction or against attached databases.
   ///
   /// ```swift
-  /// try await db.exec("DELETE FROM old_logs WHERE created_at < ?", binding: cutoffDate)
+  /// let cutoffDate = Date().addingTimeInterval(-86_400 * 30)
+  /// try await db.exec(raw: "DELETE FROM old_logs WHERE created_at < ?", binding: cutoffDate)
   /// try await db.vacuum()
   /// ```
   ///
@@ -467,7 +468,7 @@ extension Database {
   ///
   /// - `VACUUM` can take a long time on multi-gigabyte databases.
   /// - Prefer ``AutoVacuumMode/incremental`` with ``incrementalVacuum(pages:)`` for finer-grained control.
-  /// - For WAL-mode databases, ``walCheckpoint(mode:schema:)`` may be the better tool.
+  /// - For WAL-mode databases, ``walCheckpoint(mode:database:)`` may be the better tool.
   public func vacuum() async throws {
     try await exec("VACUUM")
   }

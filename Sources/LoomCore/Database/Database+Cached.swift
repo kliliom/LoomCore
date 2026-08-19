@@ -17,10 +17,11 @@ extension Database {
   /// for tight loops and batch operations.
   ///
   /// ```swift
+  /// let pendingLogs = [(message: "started", level: 1), (message: "finished", level: 2)]
   /// try await db.cached {
   ///   for entry in pendingLogs {
   ///     try await db.exec(
-  ///       "INSERT INTO logs (message, level) VALUES (?, ?)",
+  ///       raw: "INSERT INTO logs (message, level) VALUES (?, ?)",
   ///       binding: entry.message, entry.level
   ///     )
   ///   }

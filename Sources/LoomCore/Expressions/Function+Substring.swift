@@ -5,8 +5,8 @@
 /// expression evaluates to NULL.
 ///
 /// ```swift
-/// let users = ColumnExpression<String>("users", "email")
-/// let localPart = Substring(users, start: 1, length: 5)
+/// let email = ColumnExpression<String>("email", of: "users")
+/// let localPart = Substring(email, start: 1, length: 5)
 /// // SQL: SUBSTR("users"."email", ?, ?)
 /// ```
 public struct Substring: Function {

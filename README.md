@@ -18,6 +18,7 @@ A type-safe SQLite wrapper for Swift 6+ using actor isolation for thread safety.
 
 Add LoomCore to your Swift package dependencies:
 
+<!-- doc-check: skip -->
 ```swift
 dependencies: [
     .package(url: "https://github.com/kliliom/loom-core.git", from: "1.0.0")
@@ -71,7 +72,7 @@ let db = try await Database.openInMemory()
 
 // File-based
 let url = URL(fileURLWithPath: "/path/to/database.sqlite")
-let db = try await Database.open(url: url)
+let fileDB = try await Database.open(url: url)
 ```
 
 ## Queries
@@ -90,12 +91,17 @@ let users = try await db.query("SELECT name FROM users WHERE age > \(minAge)") {
 ### Raw SQL with Manual Binding
 
 ```swift
+struct User {
+    let name: String
+    let email: String
+}
+
 let users = try await db.query(
     raw: "SELECT name, email FROM users WHERE status = ?",
     binder: { stmt, index in
         try "active".bind(to: stmt, at: &index)
     },
-    stepper: { stmt, index, stop in
+    stepper: { stmt, index, _ in
         let name = try String.column(of: stmt, at: &index)
         let email = try String.column(of: stmt, at: &index)
         return User(name: name, email: email)
@@ -124,6 +130,7 @@ let firstMatch = try await db.query("SELECT name FROM users") { stmt, stop in
 try await db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)")
 
 // INSERT / UPDATE / DELETE with interpolation
+let name = "Widget"
 try await db.exec("INSERT INTO items (name) VALUES (\(name))")
 
 // Last inserted rowid — captures the ROWID of the last insert inside the block
@@ -167,11 +174,12 @@ Nested `transaction` calls open a `SAVEPOINT` scope: a normal return releases th
 - `Optional<T>` (NULL handling)
 - `RawRepresentable` enums
 - `Array`, `Dictionary` (JSON-encoded)
-- `Codable` types (JSON-encoded as TEXT — queryable with SQLite's JSON functions)
+- `Codable` types (declare `Codable, Bindable` — JSON-encoded as TEXT, queryable with SQLite's JSON functions)
 
 ### Optional / NULL
 
 ```swift
+let name = "Alice"
 let email: String? = nil
 try await db.exec("INSERT INTO users (name, email) VALUES (\(name), \(email))")
 
@@ -183,7 +191,7 @@ let result = try await db.query("SELECT email FROM users") { stmt, _ in
 ### Codable
 
 ```swift
-struct Metadata: Codable {
+struct Metadata: Codable, Bindable {
     let createdAt: Date
     let tags: [String]
 }
@@ -198,15 +206,22 @@ let retrieved = try await db.query("SELECT metadata FROM items") { stmt, _ in
 
 ## Managed Indices
 
-For multi-column queries, `ManagedIndex` auto-increments after each bind/column call so you don't have to track positions manually:
+For multi-column queries, `ManagedIndex` auto-increments around binds and column reads — for parameters it increments *before* binding, so the first bind hits index 1; for columns it increments *after* reading, so the first read hits index 0. No positions to track manually:
 
 ```swift
+struct User {
+    let id: Int
+    let name: String
+    let email: String
+    let age: Int
+}
+
 let users = try await db.query(
     raw: "SELECT id, name, email, age FROM users WHERE status = ?",
     binder: { stmt, index in
         try "active".bind(to: stmt, at: &index)        // -> param 1
     },
-    stepper: { stmt, index, stop in
+    stepper: { stmt, index, _ in
         let id = try Int.column(of: stmt, at: &index)         // -> column 0
         let name = try String.column(of: stmt, at: &index)    // -> column 1
         let email = try String.column(of: stmt, at: &index)   // -> column 2
@@ -220,12 +235,14 @@ let users = try await db.query(
 
 ### Statement Composition
 
-`SQLStatement` values can be combined:
+`SQLStatement` values can be combined — `+` and `+=` join the SQL with a single space and concatenate the bound parameters:
 
 ```swift
 var stmt: SQLStatement = "SELECT * FROM users"
 stmt += "WHERE age > \(25)"
-let combined = stmt1 + stmt2
+
+let orderBy: SQLStatement = "ORDER BY name"
+let combined = stmt + orderBy
 ```
 
 ### Raw Mode for Identifiers
@@ -243,23 +260,33 @@ let stmt: SQLStatement = "SELECT \(column, mode: .raw) FROM \(table, mode: .raw)
 
 ## Expressions
 
-Bindable types support SQL operators directly in Swift:
+Build SQL predicates with Swift operators. `ColumnExpression<T>` names a column (rendered as a quoted identifier — safe for trusted identifiers); operators combine columns and Swift values into expressions that interpolate into statements with their values bound:
 
 ```swift
-let predicate = age > 21 && status == "active"   // Expression<Bool>
-let total     = (price * quantity) + tax          // Expression<Double>
+let age = ColumnExpression<Int>("age")
+let status = ColumnExpression<String>("status")
+let price = ColumnExpression<Double>("price")
+let quantity = ColumnExpression<Double>("quantity")
+let tax = ColumnExpression<Double>("tax")
+
+let predicate = age > 21 && status == "active"   // ( ( "age" > ? ) AND ( "status" = ? ) )
+let total     = (price * quantity) + tax          // ( ( "price" * "quantity" ) + "tax" )
+
+let names = try await db.query("SELECT name FROM users WHERE \(predicate)") { stmt, _ in
+    try String.column(of: stmt, at: 0)
+}
 ```
 
-Aggregate and scalar functions: `count`, `sum`, `length`, `upper`, `lower`, `trim`, `substring`, `concat`, `groupConcat`, `ifNull`, `cast`.
+Predicates: `like`, `isNull` / `isNotNull`, `in(array:)` / `notIn(array:)`. Aggregate and scalar functions: `count`, `sum`, `avg`, `min`, `max`, `length`, `upper`, `lower`, `trim`, `substring`, `concat`, `groupConcat`, `locate`, `ifNull`, `cast`.
 
 ## Services
 
 Subclass `Database.Service` to hook into transaction lifecycle events:
 
 ```swift
-class CacheInvalidationService: Database.Service {
+final class CacheInvalidationService: Database.Service {
     override func transactionDidCommit() {
-        cache.clear()
+        // Invalidate caches after a successful commit
     }
 
     override func transactionDidRollback() {
@@ -267,7 +294,7 @@ class CacheInvalidationService: Database.Service {
     }
 }
 
-let service = db.getService(CacheInvalidationService.self)
+let service = await db.getService(CacheInvalidationService.self)
 ```
 
 Services are singletons per `Database` instance and per type. Lifecycle hooks fire only for the outermost physical transaction — nested `SAVEPOINT` scopes do not trigger them. The participating set is fixed when the transaction begins; a service registered mid-transaction receives callbacks starting with the next transaction.

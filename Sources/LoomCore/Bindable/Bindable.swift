@@ -19,15 +19,19 @@
 /// A conforming type implements four members:
 ///
 /// ```swift
-/// extension MyType: Bindable {
+/// struct Username {
+///   var rawValue: String
+/// }
+///
+/// extension Username: Bindable {
 ///   static var defaultSQLStorageType: String { "TEXT" }
 ///
-///   static func bind(to stmt: borrowing StatementHandle, value: MyType, at index: Int32) throws {
+///   static func bind(to stmt: borrowing StatementHandle, value: Username, at index: Int32) throws {
 ///     try value.rawValue.bind(to: stmt, at: index)
 ///   }
 ///
-///   static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> MyType {
-///     MyType(rawValue: try String.column(of: stmt, at: index))!
+///   static func column(of stmt: borrowing StatementHandle, at index: Int32) throws -> Username {
+///     Username(rawValue: try String.column(of: stmt, at: index))
 ///   }
 ///
 ///   func asSQLLiteral() throws -> String { try rawValue.asSQLLiteral() }
@@ -39,7 +43,7 @@ public protocol Bindable: Expression<Self> & Sendable {
   /// Use inside a `Database.Binder` closure when binding parameters by explicit position.
   ///
   /// ```swift
-  /// try database.execute("INSERT INTO users (name, age) VALUES (?, ?)") { stmt in
+  /// try await db.exec(raw: "INSERT INTO users (name, age) VALUES (?, ?)") { stmt in
   ///   try String.bind(to: stmt, value: "Alice", at: 1)
   ///   try Int.bind(to: stmt, value: 30, at: 2)
   /// }
@@ -52,7 +56,9 @@ public protocol Bindable: Expression<Self> & Sendable {
   /// Use inside a `Database.Stepper` closure when reading columns by explicit position.
   ///
   /// ```swift
-  /// let users = try database.query("SELECT name, age FROM users") { stmt in
+  /// struct User { let name: String; let age: Int }
+  ///
+  /// let users = try await db.query(raw: "SELECT name, age FROM users") { stmt, _ in
   ///   let name = try String.column(of: stmt, at: 0)
   ///   let age = try Int.column(of: stmt, at: 1)
   ///   return User(name: name, age: age)
@@ -111,7 +117,7 @@ extension Bindable {
   /// without tracking positions manually.
   ///
   /// ```swift
-  /// try database.execute("INSERT INTO users (name, age, email) VALUES (?, ?, ?)") { stmt, index in
+  /// try await db.exec(raw: "INSERT INTO users (name, age, email) VALUES (?, ?, ?)") { stmt, index in
   ///   try String.bind(to: stmt, value: "Alice", at: &index)
   ///   try Int.bind(to: stmt, value: 30, at: &index)
   ///   try String.bind(to: stmt, value: "alice@example.com", at: &index)
@@ -131,7 +137,9 @@ extension Bindable {
   /// without tracking positions manually.
   ///
   /// ```swift
-  /// let users = try database.query("SELECT name, age, email FROM users") { stmt, index in
+  /// struct User { let name: String; let age: Int; let email: String }
+  ///
+  /// let users = try await db.query(raw: "SELECT name, age, email FROM users") { stmt, index, _ in
   ///   let name = try String.column(of: stmt, at: &index)
   ///   let age = try Int.column(of: stmt, at: &index)
   ///   let email = try String.column(of: stmt, at: &index)
@@ -154,7 +162,7 @@ extension Bindable {
   /// Instance-method form of the static `bind(to:value:at:)`.
   ///
   /// ```swift
-  /// try database.execute("UPDATE users SET name = ? WHERE id = ?") { stmt in
+  /// try await db.exec(raw: "UPDATE users SET name = ? WHERE id = ?") { stmt in
   ///   try "Alice".bind(to: stmt, at: 1)
   ///   try 42.bind(to: stmt, at: 2)
   /// }
@@ -170,11 +178,12 @@ extension Bindable {
   /// Mutating instance form useful when destination variables are already declared.
   ///
   /// ```swift
-  /// var name = ""
-  /// var age = 0
-  /// try database.query("SELECT name, age FROM users WHERE id = 1") { stmt in
+  /// let rows = try await db.query(raw: "SELECT name, age FROM users WHERE id = 1") { stmt, _ in
+  ///   var name = ""
+  ///   var age = 0
   ///   try name.column(of: stmt, at: 0)
   ///   try age.column(of: stmt, at: 1)
+  ///   return (name, age)
   /// }
   /// ```
   @DatabaseActor
@@ -188,7 +197,7 @@ extension Bindable {
   /// Instance-method form of the static managed-index `bind`.
   ///
   /// ```swift
-  /// try database.execute("INSERT INTO users (name, age) VALUES (?, ?)") { stmt, index in
+  /// try await db.exec(raw: "INSERT INTO users (name, age) VALUES (?, ?)") { stmt, index in
   ///   try "Alice".bind(to: stmt, at: &index)
   ///   try 30.bind(to: stmt, at: &index)
   /// }
@@ -205,11 +214,12 @@ extension Bindable {
   /// Mutating instance form of the static managed-index `column`.
   ///
   /// ```swift
-  /// var name = ""
-  /// var age = 0
-  /// try database.query("SELECT name, age FROM users") { stmt, index in
+  /// let rows = try await db.query(raw: "SELECT name, age FROM users") { stmt, index, _ in
+  ///   var name = ""
+  ///   var age = 0
   ///   try name.column(of: stmt, at: &index)
   ///   try age.column(of: stmt, at: &index)
+  ///   return (name, age)
   /// }
   /// ```
   @DatabaseActor

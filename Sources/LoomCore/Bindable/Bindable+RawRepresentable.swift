@@ -9,7 +9,8 @@ extension Bindable where Self: RawRepresentable, RawValue: Bindable {
   ///   case admin, member, guest
   /// }
   ///
-  /// try db.execute("INSERT INTO users (name, role) VALUES (\(name), \(Role.admin))")
+  /// let name = "Alice"
+  /// try await db.exec("INSERT INTO users (name, role) VALUES (\(name), \(Role.admin))")
   /// ```
   @DatabaseActor
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {
