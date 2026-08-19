@@ -73,6 +73,10 @@ public final class Database: Sendable {
   /// escape hatch for a stuck transaction: closing the connection makes the transaction's
   /// remaining statements — and any waiting operations — fail with `.databaseClosed`.
   ///
+  /// Statements in flight when `close()` runs keep working — an iteration in progress
+  /// continues to completion — and the connection is fully released once their handles
+  /// are destroyed. Only new operations throw.
+  ///
   /// ```swift
   /// let db = try await Database.open(url: tempURL)
   /// defer { Task { @DatabaseActor in db.close() } }

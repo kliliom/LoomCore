@@ -7,7 +7,8 @@ import SQLite3
 ///
 /// - **Cached** (`freeOnDeinit == false`): the statement is reset via `sqlite3_reset` and its bindings
 ///   cleared via `sqlite3_clear_bindings`, leaving it ready for reuse on the next ``Database/prepare(sql:)``
-///   call with the same SQL string.
+///   call with the same SQL string — unless the owning database was closed while the handle was live,
+///   in which case the statement is finalized instead.
 /// - **Temporary** (`freeOnDeinit == true`): the statement is finalized via `sqlite3_finalize` and its
 ///   resources released.
 ///
@@ -32,7 +33,9 @@ public struct StatementHandle: ~Copyable, Sendable {
   let freeOnDeinit: Bool
 
   // Set for a borrowed cached statement so `deinit` can release its checkout
-  // reservation after resetting it. `nil` for temporary (finalized) statements.
+  // reservation after resetting it — or finalize the statement instead when the
+  // store reports the connection closed. `nil` for temporary (finalized)
+  // statements.
   let store: DatabaseHandle.ResourceStore?
 
   init(dbPtr: OpaquePointer, stmtPtr: OpaquePointer, freeOnDeinit: Bool, store: DatabaseHandle.ResourceStore? = nil) {
@@ -43,7 +46,10 @@ public struct StatementHandle: ~Copyable, Sendable {
   }
 
   deinit {
-    if freeOnDeinit {
+    if freeOnDeinit || store?.isClosed == true {
+      // Temporary statement, or a cached one whose store was closed while this
+      // handle was live: finalize. On a closed (zombie) connection this
+      // finalize is what ultimately frees the connection.
       sqlite3_finalize(stmtPtr)
     } else {
       sqlite3_reset(stmtPtr)
