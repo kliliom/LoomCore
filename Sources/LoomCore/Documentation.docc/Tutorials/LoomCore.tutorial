@@ -6,11 +6,15 @@
   @Chapter(name: "Getting started") {
     Open a database, create a schema, and run safe parameterised inserts and queries.
 
+    @Image(source: "chapter-getting-started", alt: "Artwork for the Getting started chapter.")
+
     @TutorialReference(tutorial: "doc:GettingStarted")
   }
 
   @Chapter(name: "Expressions and services") {
     Build composable, type-checked SQL expressions, store custom Codable types, and react to commits with services.
+
+    @Image(source: "chapter-expressions-and-services", alt: "Artwork for the Expressions and services chapter.")
 
     @TutorialReference(tutorial: "doc:ExpressionsAndServices")
   }
