@@ -30,7 +30,10 @@ public struct InExpression<T: Bindable>: Expression {
   /// Prefer the `in(array:)`, `in(values:)`, `in(subquery:)`, and their `notIn` counterparts on
   /// `Expression` over calling this initializer directly.
   ///
-  /// - Parameter isNegated: Pass `true` to render `NOT IN`, `false` for `IN`.
+  /// - Parameters:
+  ///   - needleExpression: Expression to test for membership.
+  ///   - haystackExpression: Set to search — a value list or a subquery.
+  ///   - isNegated: Pass `true` to render `NOT IN`, `false` for `IN`.
   public init(
     needleExpression: any Expression,
     haystackExpression: any Expression<T>,

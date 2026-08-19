@@ -22,9 +22,11 @@ public struct CastExpression<Operand: Expression, Result>: Expression {
 
   /// Creates a CAST expression that converts `operand` to `targetType`.
   ///
-  /// - Parameter targetType: A SQL type name such as `"INTEGER"`, `"TEXT"`, `"REAL"`,
-  ///   or `"BLOB"`. Embedded directly into the generated SQL, so it must come from a
-  ///   trusted source.
+  /// - Parameters:
+  ///   - operand: Expression whose value is cast.
+  ///   - targetType: A SQL type name such as `"INTEGER"`, `"TEXT"`, `"REAL"`,
+  ///     or `"BLOB"`. Embedded directly into the generated SQL, so it must come from a
+  ///     trusted source.
   public init(operand: Operand, targetType: String) {
     self.operand = operand
     self.targetType = targetType

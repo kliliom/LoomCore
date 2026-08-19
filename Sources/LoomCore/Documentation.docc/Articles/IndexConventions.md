@@ -69,5 +69,5 @@ Raw indices (`Int32`) are still useful for:
 ## Topics
 
 - ``ManagedIndex``
-- ``Bindable/bind(to:value:at:)-static``
-- ``Bindable/column(of:at:)-static``
+- ``Bindable/bind(to:value:at:)-(_,_,ManagedIndex)``
+- ``Bindable/column(of:at:)-(_,ManagedIndex)->_``

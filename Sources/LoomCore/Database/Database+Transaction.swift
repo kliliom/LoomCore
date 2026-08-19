@@ -93,6 +93,8 @@ extension Database {
   ///
   /// - Parameter kind: Locking mode for the `BEGIN` statement. Defaults to
   ///   ``TransactionKind/deferred``. Ignored for nested (savepoint) scopes.
+  /// - Parameter block: Transaction body, isolated to ``DatabaseActor``. Returning normally
+  ///   commits (or releases the savepoint); throwing rolls back the scope's work.
   /// - Throws: Rethrows any error from `block`; throws `LoomError` if the
   ///   `BEGIN`, `COMMIT`, `SAVEPOINT`, or `RELEASE` itself fails, or with
   ///   ``LoomCoreErrorCode/transactionScopeLost`` in place of the `COMMIT`/`RELEASE` when

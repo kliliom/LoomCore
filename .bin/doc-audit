@@ -32,10 +32,9 @@ while IFS= read -r FILE; do
             stripped = line
             gsub(/^[[:space:]]+/, "", stripped)
 
-            # Match public declarations
-            if (stripped ~ /^public[[:space:]]+(func|var|let|class|struct|enum|protocol|typealias|subscript)/ ||
-                stripped ~ /^public[[:space:]]+(final|static|override|lazy)[[:space:]]+(func|var|let|class)/ ||
-                stripped ~ /^public[[:space:]]+init[[:space:](]/) {
+            # Match public declarations: optional modifier chain, then a declaration
+            # keyword (init may be followed directly by (, <, ? or !)
+            if (stripped ~ /^public([[:space:]]+(final|static|override|lazy|mutating|nonisolated(\([^)]*\))?|required|convenience|dynamic|indirect|class|private\(set\)|internal\(set\)|package\(set\)))*[[:space:]]+((func|var|let|class|struct|enum|actor|protocol|typealias|subscript|associatedtype|macro)[[:space:](<]|init[[:space:](<?!])/) {
 
                 has_doc = 0
                 for (j = i - 1; j >= 1 && j >= i - 20; j--) {
@@ -69,4 +68,6 @@ done <<< "$FILES"
 
 if [ "$FOUND" -eq 0 ]; then
     echo "All public symbols documented."
+else
+    exit 1
 fi

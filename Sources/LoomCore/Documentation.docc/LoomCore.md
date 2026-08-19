@@ -97,6 +97,6 @@ Concept-level explanations of how LoomCore is put together.
 ### Errors
 
 - ``LoomError``
-- ``ErrorCode``
+- ``LoomError/ErrorCode``
 - ``LoomCoreErrorCode``
 - ``SQLiteResultCode``

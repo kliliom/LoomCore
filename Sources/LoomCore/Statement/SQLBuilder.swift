@@ -113,8 +113,8 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// ```
   ///
   /// `.raw` renders the value's `description`, so this overload is available only where that
-  /// exists. Values without it can still be interpolated through ``appendInterpolation(_:)``,
-  /// which always binds.
+  /// exists. Values without it can still be interpolated through
+  /// ``appendInterpolation(_:)-(Expression)``, which always binds.
   public mutating func appendInterpolation(_ value: some Expression & CustomStringConvertible, mode: AppendMode) {
     switch mode {
     case .raw:

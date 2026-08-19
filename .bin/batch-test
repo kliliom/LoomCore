@@ -12,6 +12,12 @@ set -u
 cd "${0%/*}/.."
 
 count="${1:-100}"
+
+if ! [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Usage: .bin/batch-test [count]  (count must be a positive integer)" >&2
+  exit 2
+fi
+
 logdir=".build/batch-test"
 mkdir -p "$logdir"
 
@@ -48,6 +54,6 @@ elapsed=$((end - start))
 echo
 echo "Ran: $((pass + fail))   Passed: $pass   Failed: $fail   Elapsed: ${elapsed}s"
 
-if [ "$fail" -gt 0 ]; then
+if [ "$fail" -gt 0 ] || [ "$((pass + fail))" -eq 0 ]; then
   exit 1
 fi

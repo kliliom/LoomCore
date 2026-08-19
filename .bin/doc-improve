@@ -28,6 +28,13 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
+# Refuse to overwrite unrecoverable work: the file must be clean in git so a bad
+# rewrite can always be undone with `git checkout -- <file>`.
+if [ -n "$(git status --porcelain -- "$FILE")" ]; then
+    echo "Error: $FILE has uncommitted changes — commit or stash them first"
+    exit 1
+fi
+
 echo "Improving: $FILE"
 
 CONTENT=$(cat "$FILE")
@@ -55,5 +62,40 @@ if [ -z "$IMPROVED" ]; then
     exit 1
 fi
 
-printf '%s\n' "$IMPROVED" > "$FILE"
+case "$IMPROVED" in
+    '```'*)
+        echo "Error: claude returned markdown-wrapped output instead of a Swift file"
+        exit 1
+        ;;
+esac
+
+SCRATCH=".build/doc-improve"
+mkdir -p "$SCRATCH"
+TMP="$SCRATCH/$(basename "$FILE")"
+printf '%s\n' "$IMPROVED" > "$TMP"
+
+# Apply, format with the config .bin/format would use, and verify the build.
+# On any failure, restore the committed version.
+cp "$TMP" "$FILE"
+
+FORMAT_ARGS=()
+case "$FILE" in
+    */Documentation.docc/*)
+        FORMAT_ARGS=(--configuration .swift-format-docs)
+        ;;
+esac
+
+if ! swift format format -i "${FORMAT_ARGS[@]}" "$FILE"; then
+    git checkout -- "$FILE"
+    echo "Error: rewritten file does not parse — reverted"
+    exit 1
+fi
+
+BUILD_LOG="$SCRATCH/build.log"
+if ! swift build --build-tests > "$BUILD_LOG" 2>&1; then
+    git checkout -- "$FILE"
+    echo "Error: rewritten file does not build — reverted. See $BUILD_LOG"
+    exit 1
+fi
+
 echo "Done: $FILE"

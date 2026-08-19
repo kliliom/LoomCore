@@ -21,6 +21,7 @@ public struct Substring: Function {
   /// Creates a `SUBSTR()` call over `expression`.
   ///
   /// - Parameters:
+  ///   - expression: Expression yielding the string to slice.
   ///   - start: 1-indexed starting position. Negative values count from the end of the string.
   ///   - length: Number of characters to extract. When `nil`, extracts through the end.
   public init(_ expression: any Expression, start: Int, length: Int? = nil) {

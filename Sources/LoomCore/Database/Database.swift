@@ -9,7 +9,7 @@ import SQLite3
 /// Cleanup of the connection and cached statements is driven by ``DatabaseHandle``'s deinit.
 ///
 /// Open a database with one of the static factory methods, then use ``exec(_:)`` for writes
-/// and ``query(_:stepper:)`` for reads:
+/// and ``query(_:stepper:)-232u6`` for reads:
 ///
 /// ```swift
 /// let db = try await Database.openInMemory()

@@ -28,9 +28,12 @@ public struct BinaryOperation<Left: Expression, Right: Expression, Result>: Expr
 
   /// Creates a binary operation from two operands and an SQL operator token.
   ///
-  /// - Parameter sqlOperator: The literal operator emitted between the operands
-  ///   (e.g. `"+"`, `"="`, `"AND"`). Inserted verbatim, so it must be a trusted,
-  ///   non-user-controlled string.
+  /// - Parameters:
+  ///   - left: Left-hand operand.
+  ///   - right: Right-hand operand.
+  ///   - sqlOperator: The literal operator emitted between the operands
+  ///     (e.g. `"+"`, `"="`, `"AND"`). Inserted verbatim, so it must be a trusted,
+  ///     non-user-controlled string.
   public init(left: Left, right: Right, sqlOperator: String) {
     self.left = left
     self.right = right

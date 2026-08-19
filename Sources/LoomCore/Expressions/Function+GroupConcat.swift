@@ -24,6 +24,7 @@ public struct GroupConcat: Function {
   /// Creates a `GROUP_CONCAT` aggregate over `expression`.
   ///
   /// - Parameters:
+  ///   - expression: Expression whose values are concatenated.
   ///   - distinct: Concatenate only distinct values when `true`.
   ///   - separator: Separator written between values. When `nil`, SQLite uses `,`.
   public init(_ expression: any Expression, distinct: Bool = false, separator: String? = nil) {
