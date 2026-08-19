@@ -5,7 +5,7 @@ import Foundation
 import PackageDescription
 
 let package = Package(
-    name: "loom-core",
+    name: "LoomCore",
     platforms: [
         .iOS(.v16),
         .macCatalyst(.v16),
