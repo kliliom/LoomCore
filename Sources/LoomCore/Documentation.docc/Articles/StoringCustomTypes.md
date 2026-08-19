@@ -11,7 +11,7 @@ The ``Bindable`` protocol is the single extension point for type-safe parameter 
 - `asSQLLiteral()` — produce a literal SQL representation for debugging.
 - `defaultSQLStorageType` — the SQL type to use in `CREATE TABLE`.
 
-## Built-in conformances
+### Built-in conformances
 
 | Swift type | SQLite storage | Notes |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ The ``Bindable`` protocol is the single extension point for type-safe parameter 
 | `Array`, `Dictionary` | TEXT (JSON) | JSON-encoded |
 | `Codable` | TEXT (JSON) | JSON-encoded; you opt in by conforming to ``JSONBindable`` |
 
-## Custom Codable types
+### Custom Codable types
 
 Any `Codable` type can become ``Bindable`` by conforming to ``JSONBindable`` — no implementation needed:
 
@@ -56,7 +56,7 @@ Encoding uses `JSONEncoder` and stores JSON TEXT, so stored values work directly
 
 JSON storage is opt-in so it never competes with other storage strategies: a raw-value enum declared `enum Role: String, Codable, Bindable` keeps its raw-value storage (`'admin'`, not `'"admin"'`). Don't combine ``JSONBindable`` with a `RawRepresentable`-based ``Bindable`` conformance on one type.
 
-## NULL handling
+### NULL handling
 
 Non-optional ``Bindable`` types throw ``LoomError`` with code ``LoomCoreErrorCode/nullValue`` if the column contains NULL:
 
@@ -76,7 +76,7 @@ let avatarURLs = try await db.query(raw: "SELECT avatar_url FROM accounts") { st
 
 `Optional` checks `sqlite3_column_type == SQLITE_NULL` before delegating to the wrapped type.
 
-## RawRepresentable enums
+### RawRepresentable enums
 
 Enums backed by a ``Bindable`` raw type can be stored directly:
 
@@ -92,7 +92,7 @@ try await db.exec("INSERT INTO accounts (state) VALUES (\(AccountState.active))"
 
 If a stored value doesn't map to a case (e.g. `state = 99`), extraction throws ``LoomError`` with code ``LoomCoreErrorCode/typeMappingFailed``.
 
-## Writing your own Bindable
+### Writing your own Bindable
 
 For types that don't fit Codable (e.g. you want to control storage layout), conform to ``Bindable`` directly. The contract is small enough to implement in a few lines — see `Bindable+UUID.swift` for a self-contained example that stores 16 raw bytes via `sqlite3_bind_blob`.
 

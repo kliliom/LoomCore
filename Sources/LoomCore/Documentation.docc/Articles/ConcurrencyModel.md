@@ -17,14 +17,14 @@ public actor DatabaseActor {
 
 Every public method on ``Database``, every static method on ``Bindable``, and every closure passed in (`Binder`, `Stepper`, `transaction`'s body) is `@DatabaseActor`-isolated. Swift's compiler enforces this at the call site — you cannot call into LoomCore from arbitrary async code without first hopping to the actor.
 
-## What this guarantees
+### What this guarantees
 
 - No two SQLite calls run at the same time, ever, in your process.
 - No accidental shared mutable state between callers — the actor is the single point of synchronization.
 - `Sendable` values you pass into binders and steppers are safe to capture; mutable references are flagged at compile time.
 - Once an operation starts executing, it runs to completion synchronously on the actor. Interleaving between tasks happens only at suspension points — never in the middle of a statement.
 
-## The transaction gate
+### The transaction gate
 
 Actor isolation alone is not enough for transactions: ``DatabaseActor`` releases its executor at every `await`, so a transaction body that suspends would otherwise let another task's statements run inside the open transaction. LoomCore closes that hole with a **gate**.
 
@@ -32,7 +32,7 @@ While a transaction is in flight — including while its body is suspended — d
 
 The gate is what makes `await` inside a transaction body safe. When no transaction is active it costs a single nil check. See <doc:TransactionsAndServices> for the full semantics, including savepoint nesting.
 
-## Cancellation
+### Cancellation
 
 Cancellation is ambient — no opt-in, no API knob:
 
@@ -45,12 +45,12 @@ An interrupted **write** inside an explicit transaction makes SQLite roll the wh
 
 ``Database/directAccess(_:)`` is the exception: it runs no LoomCore statements, so nothing is armed — code inside it manages its own cancellation.
 
-## What this rules out
+### What this rules out
 
 - **Concurrent reads against the same `Database`.** Even if SQLite would allow it (e.g. in WAL mode), LoomCore serializes everything through the actor. If you want true read parallelism, open multiple ``Database`` instances against the same file — each has its own connection and runs on its own actor turn.
 - **Cross-actor `StatementHandle` use.** ``StatementHandle`` and ``DatabaseHandle`` are `~Copyable` and isolated to ``DatabaseActor``. They cannot escape into other contexts.
 
-## Resource cleanup
+### Resource cleanup
 
 ``DatabaseHandle`` owns the `sqlite3*` pointer plus the prepared-statement cache. It is `~Copyable` to enforce single ownership. Cleanup happens in two ways:
 
@@ -59,7 +59,7 @@ An interrupted **write** inside an explicit transaction makes SQLite roll the wh
 
 The cache is captured via a small reference-counted `ResourceStore` so it survives the move into the cleanup task. You should not normally see this internal structure — it just means resources are released safely without you having to think about it.
 
-## Working with SwiftUI and structured concurrency
+### Working with SwiftUI and structured concurrency
 
 `Database` is `Sendable`, so it can be passed across actor boundaries. The methods that mutate it are isolated to ``DatabaseActor``:
 

@@ -22,7 +22,7 @@ try await db.transaction { db in
 
 If the block returns normally, the transaction commits. If it throws, the transaction rolls back and the error propagates. Atomicity is preserved across `await`s inside the block — see the gating section below for how.
 
-## Lock modes
+### Lock modes
 
 ``TransactionKind`` selects the SQLite locking strategy:
 
@@ -38,7 +38,7 @@ try await db.transaction(kind: .immediate) { db in
 
 `kind` applies to the outermost transaction only — nested calls open savepoints, which have no locking mode, so the parameter is ignored for them.
 
-## Nested transactions — savepoints
+### Nested transactions — savepoints
 
 Calling ``Database/transaction(kind:_:)`` from inside an active transaction opens a `SAVEPOINT` scope. If the nested block returns normally, the savepoint is released and its work joins the enclosing transaction. If it throws, LoomCore rolls back to the savepoint — undoing only the nested block's work, leaving the enclosing transaction intact — and rethrows the error:
 
@@ -66,7 +66,7 @@ try await db.transaction { db in
 
 Nothing inside a savepoint scope — released or not — becomes durable until the outermost transaction commits. Sibling child tasks that each open a nested transaction are serialized automatically by the gate, so their savepoint scopes never interleave (SQLite savepoints are a stack).
 
-## Transaction gating
+### Transaction gating
 
 `DatabaseActor` releases its executor at every suspension point, so an `await` inside a transaction body would — without further machinery — let another task's statements run inside the open transaction. LoomCore prevents this with a gate: while a transaction is in flight, even while its body is suspended, database operations from tasks *outside* the transaction suspend and resume once the transaction commits or rolls back.
 
@@ -78,7 +78,7 @@ Membership is tracked by a task-local token bound around the block:
 
 Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — interleaving between tasks happens only at gates and suspension points, never mid-statement. When no transaction is active the gate is a single nil check, so ungated workloads pay essentially nothing.
 
-## Services — lifecycle hooks
+### Services — lifecycle hooks
 
 Subclass ``Database/Service`` to react to transaction lifecycle events. Common uses are cache invalidation, change notifications, and audit logging:
 
@@ -107,13 +107,13 @@ Services are singletons per `Database` instance and per service type. The first 
 
 Services receive ``Database/Service/transactionWillBegin()``, ``Database/Service/transactionDidCommit()``, and ``Database/Service/transactionDidRollback()`` **only for the outermost physical transaction**. Nested (savepoint) scopes fire no callbacks — they describe intermediate state that only becomes durable when the outer transaction commits. Implicit per-statement transactions (a bare `exec` outside a `transaction` block) do not fire service callbacks either.
 
-## What rollback failure means
+### What rollback failure means
 
 Some failures roll the physical transaction back inside SQLite itself — an interrupted write (``Database/interrupt()`` or task cancellation) and `ON CONFLICT ROLLBACK` constraints both do. LoomCore detects that, skips its own now-pointless `ROLLBACK`, still notifies services via ``Database/Service/transactionDidRollback()``, and rethrows the block's error with the connection intact.
 
 If `ROLLBACK` itself fails on a transaction that is genuinely still open (rare — typically only a corrupt or disconnected database), LoomCore logs a warning, closes the underlying handle, and rethrows the original error from the block. Subsequent operations on the database fail with a closed-database error.
 
-## Handling SQLITE_BUSY
+### Handling SQLITE_BUSY
 
 A second connection — another process, or another `Database` on the same file — can hold a lock that makes a statement fail with ``SQLiteResultCode/busy``. Three tools, in the order to reach for them:
 

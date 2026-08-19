@@ -15,7 +15,7 @@ try await db.exec("INSERT INTO users (name) VALUES (\(user))")
 
 The malicious payload becomes a literal string value in the database. There is no way to break out of the parameter binding.
 
-## Raw mode
+### Raw mode
 
 Some things cannot be parameters — table names, column names, SQL keywords. For these, opt in to `.raw` mode:
 
@@ -29,7 +29,7 @@ try await db.exec("SELECT * FROM \(table, mode: .raw) WHERE active = \(true)")
 
 > Warning: Never pass untrusted input through `.raw`. If user input determines a table or column name, validate it against an allowlist of known names before using `.raw`, or use ``ColumnExpression`` which always quotes identifiers safely.
 
-## ColumnExpression — the safe identifier path
+### ColumnExpression — the safe identifier path
 
 When you need to refer to a column by name, ``ColumnExpression`` is preferable to `.raw`:
 
@@ -44,7 +44,7 @@ try await db.query("SELECT \(nameColumn) FROM users") { stmt, _ in
 
 `ColumnExpression` always renders quoted identifiers (`"name"`, `"users"."email"`), escapes embedded double quotes by doubling, and rejects empty or NUL-containing names at construction. This makes reserved words like `order` and identifiers with spaces safe to use without special handling.
 
-## Composing statements
+### Composing statements
 
 ``SQLStatement`` values can be combined while preserving parameter ordering:
 

@@ -23,7 +23,7 @@ import SQLite3
 /// }
 /// ```
 ///
-/// File-backed databases use ``open(url:)``:
+/// File-backed databases use ``open(url:statementCacheCapacity:)``:
 ///
 /// ```swift
 /// let url = URL(fileURLWithPath: "/tmp/app.sqlite")

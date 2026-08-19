@@ -29,7 +29,7 @@ let rows = try await db.query(raw: "SELECT name, age FROM users") { stmt, _ in
 }
 ```
 
-## Avoiding off-by-one errors
+### Avoiding off-by-one errors
 
 For multi-column statements, the safest pattern is ``ManagedIndex``. It auto-increments around binds and column reads — for parameters it increments *before* binding, so the first bind hits index 1; for columns it increments *after* reading, so the first read hits index 0.
 
@@ -58,7 +58,7 @@ let users = try await db.query(
 
 When you add or remove a column, the indices shift automatically. There are no magic numbers to renumber.
 
-## When to use raw indices
+### When to use raw indices
 
 Raw indices (`Int32`) are still useful for:
 
