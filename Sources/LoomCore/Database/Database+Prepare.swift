@@ -90,7 +90,7 @@ extension Database {
     // handle. Two live handles for the same SQL are not currently expressible
     // through the public API (operations run to completion synchronously once
     // past the gate), so the checkout guard is defense in depth.
-    if useCache, let stmtPtr = store.statementCache[sql], store.checkOut(stmtPtr) {
+    if useCache, let stmtPtr = store.cachedStatement(for: sql), store.checkOut(stmtPtr) {
       return StatementHandle(dbPtr: dbPtr, stmtPtr: stmtPtr, freeOnDeinit: false, store: store)
     }
 
@@ -143,7 +143,7 @@ extension Database {
     // but the slot is already occupied by a borrowed statement, keep this one
     // temporary so it is finalized when its handle goes out of scope.
     if useCache, store.statementCache[sql] == nil {
-      store.statementCache[sql] = ptr
+      store.cache(ptr, for: sql)
       _ = store.checkOut(ptr)
       return StatementHandle(dbPtr: dbPtr, stmtPtr: ptr, freeOnDeinit: false, store: store)
     }

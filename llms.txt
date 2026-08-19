@@ -5,7 +5,7 @@
 LoomCore emphasizes safety through Swift's type system and concurrency model. The library prevents SQL injection via automatic parameter binding in string interpolation, prevents race conditions via actor isolation, and prevents type errors via the `Bindable` protocol. All `Database` methods and `Bindable` operations are isolated to `DatabaseActor`, which means you cannot accidentally perform unsynchronized access to SQLite.
 
 **Important constraints:**
-- All public `Database` operations are `async` — `exec`, `execScript(_:)`, `query`, pragma methods, `walCheckpoint(mode:database:)`, `directAccess`, `cached`, `lastInsertedRowID`, and `transaction` are called as `try await db.…`. Only `close()`, `getService(_:)`, `shutdownService(_:)`, and the static `Database.open(url:)` / `Database.openInMemory()` remain synchronous — but they are `@DatabaseActor`-isolated, so call sites outside the actor still write `try await` / `await` to hop onto it.
+- All public `Database` operations are `async` — `exec`, `execScript(_:)`, `query`, pragma methods, `walCheckpoint(mode:database:)`, `directAccess`, `cached`, `lastInsertedRowID`, and `transaction` are called as `try await db.…`. Only `close()`, `clearStatementCache()`, `getService(_:)`, `shutdownService(_:)`, and the static `Database.open(url:statementCacheCapacity:)` / `Database.openInMemory(statementCacheCapacity:)` remain synchronous — but they are `@DatabaseActor`-isolated, so call sites outside the actor still write `try await` / `await` to hop onto it.
 - Nested transactions are supported via `SAVEPOINT`: calling `transaction()` inside an active transaction opens a savepoint scope. A normal return releases the savepoint into the enclosing transaction; a throw rolls back to the savepoint (leaving the enclosing transaction's work intact) and rethrows. Service lifecycle hooks fire only for the outermost physical transaction (the participating set is fixed when it begins; a service shut down while it is in flight receives no terminal callback), and `kind:` is ignored when nested.
 - While a transaction is in flight — even suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Membership is a task-local token bound around the body, inherited by structured children (`async let`, task groups) and `Task {}`, but NOT by `Task.detached`. An unstructured `Task {}` must complete before the body returns (await its value); a task that outlives the body races the commit and may run outside the transaction, and its own scope close is refused with `LoomCoreErrorCode.transactionScopeLost` — it never touches a transaction opened later on the same connection. Waiting operations throw `CancellationError` on task cancellation. Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — nothing interleaves mid-statement.
 - The `Database` class is `@DatabaseActor` isolated. You cannot call its methods from arbitrary async contexts without hopping to the actor.
@@ -143,7 +143,9 @@ resolved case-insensitively); `nil` or `""` checkpoints every attached database,
 func transaction<T>(kind: TransactionKind = .deferred,
                     _ block: @DatabaseActor (Database) async throws -> T) async throws -> T
 
-db.cached(_:) async            // Statement caching scope, per task tree (task-local)
+db.cached(_:) async            // Statement caching scope, per task tree (task-local); the cache is
+                               // LRU-bounded by `statementCacheCapacity` (default 128) set at open
+db.clearStatementCache()       // Finalize every idle cached statement (synchronous)
 db.lastInsertedRowID(_:) async // ROWID of the last insert performed inside the block -> Int64?
 db.close()                     // Explicit cleanup (synchronous)
 ```
@@ -347,7 +349,7 @@ let service = await db.getService(CacheInvalidationService.self)
 ### Essential API documentation
 
 - `Sources/LoomCore/Database/Database.swift` — Core `Database` class definition, resource management, actor isolation
-- `Sources/LoomCore/Database/Database+Open.swift` — `Database.open(url:)` / `Database.openInMemory()` factory methods
+- `Sources/LoomCore/Database/Database+Open.swift` — `Database.open(url:statementCacheCapacity:)` / `Database.openInMemory(statementCacheCapacity:)` factory methods
 - `Sources/LoomCore/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
 - `Sources/LoomCore/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL), `execScript(_:)`
 - `Sources/LoomCore/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting

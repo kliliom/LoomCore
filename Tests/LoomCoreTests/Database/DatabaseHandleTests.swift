@@ -1,6 +1,8 @@
 import Foundation
-import LoomCore
+import SQLite3
 import Testing
+
+@testable import LoomCore
 
 @Suite("Database Handle Tests")
 @DatabaseActor
@@ -122,6 +124,115 @@ struct DatabaseHandleTests {
     await #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
       try await db.exec("SELECT a FROM t")
     }
+  }
+
+  @Test("Statement cache evicts the least recently used entry at capacity")
+  func testCacheEvictsLeastRecentlyUsed() async throws {
+    let db = try Database.openInMemory(statementCacheCapacity: 2)
+    try await db.exec("CREATE TABLE t (a INTEGER)")
+    let store = db.handle.resourceStore
+
+    let sqlA = "INSERT INTO t (a) VALUES (1)"
+    let sqlB = "INSERT INTO t (a) VALUES (2)"
+    let sqlC = "INSERT INTO t (a) VALUES (3)"
+
+    try await db.cached {
+      try await db.exec(raw: sqlA)
+      try await db.exec(raw: sqlB)
+      // Touch A so B becomes the least recently used, then C's insert evicts B.
+      try await db.exec(raw: sqlA)
+      try await db.exec(raw: sqlC)
+    }
+
+    #expect(store.statementCache.count == 2)
+    #expect(store.statementCache[sqlA] != nil)
+    #expect(store.statementCache[sqlB] == nil)
+    #expect(store.statementCache[sqlC] != nil)
+
+    // The surviving hot entry still executes correctly after the eviction pass.
+    try await db.cached {
+      try await db.exec(raw: sqlA)
+    }
+    let count = try await db.query("SELECT COUNT(*) FROM t WHERE a = 1") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+    #expect(count == [3])
+  }
+
+  @Test("A checked-out statement is never evicted")
+  func testCheckedOutStatementSurvivesEviction() async throws {
+    let db = try Database.openInMemory(statementCacheCapacity: 1)
+    try await db.exec("CREATE TABLE t (a INTEGER)")
+    let store = db.handle.resourceStore
+
+    let sqlA = "SELECT a FROM t"
+    let sqlB = "SELECT COUNT(*) FROM t"
+
+    try await db.cached {
+      do {
+        let handleA = try db.prepare(sql: sqlA)
+        let ptrA = handleA.stmtPtr
+        // The cache is full and its only entry is checked out, so preparing B
+        // must overflow the cap instead of evicting A under its live handle.
+        do {
+          let handleB = try db.prepare(sql: sqlB)
+          _ = handleB.stmtPtr
+        }
+        #expect(store.statementCache[sqlA]?.ptr == ptrA)
+        #expect(store.statementCache.count == 2)
+      }
+    }
+    #expect(store.checkedOut.isEmpty)
+  }
+
+  @Test("Eviction finalizes the victim instead of leaking it")
+  func testEvictionFinalizesVictims() async throws {
+    let db = try Database.openInMemory(statementCacheCapacity: 2)
+    try await db.exec("CREATE TABLE t (a INTEGER)")
+
+    try await db.cached {
+      for value in 0..<10 {
+        try await db.exec(raw: "INSERT INTO t (a) VALUES (\(value))")
+      }
+    }
+
+    #expect(db.handle.resourceStore.statementCache.count == 2)
+
+    // Walk SQLite's own list of live statements: evicted entries must have been
+    // finalized, so no more statements survive than the cache holds.
+    var liveStatements = 0
+    var stmt = sqlite3_next_stmt(try db.handle.ptr, nil)
+    while stmt != nil {
+      liveStatements += 1
+      stmt = sqlite3_next_stmt(try db.handle.ptr, stmt)
+    }
+    #expect(liveStatements == 2)
+  }
+
+  @Test("clearStatementCache empties the cache and later work repopulates it")
+  func testClearStatementCache() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE t (a INTEGER)")
+    let store = db.handle.resourceStore
+
+    try await db.cached {
+      try await db.exec(raw: "INSERT INTO t (a) VALUES (1)")
+      try await db.exec(raw: "INSERT INTO t (a) VALUES (2)")
+    }
+    #expect(store.statementCache.count == 2)
+
+    db.clearStatementCache()
+    #expect(store.statementCache.isEmpty)
+
+    try await db.cached {
+      try await db.exec(raw: "INSERT INTO t (a) VALUES (3)")
+    }
+    #expect(store.statementCache.count == 1)
+
+    let values = try await db.query("SELECT a FROM t ORDER BY a") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+    #expect(values == [1, 2, 3])
   }
 }
 

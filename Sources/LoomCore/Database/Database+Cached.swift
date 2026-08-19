@@ -44,9 +44,12 @@ extension Database {
   /// ## Lifetime
   ///
   /// Cached statements are not finalized when the block exits — the cache lives on the
-  /// `Database` and grows unbounded as new SQL strings are seen, so a second `cached` block
-  /// reuses statements prepared by the first. Nested `cached` calls share the existing scope
-  /// and do not enable caching twice.
+  /// `Database`, so a second `cached` block reuses statements prepared by the first. It is
+  /// bounded by the `statementCacheCapacity` set at ``open(url:statementCacheCapacity:)``
+  /// (128 by default): at capacity, the least-recently-used statement is finalized to make
+  /// room, so hot-loop statements stay resident while one-off SQL cycles out. Call
+  /// ``clearStatementCache()`` to release the cache eagerly. Nested `cached` calls share
+  /// the existing scope and do not enable caching twice.
   public func cached<T>(_ block: @DatabaseActor () async throws -> T) async rethrows -> T {
     let id = ObjectIdentifier(self)
     if StatementCaching.databases.contains(id) {

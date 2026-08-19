@@ -27,10 +27,11 @@ public struct DatabaseHandle: ~Copyable, Sendable {
 
   // Reference-type store so cached statements can be captured by value into
   // the deinit cleanup `Task`.
-  let resourceStore = ResourceStore()
+  let resourceStore: ResourceStore
 
-  init(ptr: OpaquePointer) {
+  init(ptr: OpaquePointer, statementCacheCapacity: Int) {
     self.ptrRaw = ptr
+    self.resourceStore = ResourceStore(capacity: statementCacheCapacity)
   }
 
   // `deinit` may run off-actor, so cleanup hops onto `DatabaseActor`.
@@ -54,9 +55,30 @@ extension DatabaseHandle {
   // Reference-type backing store for resources that must outlive the
   // non-copyable `DatabaseHandle` struct so they can be moved into the
   // deinit cleanup `Task`.
+  // A prepared statement in the cache, stamped with its last use so eviction
+  // can pick the least-recently-used entry.
+  struct CachedStatement {
+    let ptr: OpaquePointer
+    var lastUsed: UInt64
+  }
+
   @DatabaseActor
   final class ResourceStore: Sendable {
-    var statementCache: [String: OpaquePointer] = [:]
+    var statementCache: [String: CachedStatement] = [:]
+
+    // Maximum number of cached statements. Reached capacity evicts the
+    // least-recently-used idle entry; when every entry is checked out (not
+    // currently expressible through the public API), the cap is exceeded
+    // rather than evicting a borrowed statement.
+    let capacity: Int
+
+    // Monotonic recency clock, bumped on every cache hit and insert.
+    private var tick: UInt64 = 0
+
+    init(capacity: Int) {
+      precondition(capacity > 0, "Statement cache capacity must be positive")
+      self.capacity = capacity
+    }
 
     // Cached statements currently borrowed by a live `StatementHandle`. A
     // borrowed statement must not be handed out again — two live handles over
@@ -88,6 +110,49 @@ extension DatabaseHandle {
       checkedOut.remove(stmtPtr)
     }
 
+    // Returns the cached statement for `sql`, marking it most recently used.
+    func cachedStatement(for sql: String) -> OpaquePointer? {
+      guard var entry = statementCache[sql] else { return nil }
+      tick += 1
+      entry.lastUsed = tick
+      statementCache[sql] = entry
+      return entry.ptr
+    }
+
+    // Inserts a freshly prepared statement, evicting the least-recently-used
+    // idle entry first when the cache is at capacity.
+    func cache(_ stmtPtr: OpaquePointer, for sql: String) {
+      if statementCache.count >= capacity {
+        evictLeastRecentlyUsed()
+      }
+      tick += 1
+      statementCache[sql] = CachedStatement(ptr: stmtPtr, lastUsed: tick)
+    }
+
+    // Finalizes and removes the idle entry with the oldest `lastUsed` stamp.
+    // Checked-out statements are never victims: their live `StatementHandle`s
+    // reset rather than finalize on deinit, so evicting one here would leave
+    // that handle resetting freed memory.
+    private func evictLeastRecentlyUsed() {
+      var victim: (key: String, lastUsed: UInt64)?
+      for (key, entry) in statementCache where !checkedOut.contains(entry.ptr) {
+        if victim == nil || entry.lastUsed < victim!.lastUsed {
+          victim = (key, entry.lastUsed)
+        }
+      }
+      guard let victim, let entry = statementCache.removeValue(forKey: victim.key) else { return }
+      sqlite3_finalize(entry.ptr)
+    }
+
+    // Finalizes and removes every idle cached statement. Checked-out entries
+    // stay cached and remain reusable once their handles are destroyed.
+    func clearCache() {
+      for (key, entry) in statementCache where !checkedOut.contains(entry.ptr) {
+        sqlite3_finalize(entry.ptr)
+        statementCache.removeValue(forKey: key)
+      }
+    }
+
     // Finalizes idle cached statements, marks the store closed, and closes the
     // SQLite connection via `sqlite3_close_v2`. A failed close (misuse-only
     // with `_v2`) is logged as a warning.
@@ -102,8 +167,8 @@ extension DatabaseHandle {
       guard !isClosed else { return }
       isClosed = true
 
-      for (_, stmtPtr) in statementCache where !checkedOut.contains(stmtPtr) {
-        sqlite3_finalize(stmtPtr)
+      for (_, entry) in statementCache where !checkedOut.contains(entry.ptr) {
+        sqlite3_finalize(entry.ptr)
       }
       statementCache = [:]
       checkedOut = []

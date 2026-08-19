@@ -256,4 +256,32 @@ struct SQLStatementTests {
     #expect(result.count == 1)
     #expect(result.first == "Charlie")
   }
+
+  // Pins in-place append semantics across many fragments: exact SQL text (one
+  // space per join), binder count and order, and a full round trip through
+  // binding and execution.
+  @Test("SQLStatement += accumulates many fragments")
+  func testPlusEqualsAccumulatesManyFragments() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE t (value INTEGER)")
+
+    let count = 50
+    var insert: SQLStatement = "INSERT INTO t (value)"
+    insert += "VALUES"
+    var expectedSQL = insert.sql
+    for value in 1...count {
+      let fragment: SQLStatement = value == 1 ? "(\(value))" : ", (\(value))"
+      expectedSQL += " " + fragment.sql
+      insert += fragment
+    }
+
+    #expect(insert.sql == expectedSQL)
+    #expect(insert.binders.count == count)
+
+    try await db.exec(insert)
+    let values = try await db.query("SELECT value FROM t ORDER BY value") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+    #expect(values == Array(1...count))
+  }
 }

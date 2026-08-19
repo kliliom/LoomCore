@@ -31,6 +31,10 @@ public struct ColumnExpression<T>: Expression {
   /// unqualified column references.
   public let tableName: String?
 
+  // Full quoted rendering, computed once here: a column expression is built once
+  // but appended on every execution of every query it appears in.
+  private let renderedSQL: String
+
   /// Creates an unqualified column reference.
   ///
   /// - Parameter columnName: Column name. Must be non-empty and free of NUL bytes.
@@ -38,6 +42,7 @@ public struct ColumnExpression<T>: Expression {
     Self.validate(columnName, role: "Column")
     self.columnName = columnName
     self.tableName = nil
+    self.renderedSQL = Self.escape(columnName)
   }
 
   /// Creates a column reference qualified by a table name.
@@ -50,14 +55,11 @@ public struct ColumnExpression<T>: Expression {
     Self.validate(tableName, role: "Table")
     self.columnName = columnName
     self.tableName = tableName
+    self.renderedSQL = "\(Self.escape(tableName)).\(Self.escape(columnName))"
   }
 
   public func append(to builder: inout SQLBuilder) {
-    if let tableName {
-      builder.appendLiteral("\(Self.escape(tableName)).\(Self.escape(columnName))")
-    } else {
-      builder.appendLiteral(Self.escape(columnName))
-    }
+    builder.appendLiteral(renderedSQL)
   }
 
   private static func validate(_ name: String, role: String) {
@@ -66,6 +68,9 @@ public struct ColumnExpression<T>: Expression {
   }
 
   private static func escape(_ name: String) -> String {
-    "\"\(name.replacingOccurrences(of: "\"", with: "\"\""))\""
+    guard name.utf8.contains(UInt8(ascii: "\"")) else {
+      return "\"\(name)\""
+    }
+    return "\"\(name.replacingOccurrences(of: "\"", with: "\"\""))\""
   }
 }

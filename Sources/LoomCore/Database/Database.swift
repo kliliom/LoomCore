@@ -95,4 +95,14 @@ public final class Database: Sendable {
     activeTransactionToken = nil
     resumeTransactionWaiters()
   }
+
+  /// Finalizes and removes every idle cached prepared statement.
+  ///
+  /// Use this to release SQLite memory after a burst of ``cached(_:)`` work whose SQL
+  /// will not be reused — for example, a one-time migration. The cache repopulates on
+  /// the next `cached` block, so clearing costs only re-preparation. A statement whose
+  /// handle is still in flight stays cached and remains reusable.
+  public func clearStatementCache() {
+    handle.resourceStore.clearCache()
+  }
 }

@@ -48,10 +48,10 @@
 /// - ``Expression``
 public struct SQLStatement: Sendable {
   /// SQL string with `?` placeholders for each bound parameter.
-  public let sql: String
+  public private(set) var sql: String
 
   /// Binder closures, one per `?` placeholder in ``sql``, applied in order at execution.
-  public let binders: [Database.ManagedBinder]
+  public private(set) var binders: [Database.ManagedBinder]
 
   /// Creates a statement from a SQL string and matching binders.
   ///
@@ -165,13 +165,15 @@ extension SQLStatement {
   /// stmt = stmt + "ORDER BY name"
   /// ```
   public static func + (lhs: SQLStatement, rhs: SQLStatement) -> SQLStatement {
-    SQLStatement(
-      sql: lhs.sql + " " + rhs.sql,
-      binders: lhs.binders + rhs.binders
-    )
+    var result = lhs
+    result += rhs
+    return result
   }
 
   /// Appends a statement to another in place, joining their SQL with a single space.
+  ///
+  /// Mutates `lhs` directly, so accumulating many fragments in a loop stays linear in
+  /// the total statement length rather than re-copying the prefix on every append.
   ///
   /// ```swift
   /// var stmt: SQLStatement = "SELECT * FROM users"
@@ -179,6 +181,8 @@ extension SQLStatement {
   /// stmt += "WHERE name = \(name)"
   /// ```
   public static func += (lhs: inout SQLStatement, rhs: SQLStatement) {
-    lhs = lhs + rhs
+    lhs.sql += " "
+    lhs.sql += rhs.sql
+    lhs.binders.append(contentsOf: rhs.binders)
   }
 }

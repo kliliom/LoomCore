@@ -15,14 +15,16 @@ extension Database {
   /// try await db.exec(raw: "INSERT INTO event (payload) VALUES (?)", binding: "login")
   /// ```
   ///
+  /// - Parameter statementCacheCapacity: Maximum number of prepared statements retained by
+  ///   ``cached(_:)`` blocks before the least-recently-used one is evicted. Must be positive.
   /// - Throws: ``LoomError`` if the SQLite connection cannot be established.
-  public static func openInMemory() throws -> Database {
+  public static func openInMemory(statementCacheCapacity: Int = 128) throws -> Database {
     var ptr: OpaquePointer?
     try check(sqlite3_open(":memory:", &ptr), is: SQLITE_OK)
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
-    return Database(handle: DatabaseHandle(ptr: ptr))
+    return Database(handle: DatabaseHandle(ptr: ptr, statementCacheCapacity: statementCacheCapacity))
   }
 
   /// Opens a connection to a persistent on-disk database.
@@ -45,9 +47,12 @@ extension Database {
   ///     """)
   /// ```
   ///
-  /// - Parameter url: File URL pointing at the database. Must use the `file:` scheme.
+  /// - Parameters:
+  ///   - url: File URL pointing at the database. Must use the `file:` scheme.
+  ///   - statementCacheCapacity: Maximum number of prepared statements retained by
+  ///     ``cached(_:)`` blocks before the least-recently-used one is evicted. Must be positive.
   /// - Throws: ``LoomError`` if `url` is not a file URL or the SQLite connection cannot be established.
-  public static func open(url: URL) throws -> Database {
+  public static func open(url: URL, statementCacheCapacity: Int = 128) throws -> Database {
     guard url.isFileURL else {
       throw LoomError.core(.invalidDatabasePath, message: "Database URL must use the file: scheme.")
     }
@@ -57,6 +62,6 @@ extension Database {
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
-    return Database(handle: DatabaseHandle(ptr: ptr))
+    return Database(handle: DatabaseHandle(ptr: ptr, statementCacheCapacity: statementCacheCapacity))
   }
 }
