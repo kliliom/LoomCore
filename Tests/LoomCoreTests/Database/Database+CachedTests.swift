@@ -3,6 +3,27 @@ import Testing
 
 @testable import LoomCore
 
+/// One-shot handshake between concurrently running tasks, mirroring the helper in
+/// `Database+GateTests.swift`. Holds one side back until the other has provably
+/// reached a checkpoint — plain task scheduling order is not guaranteed.
+private struct Signal: Sendable {
+  private let stream: AsyncStream<Void>
+  private let continuation: AsyncStream<Void>.Continuation
+
+  init() {
+    (stream, continuation) = AsyncStream.makeStream()
+  }
+
+  func fire() {
+    continuation.yield(())
+  }
+
+  func wait() async {
+    var iterator = stream.makeAsyncIterator()
+    _ = await iterator.next()
+  }
+}
+
 @Suite("Database Cached Tests")
 @DatabaseActor
 struct DatabaseCachedTests {
@@ -71,6 +92,7 @@ struct DatabaseCachedTests {
       try await db.exec("INSERT INTO test (value) VALUES (\("third"))")
     }
     #expect(db.handle.resourceStore.statementCache.count == 1)
+    #expect(db.handle.resourceStore.checkedOut.isEmpty)
 
     let result = try await db.query("SELECT value FROM test ORDER BY rowid") { stmt, _ in
       try String.column(of: stmt, at: 0)
@@ -239,5 +261,68 @@ struct DatabaseCachedTests {
     }
 
     #expect(result.first == 4)
+  }
+
+  // Reuse must mean the same compiled statement, not merely a stable cache size:
+  // a broken check-in would silently prepare a fresh statement on every call while
+  // `statementCache.count` stays 1.
+  @Test("Cached statement is reused by pointer identity")
+  func testCachedBlockReusesStatementPointer() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (value TEXT)")
+
+    let sql = "INSERT INTO test (value) VALUES (?)"
+    let (first, second) = try await db.cached { () -> (OpaquePointer, OpaquePointer) in
+      let first: OpaquePointer
+      // Each handle lives in its own scope so its deinit (reset + check-in) runs
+      // before the next prepare asks the cache for the same SQL.
+      do {
+        let handle = try db.prepare(sql: sql)
+        first = handle.stmtPtr
+      }
+      let second: OpaquePointer
+      do {
+        let handle = try db.prepare(sql: sql)
+        second = handle.stmtPtr
+      }
+      return (first, second)
+    }
+
+    #expect(first == second)
+    #expect(db.handle.resourceStore.checkedOut.isEmpty)
+  }
+
+  // The caching scope is a task-local: a task that interleaves on `DatabaseActor`
+  // while a cached body is suspended must not have its statements cached. A flag
+  // stored on the `Database` instead of the task tree would fail both assertions.
+  @Test("Cached scope does not leak to concurrent tasks")
+  func testCachedScopeDoesNotLeakToConcurrentTasks() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (value INTEGER)")
+
+    let insideSuspended = Signal()
+    let outsideDone = Signal()
+    let outsideSQL = "INSERT INTO test (value) VALUES (999)"
+
+    // Spawned before the cached block below, so the caching task-local is not
+    // yet bound and cannot be inherited.
+    let outside = Task { @DatabaseActor in
+      await insideSuspended.wait()
+      try await db.exec(raw: outsideSQL)
+      outsideDone.fire()
+    }
+
+    try await db.cached {
+      try await db.exec("INSERT INTO test (value) VALUES (\(1))")
+      insideSuspended.fire()
+      // Suspend mid-block so the outside task's exec provably interleaves while
+      // the caching scope is active.
+      await outsideDone.wait()
+    }
+
+    try await outside.value
+
+    #expect(db.handle.resourceStore.statementCache.count == 1)
+    #expect(db.handle.resourceStore.statementCache[outsideSQL] == nil)
   }
 }

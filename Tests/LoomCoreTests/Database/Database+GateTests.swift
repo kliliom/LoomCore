@@ -610,6 +610,41 @@ struct DatabaseGateTests {
     #expect(values == [1])
   }
 
+  @Test("Task.detached does not inherit the transaction token")
+  func detachedTaskDoesNotInheritToken() async throws {
+    let db = try await Database.openInMemory()
+    try await db.exec("CREATE TABLE t (value INTEGER)")
+    let detachedDone = Signal()
+
+    // The detached task must queue at the gate like any outside caller; if it
+    // inherited the token it would pass straight through and `waitForWaiters`
+    // would time out. Its insert runs after the rollback, outside the
+    // transaction, so it must survive while the body's insert must not.
+    @Sendable @DatabaseActor func detachedInsert() async {
+      do {
+        try await db.exec("INSERT INTO t (value) VALUES (2)")
+      } catch {
+        Issue.record("Detached insert failed: \(error)")
+      }
+      detachedDone.fire()
+    }
+    try? await db.transaction { db in
+      try await db.exec("INSERT INTO t (value) VALUES (1)")
+      Task.detached {
+        await detachedInsert()
+      }
+      await waitForWaiters(on: db)
+      throw LoomError.core(.unexpectedState, message: "body failure")
+    }
+
+    await detachedDone.wait()
+
+    let values = try await db.query("SELECT value FROM t ORDER BY value") { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+    #expect(values == [2])
+  }
+
   @Test("Unstructured Task inherits the token and joins the transaction")
   func unstructuredTaskInheritsToken() async throws {
     let db = try await Database.openInMemory()
