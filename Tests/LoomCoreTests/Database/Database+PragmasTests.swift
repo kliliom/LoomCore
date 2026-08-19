@@ -543,6 +543,129 @@ class DatabasePragmasTests {
     #expect(categoryFK?.onDelete == "SET NULL")
   }
 
+  // MARK: - Identifier Safety Tests
+
+  @Test("Introspection works on identifiers that need quoting")
+  func testIntrospectsQuotedIdentifiers() async throws {
+    try await db.exec(
+      """
+      CREATE TABLE "my table" (
+        id INTEGER PRIMARY KEY,
+        "order" TEXT
+      )
+      """
+    )
+    try await db.exec(
+      """
+      CREATE TABLE "order" (
+        id INTEGER PRIMARY KEY,
+        "my table_id" INTEGER REFERENCES "my table"(id)
+      )
+      """
+    )
+    try await db.exec(#"CREATE INDEX "idx my index" ON "my table" ("order")"#)
+
+    // Names containing spaces and reserved words used to fail to prepare, because they
+    // were spliced into the PRAGMA text instead of bound.
+    let columns = try await db.tableInfo("my table")
+    #expect(columns.map(\.name) == ["id", "order"])
+
+    let reserved = try await db.tableInfo("order")
+    #expect(reserved.map(\.name) == ["id", "my table_id"])
+
+    let indexes = try await db.indexList("my table").map(\.name)
+    #expect(indexes.contains("idx my index"))
+
+    let indexColumns = try await db.indexInfo("idx my index")
+    #expect(indexColumns.first?.name == "order")
+
+    let foreignKeys = try await db.foreignKeyList("order")
+    try #require(foreignKeys.count == 1)
+    #expect(foreignKeys[0].table == "my table")
+    #expect(foreignKeys[0].from == "my table_id")
+  }
+
+  @Test("Schema name is bound, never parsed as SQL")
+  func testSchemaNameIsBound() async throws {
+    // A schema name containing a space used to be spliced after the PRAGMA keyword and
+    // produce a syntax error. It is now a bound value, so it simply matches nothing.
+    let tables = try await db.tableList(schema: "not a schema")
+    #expect(tables.isEmpty)
+  }
+
+  @Test("Schema name cannot execute a different pragma")
+  func testSchemaNameCannotExecutePragma() async throws {
+    try await db.setSynchronous(.full)
+    #expect(try await db.getSynchronous() == .full)
+
+    let ignoreCheckConstraints = {
+      try await self.db.query("PRAGMA ignore_check_constraints") { stmt, _ in
+        try Int32.column(of: stmt, at: 0)
+      }.first ?? 0
+    }
+    #expect(try await ignoreCheckConstraints() == 0)
+
+    // These payloads used to land in the pragma-name position, replacing the intended
+    // pragma outright and flipping connection state.
+    _ = try? await db.tableList(schema: "synchronous = OFF --")
+    _ = try? await db.tableList(schema: "ignore_check_constraints = ON --")
+    _ = try? await db.walCheckpoint(database: "synchronous = OFF --")
+
+    #expect(try await db.getSynchronous() == .full)
+    #expect(try await ignoreCheckConstraints() == 0)
+  }
+
+  @Test("WAL checkpoint rejects an unknown database name")
+  func testWALCheckpointUnknownDatabase() async throws {
+    try await db.setJournalMode(.wal)
+
+    await #expect(throws: LoomError.self) {
+      _ = try await self.db.walCheckpoint(database: "no such database")
+    }
+  }
+
+  @Test("WAL checkpoint resolves database names case-insensitively")
+  func testWALCheckpointCaseInsensitiveDatabase() async throws {
+    try await db.setJournalMode(.wal)
+    try await db.exec("CREATE TABLE t (x INTEGER)")
+    try await db.exec("INSERT INTO t VALUES (1)")
+
+    let info = try await db.walCheckpoint(mode: .truncate, database: "MAIN")
+    #expect(info.busy == false)
+    #expect(info.checkpointedPages >= 0)
+  }
+
+  @Test("WAL checkpoint of every attached database via nil or empty name")
+  func testWALCheckpointAllDatabases() async throws {
+    // Explicitly opting in to the sqlite3_wal_checkpoint_v2 "all databases" form.
+    // Used to throw when the name was spliced into PRAGMA text.
+    try await db.setJournalMode(.wal)
+    try await db.exec("CREATE TABLE t (x INTEGER)")
+    try await db.exec("INSERT INTO t VALUES (1)")
+
+    let nilInfo = try await db.walCheckpoint(mode: .passive, database: nil)
+    #expect(nilInfo.busy == false)
+
+    let emptyInfo = try await db.walCheckpoint(mode: .passive, database: "")
+    #expect(emptyInfo.busy == false)
+  }
+
+  @Test("Table list resolves schema names case-insensitively")
+  func testTableListCaseInsensitiveSchema() async throws {
+    // SQLite resolves schema names case-insensitively everywhere (`SELECT * FROM MAIN.t`
+    // works); a BINARY comparison against pragma_table_list's output would return [].
+    try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY)")
+
+    let upper = try await db.tableList(schema: "MAIN").map(\.name)
+    #expect(upper.contains("users"))
+
+    try await db.exec("ATTACH ':memory:' AS Aux")
+    try await db.exec("CREATE TABLE Aux.extras (id INTEGER PRIMARY KEY)")
+
+    let attached = try await db.tableList(schema: "aux").map(\.name)
+    #expect(attached.contains("extras"))
+  }
+
   // MARK: - Integration Tests
 
   @Test("Configure database for production use")

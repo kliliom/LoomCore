@@ -54,8 +54,11 @@ where Left.ExpressionValue == String, Right.ExpressionValue == String {
       builder.appendLiteral("NOT LIKE")
     }
     right.append(to: &builder)
-    if let escape = escape {
-      builder.appendLiteral("ESCAPE '\(escape)'")
+    if let escape {
+      // Rendered as a quote-doubled literal, not a bound parameter: SQLite applies the
+      // LIKE prefix-index optimization only when the ESCAPE operand is a literal token,
+      // so binding it would silently turn every indexed LIKE into a full-table scan.
+      builder.appendLiteral("ESCAPE '\(String(escape).replacingOccurrences(of: "'", with: "''"))'")
     }
     builder.appendLiteral(")")
   }

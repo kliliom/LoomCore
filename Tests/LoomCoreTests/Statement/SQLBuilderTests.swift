@@ -94,8 +94,10 @@ struct SQLBuilderTests {
     var builder = SQLBuilder()
     builder.appendLiteral("INSERT INTO test VALUES (")
 
+    // `Optional` is not `CustomStringConvertible`, so it uses the always-binding overload
+    // rather than the `mode:` one.
     let optionalValue: String? = nil
-    builder.appendInterpolation(optionalValue, mode: .bind)
+    builder.appendInterpolation(optionalValue)
     builder.appendLiteral(")")
 
     let stmt = builder.makeStatement()

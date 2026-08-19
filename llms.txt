@@ -9,7 +9,7 @@ LoomCore emphasizes safety through Swift's type system and concurrency model. Th
 - Nested transactions are supported via `SAVEPOINT`: calling `transaction()` inside an active transaction opens a savepoint scope. A normal return releases the savepoint into the enclosing transaction; a throw rolls back to the savepoint (leaving the enclosing transaction's work intact) and rethrows. Service lifecycle hooks fire only for the outermost physical transaction (the participating set is fixed when it begins), and `kind:` is ignored when nested.
 - While a transaction is in flight — even suspended at an `await` — operations from tasks outside it wait until it commits or rolls back. Membership is a task-local token bound around the body, inherited by structured children (`async let`, task groups) and `Task {}`, but NOT by `Task.detached`. An unstructured `Task {}` must complete before the body returns (await its value); a task that outlives the body races the commit and may run outside the transaction. Waiting operations throw `CancellationError` on task cancellation. Once past the gate, an operation runs to completion synchronously on `DatabaseActor` — nothing interleaves mid-statement.
 - The `Database` class is `@DatabaseActor` isolated. You cannot call its methods from arbitrary async contexts without hopping to the actor.
-- String interpolation defaults to safe `.bind` mode. Use `.raw` mode only for trusted SQL identifiers (table/column names), never for user input.
+- String interpolation defaults to safe `.bind` mode. Use `.raw` mode only for trusted SQL identifiers (table/column names), never for user input. `.raw` is only available for values conforming to `CustomStringConvertible`; everything else must bind.
 - When using managed indices (`ManagedIndex`), the index auto-increments *after* bind/column operations. Parameters start at 0 (becomes 1 after first bind), columns start at 0.
 
 **Platform support:** Swift 6.0+, iOS 16+, macOS 13+, tvOS 16+, visionOS 1+, watchOS 9+
@@ -110,7 +110,25 @@ db.query(raw:binding:_:stepper:) async throws -> [R]
 db.exec(_:)                    // SQLStatement
 db.exec(raw:binder:)           // Manual binding
 db.exec(raw:)                  // No parameters
+db.execScript(_:)              // Multi-statement script, no parameters, not cached
 ```
+
+`exec` and `query` prepare exactly one statement. SQL containing a second statement — or an
+embedded NUL byte, after which SQLite would silently drop everything — throws
+`LoomCoreErrorCode.trailingSQL` rather than silently dropping the remainder; use
+`execScript(_:)` for migration scripts.
+
+`execScript(_:)` throws `LoomCoreErrorCode.invalidScript` when a script statement contains a
+parameter placeholder, the script contains an embedded NUL byte, the script leaves a transaction
+open at the end (balanced `BEGIN … COMMIT` — `sqlite3 .dump` output — is fine), or a script
+statement commits/rolls back the enclosing `transaction { }`. A script-managed transaction
+fires no `Service` lifecycle hooks.
+
+`walCheckpoint(mode:database:)` names the database to checkpoint (`"main"` by default,
+resolved case-insensitively); `nil` or `""` checkpoints every attached database, per
+`sqlite3_wal_checkpoint_v2`. Introspection helpers (`tableInfo`, `tableList`, `indexList`,
+`indexInfo`, `foreignKeyList`) bind bare names as values — never pre-quote identifiers;
+`tableList(schema:)` matches the schema name case-insensitively.
 
 **Other methods:**
 ```swift

@@ -29,6 +29,15 @@
 /// let stmt: SQLStatement = "SELECT * FROM \(table, mode: .raw)"
 /// ```
 ///
+/// `.raw` requires `CustomStringConvertible`, which supplies the rendered text. A
+/// `RawRepresentable` enum does not get that conformance for free — interpolate its
+/// `rawValue`, not the case itself:
+///
+/// ```swift
+/// enum Table: String { case users, posts }
+/// let stmt: SQLStatement = "SELECT * FROM \(Table.users.rawValue, mode: .raw)"
+/// ```
+///
 /// For DDL or other statements that contain no dynamic values, use ``raw(_:)``.
 ///
 /// ## See Also
@@ -58,6 +67,9 @@ public struct SQLStatement: Sendable {
   }
 
   /// Creates a statement from raw SQL with no parameter binding.
+  ///
+  /// Holds exactly one statement — executing SQL that contains a second one throws
+  /// ``LoomCoreErrorCode/trailingSQL``. Use ``Database/execScript(_:)`` for scripts.
   ///
   /// Use this for DDL or pragma statements that contain no dynamic values:
   ///

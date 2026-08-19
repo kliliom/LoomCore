@@ -520,6 +520,16 @@ extension Database {
     ///
     /// Most aggressive option — guarantees the WAL file is emptied.
     case truncate = "TRUNCATE"
+
+    /// `SQLITE_CHECKPOINT_*` constant passed to `sqlite3_wal_checkpoint_v2`.
+    var checkpointCode: Int32 {
+      switch self {
+      case .passive: SQLITE_CHECKPOINT_PASSIVE
+      case .full: SQLITE_CHECKPOINT_FULL
+      case .restart: SQLITE_CHECKPOINT_RESTART
+      case .truncate: SQLITE_CHECKPOINT_TRUNCATE
+      }
+    }
   }
 
   /// Result of a WAL checkpoint operation.
@@ -547,30 +557,39 @@ extension Database {
   ///
   /// - Parameters:
   ///   - mode: Checkpoint mode controlling blocking behavior and WAL truncation.
-  ///   - schema: Schema name to checkpoint (e.g. `"main"`, `"temp"`, or an attached database name).
+  ///   - database: Database name to checkpoint (e.g. `"main"`, `"temp"`, or an attached
+  ///     database name), resolved case-insensitively and passed to SQLite as a name, never
+  ///     as SQL text. Pass `nil` or an empty string to checkpoint **every** attached
+  ///     database, per `sqlite3_wal_checkpoint_v2` — the returned page counts are
+  ///     meaningless in that case.
   public func walCheckpoint(
     mode: WALCheckpointMode = .passive,
-    schema: String = "main"
+    database: String? = "main"
   ) async throws -> WALCheckpointInfo {
-    let results = try await query(
-      "PRAGMA \(schema, mode: .raw).wal_checkpoint(\(mode.rawValue, mode: .raw))"
-    ) { stmt, _ in
-      (
-        busy: try Int32.column(of: stmt, at: 0),
-        log: try Int32.column(of: stmt, at: 1),
-        checkpointed: try Int32.column(of: stmt, at: 2)
-      )
-    }
+    try await gate()
 
-    guard let result = results.first else {
-      throw LoomError.core(.unexpectedState, message: "wal_checkpoint returned no results")
-    }
+    let dbPtr = try handle.ptr
+    var logPages: Int32 = -1
+    var checkpointedPages: Int32 = -1
+    let code: Int32 =
+      if let database, !database.isEmpty {
+        database.withCString { zDb in
+          sqlite3_wal_checkpoint_v2(dbPtr, zDb, mode.checkpointCode, &logPages, &checkpointedPages)
+        }
+      } else {
+        sqlite3_wal_checkpoint_v2(dbPtr, nil, mode.checkpointCode, &logPages, &checkpointedPages)
+      }
 
-    return WALCheckpointInfo(
-      busy: result.busy != 0,
-      logPages: result.log,
-      checkpointedPages: result.checkpointed
-    )
+    switch code {
+    case SQLITE_OK:
+      return WALCheckpointInfo(busy: false, logPages: logPages, checkpointedPages: checkpointedPages)
+    case SQLITE_BUSY:
+      // Mirrors `PRAGMA wal_checkpoint`, which reports contention in its first column
+      // rather than failing the statement.
+      return WALCheckpointInfo(busy: true, logPages: logPages, checkpointedPages: checkpointedPages)
+    default:
+      throw LoomError.sqlite(code, message: String(cString: sqlite3_errmsg(dbPtr)))
+    }
   }
 }
 
@@ -606,8 +625,16 @@ extension Database {
   ///   print("\(column.name): \(column.type)\(nullability)")
   /// }
   /// ```
+  ///
+  /// - Parameter tableName: Bare table name, bound as a value — pass `my table`, not a
+  ///   pre-quoted `"my table"`. A quoted identifier is treated as literal characters of
+  ///   the name and matches nothing.
   public func tableInfo(_ tableName: String) async throws -> [ColumnInfo] {
-    try await query("PRAGMA table_info(\(tableName, mode: .raw))") { stmt, _ in
+    try await query(
+      """
+      SELECT cid, name, type, "notnull", dflt_value, pk FROM pragma_table_info(\(tableName))
+      """
+    ) { stmt, _ in
       ColumnInfo(
         cid: try Int32.column(of: stmt, at: 0),
         name: try String.column(of: stmt, at: 1),
@@ -649,8 +676,15 @@ extension Database {
   /// ```
   ///
   /// - Parameter schema: Schema to list tables from (e.g. `"main"`, `"temp"`, or an attached database name).
+  ///   Matched case-insensitively, the way SQLite itself resolves schema names. Bound as a
+  ///   parameter, so any string is safe — an unknown schema simply matches nothing.
   public func tableList(schema: String = "main") async throws -> [TableInfo] {
-    try await query("PRAGMA \(schema, mode: .raw).table_list") { stmt, _ in
+    try await query(
+      """
+      SELECT schema, name, type, ncol, wr, strict FROM pragma_table_list \
+      WHERE schema = \(schema) COLLATE NOCASE
+      """
+    ) { stmt, _ in
       TableInfo(
         schema: try String.column(of: stmt, at: 0),
         name: try String.column(of: stmt, at: 1),
@@ -688,8 +722,14 @@ extension Database {
   ///   print("\(index.name)\(kind)")
   /// }
   /// ```
+  ///
+  /// - Parameter tableName: Bare table name, bound as a value — never pre-quoted.
   public func indexList(_ tableName: String) async throws -> [IndexListInfo] {
-    try await query("PRAGMA index_list(\(tableName, mode: .raw))") { stmt, _ in
+    try await query(
+      """
+      SELECT seq, name, "unique", origin, partial FROM pragma_index_list(\(tableName))
+      """
+    ) { stmt, _ in
       IndexListInfo(
         seq: try Int32.column(of: stmt, at: 0),
         name: try String.column(of: stmt, at: 1),
@@ -730,8 +770,14 @@ extension Database {
   ///   }
   /// }
   /// ```
+  ///
+  /// - Parameter indexName: Bare index name, bound as a value — never pre-quoted.
   public func indexInfo(_ indexName: String) async throws -> [IndexColumnInfo] {
-    try await query("PRAGMA index_xinfo(\(indexName, mode: .raw))") { stmt, _ in
+    try await query(
+      """
+      SELECT seqno, cid, name, desc, coll, key FROM pragma_index_xinfo(\(indexName))
+      """
+    ) { stmt, _ in
       IndexColumnInfo(
         seqno: try Int32.column(of: stmt, at: 0),
         cid: try Int32.column(of: stmt, at: 1),
@@ -779,8 +825,15 @@ extension Database {
   ///   print("  ON DELETE \(fk.onDelete)")
   /// }
   /// ```
+  ///
+  /// - Parameter tableName: Bare table name, bound as a value — never pre-quoted.
   public func foreignKeyList(_ tableName: String) async throws -> [ForeignKeyInfo] {
-    try await query("PRAGMA foreign_key_list(\(tableName, mode: .raw))") { stmt, _ in
+    try await query(
+      """
+      SELECT id, seq, "table", "from", "to", on_update, on_delete, match
+      FROM pragma_foreign_key_list(\(tableName))
+      """
+    ) { stmt, _ in
       ForeignKeyInfo(
         id: try Int32.column(of: stmt, at: 0),
         seq: try Int32.column(of: stmt, at: 1),

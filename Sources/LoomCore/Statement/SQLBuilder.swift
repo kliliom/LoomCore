@@ -79,6 +79,9 @@ public struct SQLBuilder: StringInterpolationProtocol {
     /// Use only for trusted identifiers — table names, column names, or keywords from your own
     /// configuration. Raw mode bypasses the binding that prevents SQL injection, so user input
     /// must never reach this mode.
+    ///
+    /// Available only for values conforming to `CustomStringConvertible`, whose `description`
+    /// supplies the rendered text.
     case raw
 
     /// Renders the value as a `?` placeholder with a registered binder. The default mode.
@@ -108,20 +111,13 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// // Produces: SELECT * FROM users WHERE name = ?
   /// ```
   ///
-  /// If a `.raw` value does not conform to `CustomStringConvertible`, the builder logs a warning
-  /// and falls back to `.bind` mode.
-  public mutating func appendInterpolation(_ value: some Expression, mode: AppendMode) {
+  /// `.raw` renders the value's `description`, so this overload is available only where that
+  /// exists. Values without it can still be interpolated through ``appendInterpolation(_:)``,
+  /// which always binds.
+  public mutating func appendInterpolation(_ value: some Expression & CustomStringConvertible, mode: AppendMode) {
     switch mode {
     case .raw:
-      switch value {
-      case let value as CustomStringConvertible:
-        sql.append(value.description)
-      default:
-        warn(
-          "Value of type \(type(of: value)) does not conform to CustomStringConvertible. Falling back to `.bind` mode."
-        )
-        value.append(to: &self)
-      }
+      sql.append(value.description)
     case .bind:
       value.append(to: &self)
     }
@@ -136,7 +132,7 @@ public struct SQLBuilder: StringInterpolationProtocol {
   /// ```
   @inline(__always)
   public mutating func appendInterpolation(_ value: (some Bindable)?) {
-    return appendInterpolation(value, mode: .bind)
+    value.append(to: &self)
   }
 }
 

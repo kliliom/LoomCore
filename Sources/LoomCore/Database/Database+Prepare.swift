@@ -53,8 +53,28 @@ public struct StatementHandle: ~Copyable, Sendable {
   }
 }
 
+/// Bytes SQLite's tokenizer treats as inter-statement noise: whitespace and `;`.
+private func isTrailingNoiseByte(_ byte: CChar) -> Bool {
+  switch byte {
+  case 0x20, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x3B:  // space, \t, \n, \v, \f, \r, ;
+    true
+  default:
+    false
+  }
+}
+
 extension Database {
   func prepare(sql: String) throws -> StatementHandle {
+    // SQLite's prepare stops at the first zero byte no matter what length is passed, so
+    // anything after an embedded NUL — a second statement included — would be silently
+    // dropped before the trailing-SQL check below could see it.
+    guard !sql.utf8.contains(0) else {
+      throw LoomError.core(
+        .trailingSQL,
+        message: "SQL contains an embedded NUL byte; text after it would be silently dropped."
+      )
+    }
+
     let useCache = StatementCaching.databases.contains(ObjectIdentifier(self))
 
     let dbPtr = try handle.ptr
@@ -75,7 +95,40 @@ extension Database {
       } else {
         0
       }
-    try check(sqlite3_prepare_v3(dbPtr, sql, -1, flags, &ptr, nil), db: dbPtr, is: SQLITE_OK)
+    var hasTrailingSQL = false
+    try sql.withCString { cString in
+      var tail: UnsafePointer<CChar>?
+      try check(sqlite3_prepare_v3(dbPtr, cString, -1, flags, &ptr, &tail), db: dbPtr, is: SQLITE_OK)
+
+      // Trailing text is benign only when SQLite itself finds no further statement in it.
+      // The common shapes — "…;", "…;\n" — are pure whitespace/semicolons and are skipped
+      // here without re-entering the parser. Anything else (comments included) is settled
+      // by re-preparing the remainder, reusing SQLite's own tokenizer instead of
+      // hand-rolling one: whitespace and comments compile to a nil statement pointer.
+      if var rest = tail, rest.pointee != 0 {
+        while isTrailingNoiseByte(rest.pointee) {
+          rest += 1
+        }
+        if rest.pointee != 0 {
+          var tailPtr: OpaquePointer?
+          let code = sqlite3_prepare_v3(dbPtr, rest, -1, 0, &tailPtr, nil)
+          if let tailPtr {
+            sqlite3_finalize(tailPtr)
+          }
+          hasTrailingSQL = tailPtr != nil || code != SQLITE_OK
+        }
+      }
+    }
+
+    if hasTrailingSQL {
+      // Rejected before reaching the cache, so nothing else can observe this statement.
+      sqlite3_finalize(ptr)
+      throw LoomError.core(
+        .trailingSQL,
+        message: "SQL contains more than one statement. Use `execScript(_:)` to run a multi-statement script."
+      )
+    }
+
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_prepare_v3() did not return a statement pointer.")
     }

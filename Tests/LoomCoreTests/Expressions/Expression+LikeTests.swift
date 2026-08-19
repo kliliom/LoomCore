@@ -132,4 +132,31 @@ struct ExpressionStringTests {
       expectedValues: [true, false, true, true]
     )
   }
+
+  @Test("LIKE operator with a single-quote escape character")
+  func testLikeWithQuoteEscapeCharacter() async throws {
+    // The escape character is rendered as a SQL literal, so `'` must be quote-doubled
+    // to stay inside its own quotes instead of terminating them.
+    try await run(
+      username.like("user'_%", escape: "'"),
+      expectedExpression: "( \"username\" LIKE ? ESCAPE '''' )",
+      expectedValues: [false, true, false, false]
+    )
+  }
+
+  @Test("Escaped LIKE keeps the prefix-index optimization")
+  func testEscapedLikeUsesIndex() async throws {
+    // SQLite applies the LIKE prefix-index optimization only when the ESCAPE operand is a
+    // literal token. A bound `ESCAPE ?` silently degraded every indexed LIKE to a full scan.
+    try await db.exec("CREATE TABLE items (name TEXT COLLATE NOCASE)")
+    try await db.exec("CREATE INDEX idx_items_name ON items (name)")
+
+    let name = ColumnExpression<String>("name")
+    let condition: SQLStatement = "\(name.like("ab\\%%", escape: "\\"))"
+
+    let plan = try await db.query("EXPLAIN QUERY PLAN SELECT * FROM items WHERE" + condition) { stmt, _ in
+      try String.column(of: stmt, at: 3)
+    }
+    #expect(plan.contains { $0.contains("SEARCH") && $0.contains("idx_items_name") })
+  }
 }

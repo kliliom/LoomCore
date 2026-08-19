@@ -30,6 +30,20 @@ public struct LoomCoreErrorCode: RawRepresentable, Hashable, Sendable {
   public static let nullValue = LoomCoreErrorCode(rawValue: 4)
   /// Stored value could not be decoded into the requested Swift type.
   public static let typeMappingFailed = LoomCoreErrorCode(rawValue: 5)
+  /// SQL string contained more than one statement where exactly one was expected.
+  ///
+  /// Raised by the `exec` and `query` families, which prepare a single statement. Also
+  /// raised when the SQL contains an embedded NUL byte, since SQLite would silently drop
+  /// everything after it. Run multi-statement scripts through ``Database/execScript(_:)``
+  /// instead.
+  public static let trailingSQL = LoomCoreErrorCode(rawValue: 6)
+  /// Script handed to ``Database/execScript(_:)`` violated its contract.
+  ///
+  /// Raised when a script contains a parameter placeholder such as `?` or `:name` (script
+  /// statements take no bound parameters), contains an embedded NUL byte (everything after it would be silently
+  /// dropped), leaves a transaction open at the end, or ends the enclosing
+  /// ``Database/transaction(kind:_:)`` with a `COMMIT`/`ROLLBACK` of its own.
+  public static let invalidScript = LoomCoreErrorCode(rawValue: 7)
 }
 
 extension LoomCoreErrorCode: LoomError.ErrorCode {}
