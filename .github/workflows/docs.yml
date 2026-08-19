@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: docc-pages-${{ github.ref }}
+  group: docc-pages
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: macos-26
     env:
       BUILDING_DOCC: 1
@@ -35,7 +35,7 @@ jobs:
             --target LoomCore \
             --disable-indexing \
             --transform-for-static-hosting \
-            --hosting-base-path loom-core \
+            --hosting-base-path LoomCore \
             --warnings-as-errors \
             --output-path ./docs
 
@@ -46,22 +46,11 @@ jobs:
           <meta http-equiv="refresh" content="0; url=./documentation/loomcore/">
           EOF
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to gh-pages
+        if: github.event_name != 'pull_request'
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: ./docs
-
-  deploy:
-    if: github.event_name != 'pull_request'
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          force_orphan: true
