@@ -4,7 +4,7 @@
 ///
 /// ```swift
 /// let name = ColumnExpression<String>("name")
-/// let users = try await db.query("SELECT \(name) FROM users WHERE \(name.length()) > \(10)") { stmt, _ in
+/// let users = try await db.query("SELECT \(name) FROM users WHERE \(name.length() > 10)") { stmt, _ in
 ///   try String.column(of: stmt, at: 0)
 /// }
 /// ```

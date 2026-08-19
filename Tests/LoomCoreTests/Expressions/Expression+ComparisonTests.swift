@@ -205,4 +205,55 @@ struct ExpressionComparisonTests {
       expectedValues: [true, true, false, true]
     )
   }
+
+  // MARK: - Mixed Optionality
+
+  @Test("Optional-valued function compares against a literal")
+  func testOptionalLhsAgainstLiteral() async throws {
+    try await run(
+      name.length() > 3,
+      expectedExpression: "( LENGTH( \"name\" ) > ? )",
+      expectedValues: [true, false, true, true]
+    )
+  }
+
+  @Test("Optional-valued function equality against a literal")
+  func testOptionalLhsEquality() async throws {
+    try await run(
+      name.lower() == "alice",
+      expectedExpression: "( LOWER( \"name\" ) = ? )",
+      expectedValues: [true, false, false, false]
+    )
+  }
+
+  @Test("Non-optional expression compares against an optional-valued function")
+  func testNonOptionalLhsAgainstOptionalRhs() async throws {
+    try await run(
+      3 < name.length(),
+      expectedExpression: "( ? < LENGTH( \"name\" ) )",
+      expectedValues: [true, false, true, true]
+    )
+  }
+
+  @Test("Optional-valued aggregate comparison in HAVING")
+  func testAggregateComparisonInHaving() async throws {
+    let totals = try await db.query(
+      "SELECT \(score.sum()) FROM people GROUP BY \(age) HAVING \(score.sum() >= 100.0)",
+      stepper: { stmt, _ in
+        try Double?.column(of: stmt, at: 0)
+      }
+    )
+    #expect(totals == [173.5])
+  }
+
+  @Test("Two optional-valued aggregates compare against each other")
+  func testOptionalAgainstOptional() async throws {
+    let rows = try await db.query(
+      "SELECT \(age.min() < age.max()) FROM people",
+      stepper: { stmt, _ in
+        try Bool.column(of: stmt, at: 0)
+      }
+    )
+    #expect(rows == [true])
+  }
 }
