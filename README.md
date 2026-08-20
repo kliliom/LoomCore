@@ -23,7 +23,7 @@ Add LoomCore to your Swift package dependencies:
 <!-- doc-check: skip -->
 ```swift
 dependencies: [
-    .package(url: "https://github.com/kliliom/LoomCore.git", from: "0.1.0")
+    .package(url: "https://github.com/kliliom/LoomCore.git", from: "1.0.0")
 ]
 ```
 
