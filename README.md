@@ -12,6 +12,7 @@ A type-safe SQLite wrapper for Swift 6+ using actor isolation for thread safety.
 - 🧮 **Expressions** - Operator overloading for building SQL expressions in Swift
 - 🗂️ **Codable Support** - Automatic JSON encoding/decoding for `Codable` types
 - 🌳 **JSON Querying** - Typed expressions over SQLite's JSON functions: extract, modify, aggregate, and iterate documents (JSONB included)
+- 🔎 **Full-Text Search** - Typed `MATCH` predicates, `rank`/`bm25` ordering, and `snippet`/`highlight` excerpts over FTS5
 - 🪝 **Service Hooks** - Transaction lifecycle callbacks for cache invalidation and side effects
 - 🗃️ **Statement Caching** - Prepared statements cached automatically inside `cached { }` scopes (per task tree)
 
@@ -281,6 +282,21 @@ let names = try await db.query("SELECT name FROM users WHERE \(predicate)") { st
 Predicates: `like`, `isNull` / `isNotNull`, `in(array:)` / `notIn(array:)`. Aggregate and scalar functions: `count`, `sum`, `avg`, `min`, `max`, `length`, `upper`, `lower`, `trim`, `substring`, `concat`, `groupConcat`, `locate`, `ifNull`, `cast`.
 
 JSON functions: `jsonExtract`, `jsonValue` (`->>`), `jsonFragment` (`->`), `jsonType`, `jsonValid`, `jsonErrorPosition`, `jsonArrayLength`, `jsonSet` / `jsonInsert` / `jsonReplace`, `jsonRemove`, `jsonPatch`, `json`, `jsonArray`, `jsonObject`, `jsonGroupArray`, `jsonGroupObject`, plus `JSONEach` / `JSONTree` for iterating documents in FROM clauses and `@available`-gated `jsonb*` variants (SQLite 3.45+). The JSON surface needs the system SQLite to be 3.38+, which every supported OS version ships; APIs needing a newer SQLite (`jsonErrorPosition` — 3.42, everything `jsonb*` — 3.45) are gated with `@available` on the OS versions that carry it. See the *Querying JSON* documentation article.
+
+Full-text search: `FTS5Table` names an existing FTS5 virtual table (created with plain SQL) and provides `match` (whole-table or per-column `MATCH`; query text is always bound, so it can't escape into SQL — but raw FTS5 syntax hands the searcher column filters over every indexed column, so route user text through `FTS5Query` or a per-column match unless all columns are meant to be searchable), the `rank` column, `bm25(weights:)` scoring, and `snippet` / `highlight` excerpts. `FTS5Query` builds match queries that are correct by construction — `.phrase`, `.prefix`, `.near`, column filters, and `and`/`or`/`not` combinators:
+
+```swift
+let articles = FTS5Table("articles", columns: ["title", "body"])
+let query = FTS5Query.phrase("swift concurrency").and(.prefix("actor"))
+
+let hits = try await db.query(
+    "SELECT title FROM articles WHERE \(articles.match(query)) ORDER BY \(articles.rank)"
+) { stmt, _ in
+    try String.column(of: stmt, at: 0)
+}
+```
+
+FTS5 ships in every supported OS version. See the *Full-Text Search* documentation article.
 
 ## Services
 

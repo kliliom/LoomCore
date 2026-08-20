@@ -216,6 +216,8 @@ Predicates: `.like(_:escape:)` / `.notLike(_:escape:)` (SQL `LIKE`), `.isNull()`
 
 JSON functions: `.jsonExtract(_:as:)` (`JSON_EXTRACT`), `.jsonValue(_:as:)` (`->>`), `.jsonFragment(_:)` (`->`), `.jsonType(_:)`, `.jsonValid()` (+ a flags form for JSONB), `.jsonErrorPosition()` (iOS 17/macOS 14+), `.jsonArrayLength(_:)`; modification via `.jsonSet(_:_:)` / `.jsonInsert(_:_:)` / `.jsonReplace(_:_:)` (taking `JSONAssignment.value`/`.json` pairs), `.jsonRemove(_:_:)`, `.jsonPatch(_:)`; construction/aggregation via `jsonArray(_:)`, `jsonObject(_:)`, `.jsonGroupArray()`, `jsonGroupObject(name:value:)`; iteration via `JSONEach` / `JSONTree` interpolated in FROM position. Paths (`JSONPath`, e.g. `"$.a[0]"`) render as SQL literals so expression indexes still match. `jsonb`-prefixed variants (SQLite 3.45+) are `@available(iOS 18, macOS 15, …)` and return `Data`.
 
+Full-text search (FTS5): `FTS5Table("articles", columns: ["title", "body"])` names an existing FTS5 virtual table (create it with plain SQL). `.match(_:)` builds the `MATCH` predicate from a raw FTS5 query string or a typed `FTS5Query` — query text is always bound, so it cannot escape into SQL, but raw FTS5 syntax grants the searcher column filters over every indexed column (route user text through `FTS5Query` or a per-column match unless all indexed columns are meant to be searchable); invalid raw syntax throws at execution. `FTS5Query` factories: `.phrase(_:fromStart:)`, `.prefix(_:fromStart:)`, `.near(_:distance:)`, `.column(_:_:)` / `.columns(_:_:)`, combined with `.and(_:)` / `.or(_:)` / `.not(_:)` (phrase text is quoted, so metacharacters are inert). Ranking: the `.rank` column (`Double?`, negative, ascending = best first) and `.bm25(weights:)`. Excerpts: `.snippet(column:prefix:suffix:ellipsis:maxTokens:)` (columns addressed by name against the declared `columns` list; `maxTokens` 1–64) and `.highlight(column:prefix:suffix:)`, both `String?`. `match(_:)` also exists on `ColumnExpression<String>` for single-column matches. FTS5 ships in every supported OS version.
+
 ## Examples
 
 ### Managed indices (recommended for multi-column operations)
@@ -352,6 +354,34 @@ let tagged = try await db.query(
     "SELECT \(userID) FROM users, \(tag) WHERE \(tag.value(as: String.self) == "swift")"
 ) { stmt, _ in
     try Int64.column(of: stmt, at: 0)
+}
+```
+
+### Full-text search (FTS5)
+
+```swift
+// The index itself is plain SQL; FTS5Table names it for the DSL
+try await db.exec(raw: "CREATE VIRTUAL TABLE articles USING fts5(title, body)")
+let articles = FTS5Table("articles", columns: ["title", "body"])
+
+// Raw query syntax (bound, so it can't escape into SQL; note the searcher gets
+// column filters over every indexed column — prefer FTS5Query for user text)
+let userInput = "swift database"
+let hits = try await db.query(
+    "SELECT title FROM articles WHERE \(articles.match(userInput)) ORDER BY \(articles.rank)"
+) { stmt, _ in
+    try String.column(of: stmt, at: 0)
+}
+
+// Typed queries: correct by construction, phrase text never parsed as syntax
+let query = FTS5Query.phrase("swift concurrency").and(.prefix("actor"))
+let excerpts = try await db.query(
+    """
+    SELECT \(articles.snippet(column: "body", prefix: "<b>", suffix: "</b>", ellipsis: "…", maxTokens: 12))
+    FROM articles WHERE \(articles.match(query)) ORDER BY \(articles.bm25(weights: [10, 1]))
+    """
+) { stmt, _ in
+    try String?.column(of: stmt, at: 0)
 }
 ```
 
@@ -503,3 +533,12 @@ let service = await db.getService(CacheInvalidationService.self)
 - `Sources/LoomCore/Expressions/Function+JsonEach.swift` — `JSONEach`: json_each table-valued function with typed column handles
 - `Sources/LoomCore/Expressions/Function+JsonTree.swift` — `JSONTree`: json_tree recursive walker with typed column handles
 - `Sources/LoomCore/Expressions/IfNullExpression.swift` — IFNULL/COALESCE handling
+
+### Full-text search (FTS5)
+
+- `Sources/LoomCore/Expressions/FTS5Table.swift` — `FTS5Table`: handle to an FTS5 virtual table, plus the `rank` column
+- `Sources/LoomCore/Expressions/FTS5Query.swift` — `FTS5Query`: typed match-query builder rendering FTS5 query syntax
+- `Sources/LoomCore/Expressions/Expression+Match.swift` — `MatchExpression`: `MATCH` predicate on tables and columns (query text bound)
+- `Sources/LoomCore/Expressions/Function+Bm25.swift` — `BM25` relevance scoring with optional per-column weights
+- `Sources/LoomCore/Expressions/Function+Snippet.swift` — `SNIPPET()` excerpts with name-resolved column indices
+- `Sources/LoomCore/Expressions/Function+Highlight.swift` — `HIGHLIGHT()` full-text marking with name-resolved column indices

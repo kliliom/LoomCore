@@ -52,6 +52,11 @@ public struct LoomCoreErrorCode: RawRepresentable, Hashable, Sendable {
   /// body it was spawned from. The scope's writes were committed or rolled back together
   /// with the enclosing scope; the refused close never touches the connection.
   public static let transactionScopeLost = LoomCoreErrorCode(rawValue: 8)
+  /// Declared schema metadata disagrees with the live database schema.
+  ///
+  /// Raised by ``FTS5Table/verifyColumns(on:)`` when the handle's declared column list does
+  /// not match the table's actual columns, or the table does not exist.
+  public static let schemaMismatch = LoomCoreErrorCode(rawValue: 9)
 }
 
 extension LoomCoreErrorCode: LoomError.ErrorCode {}

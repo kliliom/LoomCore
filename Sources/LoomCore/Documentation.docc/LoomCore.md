@@ -46,6 +46,7 @@ Concept-level explanations of how LoomCore is put together.
 - <doc:ConcurrencyModel>
 - <doc:StoringCustomTypes>
 - <doc:QueryingJSON>
+- <doc:FullTextSearch>
 - <doc:TransactionsAndServices>
 
 ### Database
@@ -123,6 +124,15 @@ Concept-level explanations of how LoomCore is put together.
 - ``jsonbObject(_:)``
 - ``jsonGroupObject(name:value:)``
 - ``jsonbGroupObject(name:value:)``
+
+### Full-Text Search
+
+- ``FTS5Table``
+- ``FTS5Query``
+- ``MatchExpression``
+- ``BM25``
+- ``Snippet``
+- ``Highlight``
 
 ### Errors
 
