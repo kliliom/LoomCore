@@ -57,6 +57,13 @@ public struct LoomCoreErrorCode: RawRepresentable, Hashable, Sendable {
   /// Raised by ``FTS5Table/verifyColumns(on:)`` when the handle's declared column list does
   /// not match the table's actual columns, or the table does not exist.
   public static let schemaMismatch = LoomCoreErrorCode(rawValue: 9)
+  /// Row type requested from a `query` overload does not match the statement's column count.
+  ///
+  /// Raised by the inferred-row `query` overloads before the first row is stepped, so a row type
+  /// that disagrees with the result set surfaces from the query itself rather than from whichever
+  /// row happens to come back. Reading past the last column would otherwise decode as `NULL`,
+  /// which an optional element would silently accept as `nil`.
+  public static let columnCountMismatch = LoomCoreErrorCode(rawValue: 10)
 }
 
 extension LoomCoreErrorCode: LoomError.ErrorCode {}

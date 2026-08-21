@@ -58,6 +58,23 @@ let users = try await db.query(
 
 When you add or remove a column, the indices shift automatically. There are no magic numbers to renumber.
 
+### Letting the row type do the counting
+
+The stepper-less `query` overloads apply the 0-based managed-column convention implicitly: annotate
+the result and each element of the row type is read left to right from column 0, with no indices in
+the source at all.
+
+```swift
+let users: [(Int, String, String, Int)] = try await db.query(
+  "SELECT id, name, email, age FROM users WHERE status = \("active")"
+)
+```
+
+The element count must match the statement's column count, so a `SELECT` that gains or loses a
+column throws ``LoomCoreErrorCode/columnCountMismatch`` instead of quietly reading the wrong
+positions. Use the `stepper:` overloads when a row needs to become a named type, when iteration has
+to stop early, or when columns are read out of order.
+
 ### When to use raw indices
 
 Raw indices (`Int32`) are still useful for:
