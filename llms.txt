@@ -95,6 +95,10 @@ try await db.transaction { db in
 
 **Query methods (all `async throws`):**
 ```text
+// Row type inferred from the return type (no stepper)
+db.query(_:) async throws -> [(repeat each Column)]
+db.query(raw:) async throws -> [(repeat each Column)]  // No parameters
+
 // String interpolation (recommended)
 db.query(_:stepper:) async throws -> [R]
 db.query(_:stepper:) async throws -> [R]  // With ManagedStepper
@@ -269,6 +273,15 @@ let result = try await db.query("SELECT email FROM users") { stmt, _ in
 }
 ```
 
+The stepper-less `query(_:)` / `query(raw:)` overloads take the row shape from the contextual
+result type: each element of the annotated tuple must conform to `Bindable` and is read left to
+right from column 0, a single-element row type yields the bare value, and nullable columns use
+`Optional`. The element count must equal `sqlite3_column_count`, or the query throws
+`LoomCoreErrorCode.columnCountMismatch` before the first row is stepped (so it fires on an empty
+result set too, and a statement returning no columns is always an error). They have no `stop`
+parameter and always read the whole result set — use a `stepper:` overload for early termination or
+custom row decoding.
+
 Column decoding is strict: reading a NULL into a non-optional type throws `LoomError.core(.nullValue, …)` (use `Optional` for nullable columns), and a value whose SQLite storage class doesn't match the requested type throws `LoomError.core(.typeMappingFailed, …)`. Numeric types accept INTEGER (Double/Float also accept REAL); `Date` binds as epoch REAL and reads only REAL/INTEGER epoch seconds — TEXT storage throws; for datetime TEXT columns (such as `CURRENT_TIMESTAMP` output) use `TextDate`, which binds and reads `YYYY-MM-DD HH:MM:SS.SSS` UTC datetime TEXT (`TextDate(date)` or `date.textDate`). `UUID` accepts a 16-byte BLOB or a textual UUID.
 
 ### Dates: `Date` vs `TextDate`
@@ -424,7 +437,7 @@ let service = await db.getService(CacheInvalidationService.self)
 
 - `Sources/LoomCore/Database/Database.swift` — Core `Database` class definition, resource management, actor isolation
 - `Sources/LoomCore/Database/Database+Open.swift` — `Database.open(url:statementCacheCapacity:)` / `Database.openInMemory(statementCacheCapacity:)` factory methods
-- `Sources/LoomCore/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
+- `Sources/LoomCore/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination, return-type-inferred row tuples
 - `Sources/LoomCore/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL), `execScript(_:)`
 - `Sources/LoomCore/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting
 - `Sources/LoomCore/Database/Database+Gate.swift` — Transaction gate: suspends operations from tasks outside the active transaction until commit/rollback

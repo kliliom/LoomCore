@@ -281,3 +281,111 @@ extension Database {
     try await query(raw: statement.sql, binder: statement.managedBinder, stepper: stepper)
   }
 }
+
+// MARK: - Inferred Row Types
+
+/// Number of columns the row type `type` reads.
+///
+/// A pack expansion has to mention the pack it expands, so the count comes from expanding a call
+/// that names each element and discards it. Folds to a constant at every concrete instantiation.
+@inline(__always)
+private func columnArity<each Column: Bindable>(of type: (repeat each Column).Type) -> Int32 {
+  var arity: Int32 = 0
+  func countElement<T>(_ elementType: T.Type) {
+    arity += 1
+  }
+  repeat countElement((each Column).self)
+  return arity
+}
+
+extension Database {
+  /// Shared core of the inferred-row `query` overloads.
+  ///
+  /// Checks the statement's column count against the row type's arity from inside the binder: the
+  /// binder runs once, after `prepare` and before the first `sqlite3_step`, so the check costs
+  /// nothing per row and still fires for an empty result set. Delegating to the gated
+  /// `query(raw:binder:stepper:)` keeps transaction gating and cancellation behaviour identical to
+  /// the stepper-based overloads.
+  private func queryRows<each Column: Bindable>(
+    raw statement: String,
+    binder: Binder
+  ) async throws -> [(repeat each Column)] {
+    let arity = columnArity(of: (repeat each Column).self)
+    return try await query(
+      raw: statement,
+      binder: { stmt in
+        let count = sqlite3_column_count(stmt.stmtPtr)
+        guard count == arity else {
+          throw LoomError.core(
+            .columnCountMismatch,
+            message: "Row type has \(arity) element(s) but the statement returns \(count) column(s)."
+          )
+        }
+        try binder(stmt)
+      },
+      stepper: { stmt, _ in
+        var index = ManagedIndex()
+        return (repeat try (each Column).column(of: stmt, at: &index))
+      }
+    )
+  }
+
+  /// Executes a ``SQLStatement`` query, decoding each row into a tuple inferred from the return type.
+  ///
+  /// The row shape comes from the contextual result type: annotate the destination and each element
+  /// is read left to right starting at column 0, with no `stepper` closure to write. Every element
+  /// must conform to ``Bindable``; nullable columns use `Optional`.
+  ///
+  /// ```swift
+  /// let users: [(String, Int, Date)] = try await db.query(
+  ///   "SELECT name, age, created_at FROM users WHERE age >= \(18)"
+  /// )
+  /// ```
+  ///
+  /// A single-element row type reads one column and yields the value itself rather than a
+  /// one-element tuple:
+  ///
+  /// ```swift
+  /// let names: [String] = try await db.query("SELECT name FROM users ORDER BY name")
+  /// ```
+  ///
+  /// The row type must have exactly as many elements as the statement returns columns, so a
+  /// `SELECT` that grows a column fails loudly instead of decoding a shifted or absent one. That
+  /// also rules out `[Void]` and any statement returning no columns at all. Column indices are
+  /// 0-based; see <doc:IndexConventions>.
+  ///
+  /// These overloads always read the whole result set. Reach for the `stepper:` overloads when
+  /// iteration has to end early or a row needs decoding these can't express.
+  ///
+  /// - Throws: ``LoomCoreErrorCode/columnCountMismatch`` when the row type's element count differs
+  ///   from the statement's column count — checked before the first row is stepped, so it fires
+  ///   even for an empty result set. ``LoomCoreErrorCode/nullValue`` when `NULL` lands in a
+  ///   non-optional element, and ``LoomCoreErrorCode/typeMappingFailed`` when a stored value's
+  ///   storage class can't be coerced to its element type.
+  @inline(__always)
+  public func query<each Column: Bindable>(
+    _ statement: SQLStatement
+  ) async throws -> [(repeat each Column)] {
+    try await queryRows(raw: statement.sql, binder: statement.binder)
+  }
+
+  /// Executes a parameter-free raw SQL query, decoding each row into a tuple inferred from the return type.
+  ///
+  /// ```swift
+  /// let counts: [(String, Int)] = try await db.query(
+  ///   raw: "SELECT status, COUNT(*) FROM orders GROUP BY status"
+  /// )
+  /// ```
+  ///
+  /// For queries with dynamic values, prefer the ``SQLStatement`` overload — interpolating values
+  /// into the SQL string opens the door to SQL injection.
+  ///
+  /// - Throws: ``LoomCoreErrorCode/columnCountMismatch`` when the row type's element count differs
+  ///   from the statement's column count.
+  @inline(__always)
+  public func query<each Column: Bindable>(
+    raw statement: String
+  ) async throws -> [(repeat each Column)] {
+    try await queryRows(raw: statement, binder: { _ in })
+  }
+}

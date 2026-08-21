@@ -40,11 +40,7 @@ let name = "Alice"
 let age = 30
 try await db.exec("INSERT INTO users (name, age) VALUES (\(name), \(age))")
 
-let users = try await db.query("SELECT name, age FROM users WHERE age > \(25)") { stmt, _ in
-    let name = try String.column(of: stmt, at: 0)
-    let age = try Int.column(of: stmt, at: 1)
-    return (name, age)
-}
+let users: [(String, Int)] = try await db.query("SELECT name, age FROM users WHERE age > \(25)")
 ```
 
 ## Core Concepts
@@ -78,6 +74,29 @@ let fileDB = try await Database.open(url: url)
 ```
 
 ## Queries
+
+### Inferred Row Types
+
+Annotate the result and the row is decoded for you — each tuple element is read left to right
+starting at column 0, no stepper closure required. Every element must be `Bindable`; nullable
+columns use `Optional`:
+
+```swift
+let users: [(String, Int, Date)] = try await db.query(
+    "SELECT name, age, created_at FROM users WHERE age >= \(18)"
+)
+```
+
+A single-element row type yields the value itself rather than a one-element tuple:
+
+```swift
+let names: [String] = try await db.query("SELECT name FROM users ORDER BY name")
+```
+
+The row type must have exactly as many elements as the statement returns columns — a mismatch
+throws `LoomCoreErrorCode.columnCountMismatch` before the first row is stepped, so a `SELECT` that
+grows a column fails loudly rather than decoding a shifted or absent one. Reach for the `stepper:`
+overloads below when iteration has to end early or a row needs decoding these can't express.
 
 ### String Interpolation (recommended)
 
