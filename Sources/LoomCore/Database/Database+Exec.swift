@@ -44,6 +44,7 @@ extension Database {
   /// Ungated core of the public `exec` overloads. Runs to completion synchronously on the
   /// actor, so once past the gate nothing can interleave mid-statement.
   private func execStatementCore(raw statement: String, binder: Binder) throws {
+    try ensureTransactionIntact()
     let stmt = try prepare(sql: statement)
     try binder(stmt)
 
@@ -56,7 +57,7 @@ extension Database {
     try check(code, db: stmt.dbPtr, is: SQLITE_DONE)
   }
 
-  /// Ungated runner for the transaction machinery's own BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE,
+  /// Ungated, unguarded runner for the transaction machinery's own BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE,
   /// which must not gate against their own transaction. Machinery statements pass
   /// `cacheable: false`: savepoint names are per-scope unique, so caching them would grow the
   /// statement cache without ever hitting.
@@ -240,6 +241,7 @@ extension Database {
   /// Ungated core of ``execScript(_:)``. Runs to completion synchronously on the actor,
   /// so once past the gate nothing can interleave between the script's statements.
   func execScriptCore(_ script: String) throws {
+    try ensureTransactionIntact()
     let dbPtr = try handle.ptr
 
     // SQLite's prepare stops at the first zero byte no matter what length is passed, so a

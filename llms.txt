@@ -134,7 +134,9 @@ mid-flight, an enclosing scope exited while this one was still open (an un-await
 interrupted write via `interrupt()`/task cancellation, or an `ON CONFLICT ROLLBACK`
 constraint — the machinery then skips its own ROLLBACK, still fires
 `transactionDidRollback`, and leaves the connection open). The refused close never
-touches the connection.
+touches the connection. Once SQLite has rolled the transaction back, any further
+`exec`/`query`/`execScript` or nested `transaction` in the body throws `transactionScopeLost`
+immediately, so a body that catches the failed write cannot keep writing in autocommit mode.
 
 `walCheckpoint(mode:database:)` names the database to checkpoint (`"main"` by default,
 resolved case-insensitively); `nil` or `""` checkpoints every attached database, per
@@ -428,6 +430,7 @@ let service = await db.getService(CacheInvalidationService.self)
 - `Sources/LoomCore/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
 - `Sources/LoomCore/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL), `execScript(_:)`
 - `Sources/LoomCore/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting
+- `Sources/LoomCore/Database/Database+StatementGuards.swift` — Per-statement invariants: refuses statements after SQLite auto-rolled back a transaction
 - `Sources/LoomCore/Database/Database+Gate.swift` — Transaction gate: suspends operations from tasks outside the active transaction until commit/rollback
 - `Sources/LoomCore/Database/Database+Cancellation.swift` — Public `interrupt()` and the interrupt-on-cancel wrapper armed around exec/query/execScript
 - `Sources/LoomCore/Database/Interruptor.swift` — Off-actor interrupt channel (lock-guarded `sqlite3_interrupt`, ticket-scoped; the one exception to "no internal locking")

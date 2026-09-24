@@ -109,7 +109,7 @@ Services receive ``Database/Service/transactionWillBegin()``, ``Database/Service
 
 ### What rollback failure means
 
-Some failures roll the physical transaction back inside SQLite itself — an interrupted write (``Database/interrupt()`` or task cancellation) and `ON CONFLICT ROLLBACK` constraints both do. LoomCore detects that, skips its own now-pointless `ROLLBACK`, still notifies services via ``Database/Service/transactionDidRollback()``, and rethrows the block's error with the connection intact.
+Some failures roll the physical transaction back inside SQLite itself — an interrupted write (``Database/interrupt()`` or task cancellation) and `ON CONFLICT ROLLBACK` constraints both do. LoomCore detects that, skips its own now-pointless `ROLLBACK`, still notifies services via ``Database/Service/transactionDidRollback()``, and rethrows the block's error with the connection intact. From that point the body can no longer write: any further statement or nested transaction throws ``LoomCoreErrorCode/transactionScopeLost``, so catching the failed write and carrying on cannot leave rows committed one by one outside the transaction.
 
 If `ROLLBACK` itself fails on a transaction that is genuinely still open (rare — typically only a corrupt or disconnected database), LoomCore logs a warning, closes the underlying handle, and rethrows the original error from the block. Subsequent operations on the database fail with a closed-database error.
 

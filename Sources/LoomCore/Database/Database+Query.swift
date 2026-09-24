@@ -62,6 +62,7 @@ extension Database {
     binder: Binder,
     stepper: Stepper<R>
   ) throws -> [R] {
+    try ensureTransactionIntact()
     let stmt = try prepare(sql: statement)
     try binder(stmt)
 
