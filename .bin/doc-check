@@ -16,12 +16,21 @@ cd "${0%/*}/.."
 swift build
 
 BIN_PATH="$(swift build --show-bin-path)"
+
+# The native build system puts modules in "$BIN_PATH/Modules"; SwiftBuild (the default from
+# Swift 6.4) puts them directly in "$BIN_PATH".
 MODULES="$BIN_PATH/Modules"
-TRIPLE_BASE="$(basename "$(dirname "$BIN_PATH")")"
+if [ ! -d "$MODULES/LoomCore.swiftmodule" ]; then
+    MODULES="$BIN_PATH"
+fi
+
+# Unversioned host triple (e.g. arm64-apple-macosx) from the compiler itself — the bin path
+# layout differs between build systems.
+TRIPLE_BASE="$(swift -print-target-info | sed -n 's/.*"unversionedTriple": *"\([^"]*\)".*/\1/p' | head -n 1)"
 MACOS_MIN="$(sed -n 's/.*\.macOS(\.v\([0-9][0-9]*\)).*/\1/p' Package.swift)"
 
 if [ -z "$TRIPLE_BASE" ] || [ -z "$MACOS_MIN" ]; then
-    echo "doc-check: fatal: could not derive target triple from build path and Package.swift"
+    echo "doc-check: fatal: could not derive target triple from the compiler and Package.swift"
     exit 2
 fi
 
