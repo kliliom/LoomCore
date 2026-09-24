@@ -118,7 +118,8 @@ db.execScript(_:)              // Multi-statement script, no parameters, not cac
 `exec` and `query` prepare exactly one statement. SQL containing a second statement — or an
 embedded NUL byte, after which SQLite would silently drop everything — throws
 `LoomCoreErrorCode.trailingSQL` rather than silently dropping the remainder; use
-`execScript(_:)` for migration scripts.
+`execScript(_:)` for migration scripts. `exec` steps through and discards any rows a
+statement produces (`RETURNING`, row-returning `PRAGMA`s).
 
 `execScript(_:)` throws `LoomCoreErrorCode.invalidScript` when a script statement contains a
 parameter placeholder, the script contains an embedded NUL byte, the script leaves a transaction

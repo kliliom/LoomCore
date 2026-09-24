@@ -362,4 +362,16 @@ struct DatabaseExecTests {
     #expect(!tables.contains("a"))
     #expect(!tables.contains("b"))
   }
+
+  @Test("exec steps through rows of a RETURNING statement")
+  func testExecReturning() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value INTEGER)")
+
+    try await db.exec("INSERT INTO test (value) VALUES (10), (20) RETURNING id")
+    try await db.exec("SELECT * FROM test")
+
+    let count = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in try Int.column(of: stmt, at: 0) }
+    #expect(count == [2])
+  }
 }
