@@ -168,6 +168,7 @@ extension Database {
         for captured in captureds {
           try captured(stmt, &index)
         }
+        try stmt.requireParameterCount(index.value)
       }
     )
   }
