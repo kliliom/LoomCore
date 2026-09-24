@@ -6,8 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Keyed per ref: a shared group would let any PR push cancel an in-flight gh-pages deploy
+# from main.
 concurrency:
-  group: docc-pages
+  group: docc-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
