@@ -17,10 +17,11 @@ swift build
 
 BIN_PATH="$(swift build --show-bin-path)"
 
-# The native build system puts modules in "$BIN_PATH/Modules"; SwiftBuild (the default from
-# Swift 6.4) puts them directly in "$BIN_PATH".
+# The native build system puts modules in "$BIN_PATH/Modules" (a single .swiftmodule file);
+# SwiftBuild (the default from Swift 6.4) puts them directly in "$BIN_PATH" (a .swiftmodule
+# directory). Test for existence, not a directory, so both layouts resolve.
 MODULES="$BIN_PATH/Modules"
-if [ ! -d "$MODULES/LoomCore.swiftmodule" ]; then
+if [ ! -e "$MODULES/LoomCore.swiftmodule" ]; then
     MODULES="$BIN_PATH"
 fi
 
