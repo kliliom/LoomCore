@@ -175,4 +175,17 @@ struct BindableDictionaryTests {
 
     #expect(result.first == data)
   }
+
+  @Test("Dictionary JSON is stored with sorted keys")
+  func testDictionaryStoredWithSortedKeys() async throws {
+    let db = try Database.openInMemory()
+    try await db.exec("CREATE TABLE test (value TEXT)")
+
+    let value = ["delta": 4, "alpha": 1, "charlie": 3, "bravo": 2]
+    try await db.exec("INSERT INTO test (value) VALUES (\(value))")
+
+    let stored = try await db.query("SELECT value FROM test") { stmt, _ in try String.column(of: stmt, at: 0) }
+    #expect(stored == [#"{"alpha":1,"bravo":2,"charlie":3,"delta":4}"#])
+    #expect(try value.asSQLLiteral() == #"'{"alpha":1,"bravo":2,"charlie":3,"delta":4}'"#)
+  }
 }

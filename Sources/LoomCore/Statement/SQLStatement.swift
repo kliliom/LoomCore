@@ -94,6 +94,7 @@ public struct SQLStatement: Sendable {
       for binder in binders {
         try binder(handle, &index)
       }
+      try handle.requireParameterCount(index.value)
     }
   }
 
@@ -102,6 +103,7 @@ public struct SQLStatement: Sendable {
       for binder in binders {
         try binder(stmt, &index)
       }
+      try stmt.requireParameterCount(index.value)
     }
   }
 }

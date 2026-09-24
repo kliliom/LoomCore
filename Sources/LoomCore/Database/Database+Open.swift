@@ -19,11 +19,7 @@ extension Database {
   ///   ``cached(_:)`` blocks before the least-recently-used one is evicted. Must be positive.
   /// - Throws: ``LoomError`` if the SQLite connection cannot be established.
   public static func openInMemory(statementCacheCapacity: Int = 128) throws -> Database {
-    var ptr: OpaquePointer?
-    try check(sqlite3_open(":memory:", &ptr), is: SQLITE_OK)
-    guard let ptr else {
-      throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
-    }
+    let ptr = try openConnection(":memory:")
     return Database(handle: DatabaseHandle(ptr: ptr, statementCacheCapacity: statementCacheCapacity))
   }
 
@@ -56,12 +52,22 @@ extension Database {
     guard url.isFileURL else {
       throw LoomError.core(.invalidDatabasePath, message: "Database URL must use the file: scheme.")
     }
+    let ptr = try openConnection(url.path(percentEncoded: false))
+    return Database(handle: DatabaseHandle(ptr: ptr, statementCacheCapacity: statementCacheCapacity))
+  }
+
+  /// Opens a raw SQLite connection, closing the handle SQLite allocates even when the open fails.
+  private static func openConnection(_ filename: String) throws -> OpaquePointer {
     var ptr: OpaquePointer?
-    let path: String = url.path(percentEncoded: false)
-    try check(sqlite3_open(path, &ptr), is: SQLITE_OK)
+    let code = sqlite3_open(filename, &ptr)
+    guard code == SQLITE_OK else {
+      let message = ptr.map { String(cString: sqlite3_errmsg($0)) } ?? String(cString: sqlite3_errstr(code))
+      sqlite3_close(ptr)
+      throw LoomError.sqlite(code, message: message)
+    }
     guard let ptr else {
       throw LoomError.core(.unexpectedState, message: "sqlite3_open() did not return a database pointer.")
     }
-    return Database(handle: DatabaseHandle(ptr: ptr, statementCacheCapacity: statementCacheCapacity))
+    return ptr
   }
 }

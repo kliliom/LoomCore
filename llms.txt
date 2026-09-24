@@ -118,7 +118,16 @@ db.execScript(_:)              // Multi-statement script, no parameters, not cac
 `exec` and `query` prepare exactly one statement. SQL containing a second statement — or an
 embedded NUL byte, after which SQLite would silently drop everything — throws
 `LoomCoreErrorCode.trailingSQL` rather than silently dropping the remainder; use
-`execScript(_:)` for migration scripts.
+`execScript(_:)` for migration scripts. They do NOT inspect statements for transaction
+control: `BEGIN`, `COMMIT`/`END`, `ROLLBACK`, `SAVEPOINT` or `RELEASE` passed to them bypass
+the transaction gate and `Service` hooks, and are the caller's own risk (inside `transaction { }`
+a `COMMIT` makes the work durable but the scope then throws `transactionScopeLost` and fires
+`transactionDidRollback`; outside one, a `BEGIN` opens a transaction other tasks' writes
+silently join). Use `transaction { }`, or `execScript(_:)` for a balanced script. The
+`SQLStatement` and `binding:` overloads throw `LoomCoreErrorCode.parameterCountMismatch` when
+the bound values don't cover every placeholder (e.g. a literal `?` left in interpolated SQL).
+`exec` steps through and discards any rows a
+statement produces (`RETURNING`, row-returning `PRAGMA`s).
 
 `execScript(_:)` throws `LoomCoreErrorCode.invalidScript` when a script statement contains a
 parameter placeholder, the script contains an embedded NUL byte, the script leaves a transaction
@@ -133,7 +142,9 @@ mid-flight, an enclosing scope exited while this one was still open (an un-await
 interrupted write via `interrupt()`/task cancellation, or an `ON CONFLICT ROLLBACK`
 constraint — the machinery then skips its own ROLLBACK, still fires
 `transactionDidRollback`, and leaves the connection open). The refused close never
-touches the connection.
+touches the connection. Once SQLite has rolled the transaction back, any further
+`exec`/`query`/`execScript` or nested `transaction` in the body throws `transactionScopeLost`
+immediately, so a body that catches the failed write cannot keep writing in autocommit mode.
 
 `walCheckpoint(mode:database:)` names the database to checkpoint (`"main"` by default,
 resolved case-insensitively); `nil` or `""` checkpoints every attached database, per
@@ -427,6 +438,7 @@ let service = await db.getService(CacheInvalidationService.self)
 - `Sources/LoomCore/Database/Database+Query.swift` — All query method variants, parameter binding patterns, stepper closures, early termination
 - `Sources/LoomCore/Database/Database+Exec.swift` — Exec methods for write operations (INSERT, UPDATE, DELETE, DDL), `execScript(_:)`
 - `Sources/LoomCore/Database/Database+Transaction.swift` — Transaction API, lock modes (deferred/immediate/exclusive), SAVEPOINT-based nesting
+- `Sources/LoomCore/Database/Database+StatementGuards.swift` — Per-statement invariants: refuses statements after SQLite auto-rolled back a transaction, checks bound-value count
 - `Sources/LoomCore/Database/Database+Gate.swift` — Transaction gate: suspends operations from tasks outside the active transaction until commit/rollback
 - `Sources/LoomCore/Database/Database+Cancellation.swift` — Public `interrupt()` and the interrupt-on-cancel wrapper armed around exec/query/execScript
 - `Sources/LoomCore/Database/Interruptor.swift` — Off-actor interrupt channel (lock-guarded `sqlite3_interrupt`, ticket-scoped; the one exception to "no internal locking")

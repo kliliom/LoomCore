@@ -6,7 +6,7 @@ import SQLite3
 /// Cleanup behavior depends on whether the statement came from the database's cache:
 ///
 /// - **Cached** (`freeOnDeinit == false`): the statement is reset via `sqlite3_reset` and its bindings
-///   cleared via `sqlite3_clear_bindings`, leaving it ready for reuse on the next ``Database/prepare(sql:)``
+///   cleared via `sqlite3_clear_bindings`, leaving it ready for reuse on the next `prepare(sql:)`
 ///   call with the same SQL string — unless the owning database was closed while the handle was live,
 ///   in which case the statement is finalized instead.
 /// - **Temporary** (`freeOnDeinit == true`): the statement is finalized via `sqlite3_finalize` and its

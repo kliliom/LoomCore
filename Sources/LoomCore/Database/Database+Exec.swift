@@ -28,36 +28,47 @@ extension Database {
   /// ```
   ///
   /// Parameter indices in the binder are 1-based, matching SQLite's convention.
+  /// Rows the statement produces (`RETURNING`, row-returning `PRAGMA`s) are stepped through
+  /// and discarded — use the `query` family to read them.
   /// Cancelling the task interrupts the statement mid-step and throws `CancellationError`.
+  ///
+  /// - Warning: LoomCore does not inspect statements for transaction control. Running `BEGIN`,
+  ///   `COMMIT`/`END`, `ROLLBACK`, `SAVEPOINT` or `RELEASE` here bypasses the transaction gate
+  ///   and the ``Database/Service`` hooks, and is entirely at the caller's own risk. See
+  ///   <doc:TransactionsAndServices#Transaction-control-SQL-is-the-callers-responsibility>.
   public func exec(
     raw statement: String,
     binder: Binder
   ) async throws {
     try await gate()
     try await withInterruptOnCancellation {
-      try execCore(raw: statement, binder: binder)
+      try execStatementCore(raw: statement, binder: binder)
     }
   }
 
-  /// Ungated core shared by the public `exec` overloads and the transaction machinery
-  /// (BEGIN/COMMIT/ROLLBACK/SAVEPOINT must not gate against their own transaction).
-  /// Machinery statements also pass `cacheable: false`: savepoint names are per-scope
-  /// unique, so caching them would grow the statement cache without ever hitting.
-  /// Runs to completion synchronously on the actor, so once past the gate nothing can
-  /// interleave mid-statement.
-  func execCore(
-    raw statement: String,
-    binder: Binder,
-    cacheable: Bool = true
-  ) throws {
-    let stmt = try prepare(sql: statement, cacheable: cacheable)
+  /// Ungated core of the public `exec` overloads. Runs to completion synchronously on the
+  /// actor, so once past the gate nothing can interleave mid-statement.
+  private func execStatementCore(raw statement: String, binder: Binder) throws {
+    try ensureTransactionIntact()
+    let stmt = try prepare(sql: statement)
     try binder(stmt)
 
-    try check(sqlite3_step(stmt.stmtPtr), db: stmt.dbPtr, is: SQLITE_DONE)
+    // Requiring SQLITE_DONE on the first step would report a failure after a RETURNING
+    // statement's write had already been applied.
+    var code = sqlite3_step(stmt.stmtPtr)
+    while code == SQLITE_ROW {
+      code = sqlite3_step(stmt.stmtPtr)
+    }
+    try check(code, db: stmt.dbPtr, is: SQLITE_DONE)
   }
 
+  /// Ungated, unguarded runner for the transaction machinery's own BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE,
+  /// which must not gate against their own transaction. Machinery statements pass
+  /// `cacheable: false`: savepoint names are per-scope unique, so caching them would grow the
+  /// statement cache without ever hitting.
   func execCore(raw statement: String, cacheable: Bool = true) throws {
-    try execCore(raw: statement, binder: { _ in }, cacheable: cacheable)
+    let stmt = try prepare(sql: statement, cacheable: cacheable)
+    try check(sqlite3_step(stmt.stmtPtr), db: stmt.dbPtr, is: SQLITE_DONE)
   }
 }
 
@@ -157,6 +168,7 @@ extension Database {
         for captured in captureds {
           try captured(stmt, &index)
         }
+        try stmt.requireParameterCount(index.value)
       }
     )
   }
@@ -235,6 +247,7 @@ extension Database {
   /// Ungated core of ``execScript(_:)``. Runs to completion synchronously on the actor,
   /// so once past the gate nothing can interleave between the script's statements.
   func execScriptCore(_ script: String) throws {
+    try ensureTransactionIntact()
     let dbPtr = try handle.ptr
 
     // SQLite's prepare stops at the first zero byte no matter what length is passed, so a

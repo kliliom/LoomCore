@@ -45,6 +45,11 @@ extension Database {
   /// whole query — bind, step, extract — runs synchronously on the actor, so no other
   /// database work can interleave mid-statement. Cancelling the task interrupts the
   /// statement mid-step and throws `CancellationError`.
+  ///
+  /// - Warning: LoomCore does not inspect statements for transaction control. Running `BEGIN`,
+  ///   `COMMIT`/`END`, `ROLLBACK`, `SAVEPOINT` or `RELEASE` here bypasses the transaction gate
+  ///   and the ``Database/Service`` hooks, and is entirely at the caller's own risk. See
+  ///   <doc:TransactionsAndServices#Transaction-control-SQL-is-the-callers-responsibility>.
   public func query<R>(
     raw statement: String,
     binder: Binder,
@@ -62,6 +67,7 @@ extension Database {
     binder: Binder,
     stepper: Stepper<R>
   ) throws -> [R] {
+    try ensureTransactionIntact()
     let stmt = try prepare(sql: statement)
     try binder(stmt)
 
@@ -221,6 +227,7 @@ extension Database {
         for captured in captureds {
           try captured(stmt, &index)
         }
+        try stmt.requireParameterCount(index.value)
       },
       stepper: { stmt, index, stop in
         try stepper(stmt, &index, &stop)

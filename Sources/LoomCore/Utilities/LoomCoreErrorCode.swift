@@ -57,6 +57,12 @@ public struct LoomCoreErrorCode: RawRepresentable, Hashable, Sendable {
   /// Raised by ``FTS5Table/verifyColumns(on:)`` when the handle's declared column list does
   /// not match the table's actual columns, or the table does not exist.
   public static let schemaMismatch = LoomCoreErrorCode(rawValue: 9)
+  /// Number of bound values does not match the number of parameters the statement declares.
+  ///
+  /// Raised by ``SQLStatement``-based and `binding:` overloads of the `exec` and `query`
+  /// families — typically a literal `?` left in interpolated SQL, which would otherwise
+  /// silently evaluate as `NULL`.
+  public static let parameterCountMismatch = LoomCoreErrorCode(rawValue: 10)
 }
 
 extension LoomCoreErrorCode: LoomError.ErrorCode {}

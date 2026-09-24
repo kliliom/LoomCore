@@ -130,7 +130,13 @@ enum SQLiteDateText {
   }()
 
   static func parse(_ text: String) -> Date? {
-    var normalized = text.replacingOccurrences(of: " ", with: "T")
+    // Only the date/time separator becomes `T`; SQLite also accepts whitespace before the
+    // offset (`… 09:30:00 +02:00`), which the ISO 8601 parser does not.
+    var normalized = text.trimmingCharacters(in: .whitespaces)
+    if let space = normalized.firstIndex(of: " ") {
+      normalized.replaceSubrange(space...space, with: "T")
+      normalized.removeAll { $0 == " " }
+    }
     guard let separator = normalized.firstIndex(of: "T") else {
       normalized += "T00:00:00Z"
       return withoutFractionalSeconds.date(from: normalized)

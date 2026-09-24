@@ -31,7 +31,7 @@ extension JSONBindable {
   /// (`json_extract`, `->`, `->>`, `json_set`, …) on every SQLite version.
   @DatabaseActor
   public static func bind(to stmt: borrowing StatementHandle, value: Self, at index: Int32) throws {
-    let encoder = JSONEncoder()
+    let encoder = makeJSONBindableEncoder()
     let data = try encoder.encode(value)
     try data.withUnsafeBytes {
       try check(
@@ -69,11 +69,20 @@ extension JSONBindable {
   /// Used when emitting SQL that embeds the value inline rather than via a bound parameter.
   /// Prefer parameter binding (`bind(to:value:at:)`) for anything user-supplied.
   public func asSQLLiteral() throws -> String {
-    let encoder = JSONEncoder()
+    let encoder = makeJSONBindableEncoder()
     let data = try encoder.encode(self)
     return try String(decoding: data, as: UTF8.self).asSQLLiteral()
   }
 
   /// `"TEXT"` — Codable values are stored as JSON text, ready for SQLite's JSON functions.
   public static var defaultSQLStorageType: String { "TEXT" }
+}
+
+/// Encoder behind every `JSONBindable` write. Sorted keys make the stored text a pure function
+/// of the value: `Dictionary` iteration order changes from process to process (per-launch hash
+/// seeding), which would otherwise break `UNIQUE` constraints and equality lookups on the column.
+private func makeJSONBindableEncoder() -> JSONEncoder {
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = .sortedKeys
+  return encoder
 }
