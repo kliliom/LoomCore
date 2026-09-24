@@ -162,4 +162,20 @@ struct InExpressionTests {
     )
     #expect(result == [1, 3, 5])
   }
+
+  // `=` and `IN` share one precedence level in SQLite; an unparenthesized IN on the right of
+  // `=` would parse as `(flag = category_id) IN (…)`.
+  @Test("IN expression keeps its precedence when compared")
+  func testInExpressionPrecedence() async throws {
+    let isListed = ColumnExpression<Int>("category_id").in(values: 2, 4)
+    let expr = ColumnExpression<Bool>("flag") == isListed
+
+    let rows = try await db.query(
+      "SELECT category_id FROM (SELECT category_id, category_id = 2 AS flag FROM products) WHERE \(expr) ORDER BY category_id"
+    ) { stmt, _ in
+      try Int.column(of: stmt, at: 0)
+    }
+    // flag matches membership for 1, 2, 3 and 5; category 4 is listed but its flag is false.
+    #expect(rows == [1, 2, 3, 5])
+  }
 }

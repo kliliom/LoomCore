@@ -63,6 +63,9 @@ public struct InExpression<T: Bindable>: Expression {
       return
     }
 
+    // Parenthesized as a whole: `=`, `IS`, `IN`, `LIKE` and `MATCH` share one precedence
+    // level in SQLite, so a bare `a = b IN (…)` would parse as `(a = b) IN (…)`.
+    builder.appendLiteral("(")
     needleExpression.append(to: &builder)
     if isNegated {
       builder.appendLiteral("NOT IN (")
@@ -70,7 +73,7 @@ public struct InExpression<T: Bindable>: Expression {
       builder.appendLiteral("IN (")
     }
     haystackExpression.append(to: &builder)
-    builder.appendLiteral(")")
+    builder.appendLiteral("))")
   }
 
   struct HaystackListExpression: Expression {
