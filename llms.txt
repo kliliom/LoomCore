@@ -118,7 +118,12 @@ db.execScript(_:)              // Multi-statement script, no parameters, not cac
 `exec` and `query` prepare exactly one statement. SQL containing a second statement — or an
 embedded NUL byte, after which SQLite would silently drop everything — throws
 `LoomCoreErrorCode.trailingSQL` rather than silently dropping the remainder; use
-`execScript(_:)` for migration scripts. `exec` steps through and discards any rows a
+`execScript(_:)` for migration scripts. They do NOT inspect statements for transaction
+control: `BEGIN`, `COMMIT`/`END`, `ROLLBACK`, `SAVEPOINT` or `RELEASE` passed to them bypass
+the transaction gate and `Service` hooks, and are the caller's own risk (inside `transaction { }`
+a `COMMIT` makes the work durable but the scope then throws `transactionScopeLost` and fires
+`transactionDidRollback`; outside one, a `BEGIN` opens a transaction other tasks' writes
+silently join). Use `transaction { }`, or `execScript(_:)` for a balanced script. `exec` steps through and discards any rows a
 statement produces (`RETURNING`, row-returning `PRAGMA`s).
 
 `execScript(_:)` throws `LoomCoreErrorCode.invalidScript` when a script statement contains a

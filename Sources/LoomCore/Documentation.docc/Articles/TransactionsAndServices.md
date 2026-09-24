@@ -113,6 +113,15 @@ Some failures roll the physical transaction back inside SQLite itself — an int
 
 If `ROLLBACK` itself fails on a transaction that is genuinely still open (rare — typically only a corrupt or disconnected database), LoomCore logs a warning, closes the underlying handle, and rethrows the original error from the block. Subsequent operations on the database fail with a closed-database error.
 
+### Transaction-control SQL is the caller's responsibility
+
+LoomCore does not inspect statements for transaction control. `BEGIN`, `COMMIT`/`END`, `ROLLBACK`, `SAVEPOINT` and `RELEASE` passed to `exec` or `query` run as-is, bypassing the transaction gate and the service hooks — using them is at your own risk:
+
+- **Inside ``Database/transaction(kind:_:)``**, a `COMMIT` makes the work durable, yet the scope then finds the physical transaction gone: it throws ``LoomCoreErrorCode/transactionScopeLost`` and notifies services via ``Database/Service/transactionDidRollback()`` for data that was committed. A `ROLLBACK` discards the work the same way. Any further statement in the body throws ``LoomCoreErrorCode/transactionScopeLost``.
+- **Outside a transaction**, a `BEGIN` or `SAVEPOINT` opens a transaction the gate knows nothing about. Other tasks' operations are not held back, so their writes silently join it and commit or roll back with it, and a later ``Database/transaction(kind:_:)`` fails at its own `BEGIN` until it is closed.
+
+Prefer ``Database/transaction(kind:_:)``, or ``Database/execScript(_:)`` for a script that balances its own `BEGIN … COMMIT`. When you do manage a transaction by hand, make sure nothing else uses the same `Database` until it is closed.
+
 ### Handling SQLITE_BUSY
 
 A second connection — another process, or another `Database` on the same file — can hold a lock that makes a statement fail with ``SQLiteResultCode/busy``. Three tools, in the order to reach for them:

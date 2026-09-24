@@ -31,6 +31,11 @@ extension Database {
   /// Rows the statement produces (`RETURNING`, row-returning `PRAGMA`s) are stepped through
   /// and discarded — use the `query` family to read them.
   /// Cancelling the task interrupts the statement mid-step and throws `CancellationError`.
+  ///
+  /// - Warning: LoomCore does not inspect statements for transaction control. Running `BEGIN`,
+  ///   `COMMIT`/`END`, `ROLLBACK`, `SAVEPOINT` or `RELEASE` here bypasses the transaction gate
+  ///   and the ``Database/Service`` hooks, and is entirely at the caller's own risk. See
+  ///   <doc:TransactionsAndServices#Transaction-control-SQL-is-the-callers-responsibility>.
   public func exec(
     raw statement: String,
     binder: Binder
