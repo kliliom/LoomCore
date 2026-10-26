@@ -207,15 +207,8 @@ extension Database {
     _ otherValues: repeat each Values,
     stepper: ManagedStepper<R>
   ) async throws -> [R] {
-    // It should be possible to skip this "packing into an array" trick
-    // in the future, but current Swift 6 compiler has an issue with this
-    // try query(raw: statement, binder: { stmt, index in
-    //     try firstValue.bind(to: stmt, at: &index)
-    //     repeat try (each Values).bind(to: stmt, value: each otherValues, at: &index)
-    // }, stepper: { stmt, index, stop in
-    //     try stepper(stmt, &index, &stop)
-    // })
-
+    // Workaround: the Swift 6 compiler fails to expand the `otherValues` pack directly
+    // inside the binder closure, so the binders are collected into an array first.
     var binders: [ManagedBinder] = [
       firstValue.managedBinder
     ]

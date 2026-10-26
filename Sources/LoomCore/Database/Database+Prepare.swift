@@ -47,9 +47,8 @@ public struct StatementHandle: ~Copyable, Sendable {
 
   deinit {
     if freeOnDeinit || store?.isClosed == true {
-      // Temporary statement, or a cached one whose store was closed while this
-      // handle was live: finalize. On a closed (zombie) connection this
-      // finalize is what ultimately frees the connection.
+      // On a closed (zombie) connection, finalizing the last statement is what
+      // frees the connection.
       sqlite3_finalize(stmtPtr)
     } else {
       sqlite3_reset(stmtPtr)

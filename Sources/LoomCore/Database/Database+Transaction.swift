@@ -232,13 +232,13 @@ extension Database {
     token: TransactionToken,
     _ block: @DatabaseActor (Database) async throws -> T
   ) async throws -> T {
-    // Per-scope-unique names (uncached, see execCore) guarantee this scope's machinery
-    // can never resolve against another scope's savepoint, even when issued late from
-    // an orphaned task after the ownership guards below already refused it once.
     // Opening a savepoint outside a transaction starts a new one; after SQLite rolled the
     // enclosing transaction back, that would make this scope's writes durable on RELEASE.
     try ensureTransactionIntact()
 
+    // Per-scope-unique names (uncached, see execCore) guarantee this scope's machinery
+    // can never resolve against another scope's savepoint, even when issued late from
+    // an orphaned task after the ownership guards below already refused it once.
     nextSavepointID += 1
     let name = "loom_sp_\(nextSavepointID)"
 

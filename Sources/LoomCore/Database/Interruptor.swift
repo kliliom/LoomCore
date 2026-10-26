@@ -37,7 +37,6 @@ final class Interruptor: Sendable {
     }
   }
 
-  // Releases the channel if `ticket` still owns it.
   func release(_ ticket: UInt64) {
     state.withLockUnchecked { state in
       if state.owner == ticket {
@@ -46,8 +45,6 @@ final class Interruptor: Sendable {
     }
   }
 
-  // Interrupts the connection only while `ticket` owns the channel and the
-  // connection is still live.
   func interrupt(ticket: UInt64) {
     state.withLockUnchecked { state in
       guard state.owner == ticket, let dbPtr = state.dbPtr else { return }
@@ -55,7 +52,6 @@ final class Interruptor: Sendable {
     }
   }
 
-  // Unconditional interrupt; backs the public `Database/interrupt()`.
   func interrupt() {
     state.withLockUnchecked { state in
       guard let dbPtr = state.dbPtr else { return }

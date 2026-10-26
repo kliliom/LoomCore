@@ -12,10 +12,8 @@ import SQLite3
 /// Pass instances using `consuming` or `borrowing` parameters rather than copying.
 @DatabaseActor
 public struct DatabaseHandle: ~Copyable, Sendable {
-  // Raw SQLite database connection pointer; `nil` after `close()`.
   private var ptrRaw: OpaquePointer?
 
-  // Throws `LoomError(.databaseClosed)` once the connection has been closed.
   var ptr: OpaquePointer {
     get throws {
       guard let ptrRaw else {
@@ -35,7 +33,6 @@ public struct DatabaseHandle: ~Copyable, Sendable {
   }
 
   // `deinit` may run off-actor, so cleanup hops onto `DatabaseActor`.
-  // Both the pointer and the resource store are captured by value.
   deinit {
     Task { @DatabaseActor [ptrRaw, resourceStore] in
       resourceStore.close(dbPtr: ptrRaw)
@@ -52,11 +49,6 @@ public struct DatabaseHandle: ~Copyable, Sendable {
 }
 
 extension DatabaseHandle {
-  // Reference-type backing store for resources that must outlive the
-  // non-copyable `DatabaseHandle` struct so they can be moved into the
-  // deinit cleanup `Task`.
-  // A prepared statement in the cache, stamped with its last use so eviction
-  // can pick the least-recently-used entry.
   struct CachedStatement {
     let ptr: OpaquePointer
     var lastUsed: UInt64
@@ -110,7 +102,6 @@ extension DatabaseHandle {
       checkedOut.insert(stmtPtr).inserted
     }
 
-    // Releases a borrowed cached statement so it can be reused.
     nonisolated func checkIn(_ stmtPtr: OpaquePointer) {
       checkedOut.remove(stmtPtr)
     }
@@ -124,8 +115,6 @@ extension DatabaseHandle {
       return entry.ptr
     }
 
-    // Inserts a freshly prepared statement, evicting the least-recently-used
-    // idle entry first when the cache is at capacity.
     func cache(_ stmtPtr: OpaquePointer, for sql: String) {
       if statementCache.count >= capacity {
         evictLeastRecentlyUsed()
@@ -134,7 +123,6 @@ extension DatabaseHandle {
       statementCache[sql] = CachedStatement(ptr: stmtPtr, lastUsed: tick)
     }
 
-    // Finalizes and removes the idle entry with the oldest `lastUsed` stamp.
     // Checked-out statements are never victims: their live `StatementHandle`s
     // reset rather than finalize on deinit, so evicting one here would leave
     // that handle resetting freed memory.
@@ -149,8 +137,8 @@ extension DatabaseHandle {
       sqlite3_finalize(entry.ptr)
     }
 
-    // Finalizes and removes every idle cached statement. Checked-out entries
-    // stay cached and remain reusable once their handles are destroyed.
+    // Checked-out entries stay cached and remain reusable once their handles
+    // are destroyed.
     func clearCache() {
       for (key, entry) in statementCache where !checkedOut.contains(entry.ptr) {
         sqlite3_finalize(entry.ptr)
@@ -158,9 +146,7 @@ extension DatabaseHandle {
       }
     }
 
-    // Finalizes idle cached statements, marks the store closed, and closes the
-    // SQLite connection via `sqlite3_close_v2`. A failed close (misuse-only
-    // with `_v2`) is logged as a warning.
+    // `sqlite3_close_v2` fails only on misuse, so a failed close is just logged.
     //
     // Statements currently checked out are skipped: their `StatementHandle`s
     // are still live (`Database/close()` is callable from inside a stepper),

@@ -150,13 +150,8 @@ extension Database {
     binding firstValue: some Bindable,
     _ otherValues: repeat each Values
   ) async throws {
-    // It should be possible to skip this "packing into an array" trick
-    // in the future, but current Swift 6 compiler has an issue with this
-    // try exec(raw: statement, binder: { stmt, index in
-    //     try firstValue.bind(to: stmt, at: &index)
-    //     try repeat (each otherValues).bind(to: stmt, at: &index)
-    // })
-
+    // Workaround: the Swift 6 compiler fails to expand the `otherValues` pack directly
+    // inside the binder closure, so the binders are collected into an array first.
     var binders: [ManagedBinder] = [
       firstValue.managedBinder
     ]
