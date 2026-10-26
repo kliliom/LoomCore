@@ -39,10 +39,8 @@ struct JSONTableCore: Sendable {
   // Unquoted qualifier for the column handles; ColumnExpression quotes it on use.
   private let qualifier: String
 
-  // "JSON_EACH" / "JSON_TREE".
   private let sqlName: String
 
-  // Full " AS "alias"" rendering (empty without an alias), computed once at init.
   private let renderedAlias: String
 
   init(sqlName: String, source: some Expression, path: JSONPath?, alias: String?) {

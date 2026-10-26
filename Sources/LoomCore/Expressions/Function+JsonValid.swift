@@ -42,7 +42,7 @@ public struct JSONValid: Function {
 
   let expression: any Expression
 
-  // nil renders the one-argument form; SQLite rejects a flags value outside 1...15.
+  // nil renders the one-argument form.
   let flags: Flags?
 
   init(_ expression: any Expression) {

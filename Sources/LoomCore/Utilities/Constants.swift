@@ -1,11 +1,9 @@
-// SQLite3 constants used throughout the library.
-
 import SQLite3
 
-// SQLITE_STATIC: data pointer remains valid for the statement's lifetime; SQLite will not copy or free it.
-// Safe for string literals, compile-time constants, and any buffer guaranteed to outlive statement execution.
+// SQLITE_STATIC, whose C macro Swift cannot import: SQLite neither copies nor frees the buffer,
+// so it must stay valid until the statement is finalized or the parameter is rebound.
 let sqliteStatic = unsafeBitCast(0, to: sqlite3_destructor_type.self)
 
-// SQLITE_TRANSIENT: data pointer may become invalid after the binding call returns; SQLite copies immediately.
-// Required for temporary buffers, local variables, or any data that may be mutated or deallocated before execution.
+// SQLITE_TRANSIENT, whose C macro Swift cannot import: SQLite copies the buffer before the bind call
+// returns, so any temporary buffer is safe.
 let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
