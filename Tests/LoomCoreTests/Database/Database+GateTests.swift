@@ -575,8 +575,8 @@ struct DatabaseGateTests {
     }
 
     // T2 opens its own nested scope and suspends inside it, so the orphan's close runs
-    // while a foreign savepoint is the connection's most recent one. Historically the
-    // orphan's RELEASE resolved against it, silently committing T2's rolled-back insert.
+    // while a foreign savepoint is the connection's most recent one. Were the orphan's
+    // RELEASE to resolve against it, T2's rolled-back insert would be silently committed.
     let t2 = Task {
       try await db.transaction { db in
         try await db.exec("INSERT INTO t (value) VALUES (1)")

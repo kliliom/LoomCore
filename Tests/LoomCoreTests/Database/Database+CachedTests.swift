@@ -28,11 +28,11 @@ private struct Signal: Sendable {
 @DatabaseActor
 struct DatabaseCachedTests {
   // Reentrant use of the same SQL (a query issued from inside another query's
-  // stepper) is no longer expressible: steppers are synchronous and every
-  // operation runs to completion on the actor before the next one starts, so
-  // two live handles can never share one cached statement. This test keeps the
-  // observable half of that guarantee — back-to-back queries with the identical
-  // SQL string each iterate a full, correct result set.
+  // stepper) is not expressible: steppers are synchronous and every operation
+  // runs to completion on the actor before the next one starts, so two live
+  // handles can never share one cached statement. This test pins the observable
+  // half of that guarantee — back-to-back queries with the identical SQL string
+  // each iterate a full, correct result set.
   @Test("Repeated queries on the same SQL inside a cached block each see every row")
   func testRepeatedSameSQLInsideCachedBlock() async throws {
     let db = try Database.openInMemory()
@@ -63,7 +63,6 @@ struct DatabaseCachedTests {
 
     try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    // Execute statements within cached block
     try await db.cached {
       for i in 1...10 {
         try await db.exec("INSERT INTO test (value) VALUES (\(i))")
@@ -85,7 +84,6 @@ struct DatabaseCachedTests {
 
     try await db.exec("CREATE TABLE test (value TEXT)")
 
-    // Multiple executions of the same SQL should reuse cached statement
     try await db.cached {
       try await db.exec("INSERT INTO test (value) VALUES (\("first"))")
       try await db.exec("INSERT INTO test (value) VALUES (\("second"))")
@@ -113,7 +111,6 @@ struct DatabaseCachedTests {
       try await db.exec("INSERT INTO test (value) VALUES (\(1))")
 
       try await db.cached {
-        // Inner cached block should work with same cache
         try await db.exec("INSERT INTO test (value) VALUES (\(2))")
       }
 
@@ -165,19 +162,15 @@ struct DatabaseCachedTests {
     try await db.exec("CREATE TABLE test (value INTEGER)")
 
     try await db.cached {
-      // Insert
       try await db.exec("INSERT INTO test (value) VALUES (100)")
 
-      // Query
       let result1 = try await db.query("SELECT value FROM test") { stmt, _ in
         try Int.column(of: stmt, at: 0)
       }
       #expect(result1.first == 100)
 
-      // Update
       try await db.exec("UPDATE test SET value = 200 WHERE value = 100")
 
-      // Query again
       let result2 = try await db.query("SELECT value FROM test") { stmt, _ in
         try Int.column(of: stmt, at: 0)
       }
@@ -243,13 +236,11 @@ struct DatabaseCachedTests {
 
     try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    // First cached block
     try await db.cached {
       try await db.exec("INSERT INTO test (value) VALUES (\(1))")
       try await db.exec("INSERT INTO test (value) VALUES (\(2))")
     }
 
-    // Second cached block
     try await db.cached {
       try await db.exec("INSERT INTO test (value) VALUES (\(3))")
       try await db.exec("INSERT INTO test (value) VALUES (\(4))")

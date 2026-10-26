@@ -155,7 +155,6 @@ struct SQLStatementTests {
     let age = 25
     let stmt: SQLStatement = "INSERT INTO users (name, age) VALUES (\(name), \(age))"
 
-    // Execute the same statement multiple times
     try await db.exec(stmt)
     try await db.exec(stmt)
 

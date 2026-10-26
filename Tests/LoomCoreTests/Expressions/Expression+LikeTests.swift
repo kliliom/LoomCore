@@ -28,12 +28,10 @@ struct ExpressionStringTests {
     expectedExpression: String,
     expectedValues: [T]
   ) async throws where E.ExpressionValue == T, T: Bindable & Equatable {
-    // Test SQL generation
     var builder = SQLBuilder()
     expression.append(to: &builder)
     #expect(builder.makeStatement().sql == expectedExpression)
 
-    // Test query execution
     let result = try await db.query(
       "SELECT \(expression) FROM users ORDER BY id",
       stepper: { stmt, _ in

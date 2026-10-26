@@ -9,18 +9,14 @@ struct FunctionGroupConcatTests {
   func testGroupConcat() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
-    // Insert test data
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
 
-    // Test expression
     let expr = ColumnExpression<String>("name").groupConcat()
 
-    // Query using GROUP_CONCAT function
     let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
@@ -36,18 +32,14 @@ struct FunctionGroupConcatTests {
   func testGroupConcatCustomSeparator() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
-    // Insert test data
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
 
-    // Test expression with custom separator
     let expr = ColumnExpression<String>("name").groupConcat(separator: " | ")
 
-    // Query using GROUP_CONCAT function
     let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
@@ -63,19 +55,15 @@ struct FunctionGroupConcatTests {
   func testGroupConcatDistinct() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
-    // Insert test data with duplicates
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('ios')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('swift')")
     try await db.exec(raw: "INSERT INTO tags (name) VALUES ('mobile')")
 
-    // Test expression with distinct
     let expr = ColumnExpression<String>("name").groupConcat(distinct: true)
 
-    // Query using GROUP_CONCAT function
     let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in
@@ -91,13 +79,10 @@ struct FunctionGroupConcatTests {
   func testGroupConcatNoRows() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)")
 
-    // Test expression
     let expr = ColumnExpression<String>("name").groupConcat()
 
-    // Query using GROUP_CONCAT function
     let result = try await db.query(
       "SELECT \(expr) FROM tags",
       stepper: { stmt, _ in

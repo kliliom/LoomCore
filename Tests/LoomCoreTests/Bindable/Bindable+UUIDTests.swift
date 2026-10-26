@@ -66,7 +66,6 @@ struct BindableUUIDTests {
 
     try await db.exec("CREATE TABLE test (id BLOB)")
 
-    // Use a specific UUID to verify byte-level accuracy
     let specificUUID = UUID(uuidString: "12345678-1234-5678-1234-567812345678")!
     try await db.exec("INSERT INTO test (id) VALUES (\(specificUUID))")
 

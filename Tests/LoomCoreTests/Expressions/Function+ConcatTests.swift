@@ -9,21 +9,17 @@ struct FunctionConcatTests {
   func testConcat() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT)")
 
-    // Insert test data
     try await db.exec(raw: "INSERT INTO users (first_name, last_name) VALUES ('John', 'Doe')")
     try await db.exec(raw: "INSERT INTO users (first_name, last_name) VALUES ('Jane', 'Smith')")
 
-    // Test expression
     let expr = concat(
       ColumnExpression<String>("first_name"),
       " ",
       ColumnExpression<String>("last_name")
     )
 
-    // Query using concatenation
     let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
@@ -40,17 +36,14 @@ struct FunctionConcatTests {
   func testConcatNoRows() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT)")
 
-    // Test expression
     let expr = concat(
       ColumnExpression<String>("first_name"),
       " ",
       ColumnExpression<String>("last_name")
     )
 
-    // Query using concatenation
     let result = try await db.query(
       "SELECT \(expr) FROM users",
       stepper: { stmt, _ in

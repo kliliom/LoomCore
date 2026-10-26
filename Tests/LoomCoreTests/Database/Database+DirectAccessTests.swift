@@ -11,7 +11,6 @@ struct DatabaseDirectAccessTests {
     let db = try Database.openInMemory()
 
     try await db.directAccess { dbPtr in
-      // Just verify we can access the pointer without crashing
       _ = dbPtr
     }
   }
@@ -73,7 +72,6 @@ struct DatabaseDirectAccessTests {
       sqlite3_get_autocommit(dbPtr)
     }
 
-    // Should be in autocommit mode by default
     #expect(autocommit != 0)
   }
 
@@ -88,7 +86,6 @@ struct DatabaseDirectAccessTests {
         sqlite3_get_autocommit(dbPtr)
       }
 
-      // Should not be in autocommit mode inside transaction
       #expect(autocommit == 0)
 
       try await db.exec("INSERT INTO test (value) VALUES (1)")
@@ -103,7 +100,6 @@ struct DatabaseDirectAccessTests {
       sqlite3_db_readonly(dbPtr, "main")
     }
 
-    // In-memory database should not be readonly
     #expect(isReadonly == 0)
   }
 
@@ -111,7 +107,6 @@ struct DatabaseDirectAccessTests {
   func testDirectAccessCustomPragma() async throws {
     let db = try Database.openInMemory()
 
-    // Set a pragma using direct access
     try await db.directAccess { dbPtr in
       var errorMsg: UnsafeMutablePointer<CChar>?
       let result = sqlite3_exec(dbPtr, "PRAGMA foreign_keys = ON", nil, nil, &errorMsg)
@@ -126,7 +121,6 @@ struct DatabaseDirectAccessTests {
       }
     }
 
-    // Verify pragma was set
     let result = try await db.query("PRAGMA foreign_keys") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }
@@ -180,7 +174,6 @@ struct DatabaseDirectAccessTests {
       return nil
     }
 
-    // In-memory database should return nil or empty
     #expect(filename == nil || filename == "")
   }
 }

@@ -26,19 +26,15 @@ class DatabasePragmasTests {
 
   @Test("Get and set journal mode")
   func testJournalMode() async throws {
-    // Default should be DELETE for in-memory databases
     let defaultMode = try await db.getJournalMode()
     #expect(defaultMode == .memory || defaultMode == .delete)
 
-    // Set to WAL
     let walMode = try await db.setJournalMode(.wal)
     #expect(walMode == .wal)
 
-    // Verify it was set
     let currentMode = try await db.getJournalMode()
     #expect(currentMode == .wal)
 
-    // Try other modes
     _ = try await db.setJournalMode(.memory)
     #expect(try await db.getJournalMode() == .memory)
 
@@ -50,15 +46,12 @@ class DatabasePragmasTests {
 
   @Test("Get and set synchronous mode")
   func testSynchronousMode() async throws {
-    // Default should be FULL
     let defaultMode = try await db.getSynchronous()
     #expect(defaultMode == .full)
 
-    // Set to NORMAL
     try await db.setSynchronous(.normal)
     #expect(try await db.getSynchronous() == .normal)
 
-    // Try other modes
     try await db.setSynchronous(.off)
     #expect(try await db.getSynchronous() == .off)
 
@@ -70,15 +63,12 @@ class DatabasePragmasTests {
 
   @Test("Get and set cache size")
   func testCacheSize() async throws {
-    // Get default cache size
     let defaultSize = try await db.getCacheSize()
     #expect(defaultSize != .pages(0) && defaultSize != .kibibytes(0))
 
-    // Set cache size in pages
     try await db.setCacheSize(.pages(5000))
     #expect(try await db.getCacheSize() == .pages(5000))
 
-    // Set cache size in kibibytes
     try await db.setCacheSize(.kibibytes(10240))  // 10MB
     #expect(try await db.getCacheSize() == .kibibytes(10240))
   }
@@ -87,15 +77,12 @@ class DatabasePragmasTests {
 
   @Test("Get and set temp store mode")
   func testTempStoreMode() async throws {
-    // Get default temp store
     let defaultMode = try await db.getTempStore()
     #expect(defaultMode == .default || defaultMode == .file || defaultMode == .memory)
 
-    // Set to memory
     try await db.setTempStore(.memory)
     #expect(try await db.getTempStore() == .memory)
 
-    // Set to file
     try await db.setTempStore(.file)
     #expect(try await db.getTempStore() == .file)
   }
@@ -104,15 +91,12 @@ class DatabasePragmasTests {
 
   @Test("Get and set mmap size")
   func testMmapSize() async throws {
-    // Get default mmap size
     let defaultSize = try await db.getMmapSize()
     #expect(defaultSize >= 0)
 
-    // Set mmap size to 256MB
     #expect(try await db.setMmapSize(10 * 1024 * 1024) == 10 * 1024 * 1024)
     #expect(try await db.getMmapSize() == 10 * 1024 * 1024)
 
-    // Disable mmap
     #expect(try await db.setMmapSize(0) == 0)
     #expect(try await db.getMmapSize() == 0)
   }
@@ -121,14 +105,11 @@ class DatabasePragmasTests {
 
   @Test("Get and set foreign keys enforcement")
   func testForeignKeys() async throws {
-    // Default should be disabled
     #expect(try await db.getForeignKeys() == false)
 
-    // Enable foreign keys
     try await db.setForeignKeys(true)
     #expect(try await db.getForeignKeys() == true)
 
-    // Disable foreign keys
     try await db.setForeignKeys(false)
     #expect(try await db.getForeignKeys() == false)
   }
@@ -137,7 +118,6 @@ class DatabasePragmasTests {
   func testForeignKeysEnforcement() async throws {
     try await db.setForeignKeys(true)
 
-    // Create parent and child tables
     try await db.exec(
       """
       CREATE TABLE users (
@@ -158,13 +138,10 @@ class DatabasePragmasTests {
       """
     )
 
-    // Insert valid user
     try await db.exec(raw: "INSERT INTO users (id, name) VALUES (?, ?)", binding: 1, "Alice")
 
-    // This should succeed
     try await db.exec(raw: "INSERT INTO posts (user_id, title) VALUES (?, ?)", binding: 1, "Post 1")
 
-    // This should fail (user_id 999 doesn't exist)
     await #expect(throws: LoomError.self) {
       try await db.exec(raw: "INSERT INTO posts (user_id, title) VALUES (?, ?)", binding: 999, "Post 2")
     }
@@ -174,10 +151,9 @@ class DatabasePragmasTests {
 
   @Test("Get and set auto vacuum mode")
   func testAutoVacuumMode() async throws {
-    // Default should be NONE
     #expect(try await db.getAutoVacuum() == .none)
 
-    // Set to incremental (requires VACUUM to take effect)
+    // A switch to incremental takes effect only after VACUUM.
     try await db.setAutoVacuum(.incremental)
     try await db.vacuum()
     #expect(try await db.getAutoVacuum() == .incremental)
@@ -187,7 +163,6 @@ class DatabasePragmasTests {
 
   @Test("Integrity check on healthy database")
   func testIntegrityCheckHealthy() async throws {
-    // Create a simple table
     try await db.exec(
       """
       CREATE TABLE test (
@@ -199,14 +174,12 @@ class DatabasePragmasTests {
 
     try await db.exec(raw: "INSERT INTO test (value) VALUES (?)", binding: "test data")
 
-    // Should return empty array (no issues)
     let issues = try await db.integrityCheck()
     #expect(issues.isEmpty)
   }
 
   @Test("Optimize database")
   func testOptimize() async throws {
-    // Create some tables and data
     try await db.exec(
       """
       CREATE TABLE test (
@@ -220,13 +193,11 @@ class DatabasePragmasTests {
       try await db.exec(raw: "INSERT INTO test (value) VALUES (?)", binding: "value \(i)")
     }
 
-    // Optimize should not throw
     try await db.optimize()
   }
 
   @Test("Vacuum database")
   func testVacuum() async throws {
-    // Create table and data
     try await db.exec(
       """
       CREATE TABLE test (
@@ -240,24 +211,18 @@ class DatabasePragmasTests {
       try await db.exec(raw: "INSERT INTO test (value) VALUES (?)", binding: "value \(i)")
     }
 
-    // Delete half the data
     try await db.exec("DELETE FROM test WHERE id % 2 = 0")
 
-    // Get database size before vacuum
     let sizeBefore = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
 
-    // Vacuum should reclaim space
     try await db.vacuum()
 
-    // Get database size after vacuum
     let sizeAfter = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
 
-    // Size should be reduced (or at least not increased)
     if let before = sizeBefore, let after = sizeAfter {
       #expect(after <= before)
     }
 
-    // Verify data integrity after vacuum
     let count = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int32.column(of: stmt, at: 0)
     }
@@ -266,11 +231,9 @@ class DatabasePragmasTests {
 
   @Test("Incremental vacuum")
   func testIncrementalVacuum() async throws {
-    // Set up incremental vacuum mode
     try await db.setAutoVacuum(.incremental)
     try await db.vacuum()
 
-    // Create table and data
     try await db.exec(
       """
       CREATE TABLE test (
@@ -288,23 +251,17 @@ class DatabasePragmasTests {
       }
     }
 
-    // Delete half the data
     try await db.exec("DELETE FROM test WHERE id % 2 = 0")
 
-    // Perform incremental vacuum
     try await db.incrementalVacuum(pages: 10)
-
-    // Should not throw
   }
 
   // MARK: - WAL Checkpoint Tests
 
   @Test("WAL checkpoint")
   func testWALCheckpoint() async throws {
-    // Enable WAL mode
     try await db.setJournalMode(.wal)
 
-    // Create and populate table
     try await db.exec(
       """
       CREATE TABLE test (
@@ -318,13 +275,11 @@ class DatabasePragmasTests {
       try await db.exec(raw: "INSERT INTO test (value) VALUES (?)", binding: "value \(i)")
     }
 
-    // Perform checkpoint
     let info = try await db.walCheckpoint(mode: .passive)
     #expect(info.logPages >= 0)
     #expect(info.checkpointedPages >= 0)
     #expect(info.checkpointedPages <= info.logPages)
 
-    // Try different checkpoint modes
     _ = try await db.walCheckpoint(mode: .full)
     _ = try await db.walCheckpoint(mode: .restart)
     _ = try await db.walCheckpoint(mode: .truncate)
@@ -348,20 +303,17 @@ class DatabasePragmasTests {
     let columns = try await db.tableInfo("users")
     #expect(columns.count == 4)
 
-    // Check id column
     let idCol = columns.first { $0.name == "id" }
     #expect(idCol != nil)
     #expect(idCol?.type.uppercased() == "INTEGER")
     #expect(idCol?.pk == 1)
 
-    // Check name column
     let nameCol = columns.first { $0.name == "name" }
     #expect(nameCol != nil)
     #expect(nameCol?.type.uppercased() == "TEXT")
     #expect(nameCol?.notNull == true)
     #expect(nameCol?.pk == 0)
 
-    // Check age column (has default)
     let ageCol = columns.first { $0.name == "age" }
     #expect(ageCol != nil)
     #expect(ageCol?.defaultValue == "0")
@@ -369,11 +321,9 @@ class DatabasePragmasTests {
 
   @Test("Table list")
   func testTableList() async throws {
-    // Initially should be empty
     var tables = try await db.tableList()
     #expect(tables.count == 1)  // sqlite_schema table
 
-    // Create some tables
     try await db.exec(
       """
       CREATE TABLE users (
@@ -416,7 +366,6 @@ class DatabasePragmasTests {
       """
     )
 
-    // Create an index
     try await db.exec("CREATE INDEX idx_users_name ON users(name)")
 
     let indexes = try await db.indexList("users")
@@ -452,12 +401,10 @@ class DatabasePragmasTests {
     let columns = try await db.indexInfo("idx_users_name")
     try #require(columns.count >= 2)
 
-    // Check last_name comes first
     #expect(columns[0].name == "last_name")
     #expect(columns[0].seqno == 0)
     #expect(columns[0].key == true)
 
-    // Check first_name comes second
     #expect(columns[1].name == "first_name")
     #expect(columns[1].seqno == 1)
     #expect(columns[1].key == true)
@@ -565,8 +512,8 @@ class DatabasePragmasTests {
     )
     try await db.exec(#"CREATE INDEX "idx my index" ON "my table" ("order")"#)
 
-    // Names containing spaces and reserved words used to fail to prepare, because they
-    // were spliced into the PRAGMA text instead of bound.
+    // Names containing spaces or reserved words prepare only because they are bound;
+    // spliced into the PRAGMA text they would be a syntax error.
     let columns = try await db.tableInfo("my table")
     #expect(columns.map(\.name) == ["id", "order"])
 
@@ -587,8 +534,8 @@ class DatabasePragmasTests {
 
   @Test("Schema name is bound, never parsed as SQL")
   func testSchemaNameIsBound() async throws {
-    // A schema name containing a space used to be spliced after the PRAGMA keyword and
-    // produce a syntax error. It is now a bound value, so it simply matches nothing.
+    // Bound, a schema name containing a space simply matches nothing; spliced after the
+    // PRAGMA keyword it would be a syntax error.
     let tables = try await db.tableList(schema: "not a schema")
     #expect(tables.isEmpty)
   }
@@ -605,8 +552,8 @@ class DatabasePragmasTests {
     }
     #expect(try await ignoreCheckConstraints() == 0)
 
-    // These payloads used to land in the pragma-name position, replacing the intended
-    // pragma outright and flipping connection state.
+    // Spliced into the PRAGMA text, these payloads would land in the pragma-name position,
+    // replacing the intended pragma outright and flipping connection state.
     _ = try? await db.tableList(schema: "synchronous = OFF --")
     _ = try? await db.tableList(schema: "ignore_check_constraints = ON --")
     _ = try? await db.walCheckpoint(database: "synchronous = OFF --")
@@ -637,8 +584,7 @@ class DatabasePragmasTests {
 
   @Test("WAL checkpoint of every attached database via nil or empty name")
   func testWALCheckpointAllDatabases() async throws {
-    // Explicitly opting in to the sqlite3_wal_checkpoint_v2 "all databases" form.
-    // Used to throw when the name was spliced into PRAGMA text.
+    // nil and "" opt in to the sqlite3_wal_checkpoint_v2 "all databases" form.
     try await db.setJournalMode(.wal)
     try await db.exec("CREATE TABLE t (x INTEGER)")
     try await db.exec("INSERT INTO t VALUES (1)")
@@ -670,27 +616,21 @@ class DatabasePragmasTests {
 
   @Test("Configure database for production use")
   func testProductionConfiguration() async throws {
-    // Enable WAL mode for better concurrency
     try await db.setJournalMode(.wal)
     #expect(try await db.getJournalMode() == .wal)
 
-    // Set synchronous to NORMAL (good for WAL)
     try await db.setSynchronous(.normal)
     #expect(try await db.getSynchronous() == .normal)
 
-    // Increase cache size
     try await db.setCacheSize(.kibibytes(10240))  // 10MB
     #expect(try await db.getCacheSize() == .kibibytes(10240))
 
-    // Use memory for temp tables
     try await db.setTempStore(.memory)
     #expect(try await db.getTempStore() == .memory)
 
-    // Enable foreign keys
     try await db.setForeignKeys(true)
     #expect(try await db.getForeignKeys() == true)
 
-    // Database should still work normally
     try await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
     try await db.exec(raw: "INSERT INTO test (value) VALUES (?)", binding: "test")
 

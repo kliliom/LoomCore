@@ -17,9 +17,8 @@ struct BindableRawRepresentableTests {
     case high = 3
   }
 
-  // Regression: a Codable raw-value enum used to hit "ambiguous witness" because
-  // JSON storage was a default for every Codable Bindable. With JSON storage
-  // opt-in via JSONBindable, this declaration compiles and stores the raw value.
+  // Pins that a Codable raw-value enum compiles without an "ambiguous witness" error and
+  // stores its raw value: JSON storage is opt-in via JSONBindable, not a Codable default.
   enum Role: String, Codable, Bindable {
     case admin
     case member
@@ -160,10 +159,8 @@ struct BindableRawRepresentableTests {
 
     try await db.exec("CREATE TABLE test (status TEXT)")
 
-    // Insert an invalid raw value that doesn't correspond to any enum case
     try await db.exec(raw: "INSERT INTO test (status) VALUES ('invalid')")
 
-    // Should throw typeMappingFailed when trying to read invalid value as enum
     await #expect(throws: LoomError.self) {
       try await db.query("SELECT status FROM test") { stmt, _ in
         try Status.column(of: stmt, at: 0)

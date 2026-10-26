@@ -7,10 +7,9 @@ import Testing
 @Suite("Database Handle Tests")
 @DatabaseActor
 struct DatabaseHandleTests {
-  // Regression for a use-after-free: closing the database while a cached statement
-  // was checked out finalized it under the live handle, whose deinit then reset
-  // freed memory (SIGSEGV). The checked-out statement must survive the close and
-  // be finalized by its own handle.
+  // Guards against a use-after-free: finalizing a checked-out cached statement on
+  // close would leave the live handle's deinit resetting freed memory (SIGSEGV).
+  // The checked-out statement must survive the close and be finalized by its own handle.
   @Test("Close inside a stepper with a cached statement does not crash")
   func testCloseWithLiveCachedStatement() async throws {
     let db = try Database.openInMemory()
@@ -55,11 +54,10 @@ struct DatabaseHandleTests {
     }
   }
 
-  // Regression for a permanent connection leak: `sqlite3_close` returned
-  // SQLITE_BUSY while a statement was live, the pointer was dropped anyway, and
-  // the connection kept its file locks forever. With `sqlite3_close_v2` the
-  // connection is released once the last live statement is finalized, so a
-  // second connection to the same file can write.
+  // Guards against a permanent connection leak: `sqlite3_close` returns SQLITE_BUSY
+  // while a statement is live, and dropping the pointer then keeps the file locks
+  // forever. With `sqlite3_close_v2` the connection is released once the last live
+  // statement is finalized, so a second connection to the same file can write.
   @Test("Close with a live statement releases the connection and its file locks")
   func testCloseWithLiveStatementReleasesConnection() async throws {
     let url = tmpDatabaseURL()

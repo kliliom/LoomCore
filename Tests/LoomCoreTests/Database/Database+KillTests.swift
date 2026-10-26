@@ -9,13 +9,11 @@ struct DatabaseKillTests {
   func testKillInMemory() async throws {
     let db = try Database.openInMemory()
 
-    // Verify database is usable
     try await db.exec("CREATE TABLE test (id INTEGER)")
     try await db.exec("INSERT INTO test (id) VALUES (1)")
 
     db.close()
 
-    // Verify database is closed
     await #expect(throws: LoomError.core(.databaseClosed, message: "Database connection closed.")) {
       try await db.exec("SELECT * FROM test")
     }

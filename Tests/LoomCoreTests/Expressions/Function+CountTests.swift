@@ -9,19 +9,15 @@ struct FunctionCountTests {
   func testCount() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with numeric data
     try await db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
 
-    // Insert test data
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (300)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (150)")
 
-    // Test expression
     let expr = ColumnExpression<Int>("amount").count()
 
-    // Query using COUNT function
     let result = try await db.query(
       "SELECT \(expr) FROM sales",
       stepper: { stmt, _ in
@@ -37,13 +33,10 @@ struct FunctionCountTests {
   func testCountNoRows() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with numeric data
     try await db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
 
-    // Test expression
     let expr = ColumnExpression<Int>("amount").count()
 
-    // Query using COUNT function
     let result = try await db.query(
       "SELECT \(expr) FROM sales",
       stepper: { stmt, _ in
@@ -59,20 +52,16 @@ struct FunctionCountTests {
   func testCountDistinct() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with numeric data
     try await db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
 
-    // Insert test data with duplicates
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (300)")
 
-    // Test expression with distinct
     let expr = ColumnExpression<Int>("amount").count(distinct: true)
 
-    // Query using COUNT(DISTINCT) function
     let result = try await db.query(
       "SELECT \(expr) FROM sales",
       stepper: { stmt, _ in
@@ -88,16 +77,13 @@ struct FunctionCountTests {
   func testCountDistinctVsRegular() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with numeric data
     try await db.exec("CREATE TABLE sales (id INTEGER PRIMARY KEY, amount INTEGER)")
 
-    // Insert test data with duplicates
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (100)")
     try await db.exec(raw: "INSERT INTO sales (amount) VALUES (200)")
 
-    // Test regular count
     let regularExpr = ColumnExpression<Int>("amount").count()
     let regularResult = try await db.query(
       "SELECT \(regularExpr) FROM sales",
@@ -106,7 +92,6 @@ struct FunctionCountTests {
       }
     )
 
-    // Test distinct count
     let distinctExpr = ColumnExpression<Int>("amount").count(distinct: true)
     let distinctResult = try await db.query(
       "SELECT \(distinctExpr) FROM sales",

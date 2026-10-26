@@ -5,7 +5,6 @@ import Testing
 @Suite("Database Service Tests")
 @DatabaseActor
 struct DatabaseServiceTests {
-  // Test service that tracks lifecycle calls
   @DatabaseActor
   class TrackingService: Database.Service {
     var willBeginCount = 0
@@ -111,17 +110,14 @@ struct DatabaseServiceTests {
 
     let service = db.getService(TrackingService.self)
 
-    // First transaction (success)
     try await db.transaction { db in
       try await db.exec("INSERT INTO test (value) VALUES (1)")
     }
 
-    // Second transaction (success)
     try await db.transaction { db in
       try await db.exec("INSERT INTO test (value) VALUES (2)")
     }
 
-    // Third transaction (failure)
     await #expect(throws: LoomError.self) {
       try await db.transaction { db in
         try await db.exec("INVALID SQL")
@@ -157,7 +153,6 @@ struct DatabaseServiceTests {
 
     let service2 = db.getService(TrackingService.self)
 
-    // Should be a new instance
     #expect(service2 !== service1)
     #expect(service2.willBeginCount == 0)
   }
@@ -228,7 +223,6 @@ struct DatabaseServiceTests {
 
     let service = db.getService(TrackingService.self)
 
-    // Outer transaction
     try await db.transaction { db in
       try await db.exec("INSERT INTO test (value) VALUES (1)")
 
@@ -240,8 +234,8 @@ struct DatabaseServiceTests {
     }
 
     #expect(service.willBeginCount == 1)  // Only the outermost transaction begins
-    #expect(service.didCommitCount == 1)  // One commit
-    #expect(service.didRollbackCount == 0)  // No rollback
+    #expect(service.didCommitCount == 1)
+    #expect(service.didRollbackCount == 0)
   }
 
   @Test("Service shut down mid-transaction receives no commit callback")

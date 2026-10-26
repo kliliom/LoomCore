@@ -33,7 +33,6 @@ struct DatabaseLastInsertedRowIDTests {
       try await db.exec("INSERT INTO test (value) VALUES (2)")
       let secondID = try await db.directAccess { sqlite3_last_insert_rowid($0) }
 
-      // Verify IDs are incrementing
       #expect(secondID > firstID)
     }
 
@@ -47,7 +46,6 @@ struct DatabaseLastInsertedRowIDTests {
     try await db.exec("CREATE TABLE test (value INTEGER)")
 
     let rowID = try await db.lastInsertedRowID {
-      // No INSERT statement
       try await db.exec("SELECT * FROM test")
     }
 
@@ -73,12 +71,10 @@ struct DatabaseLastInsertedRowIDTests {
 
     try await db.exec("CREATE TABLE test (value INTEGER)")
 
-    // First insert outside the block
     try await db.exec("INSERT INTO test (value) VALUES (1)")
 
-    // This should return nil because the block doesn't insert anything
+    // The block inserts nothing, so the earlier insert's ROWID must not leak through.
     let rowID = try await db.lastInsertedRowID {
-      // Just run a non-insert operation (UPDATE with no matching rows)
       try await db.exec("UPDATE test SET value = 2 WHERE value = 999")
     }
 
@@ -127,7 +123,6 @@ struct DatabaseLastInsertedRowIDTests {
 
     #expect(rowID != nil)
 
-    // Verify we can query using the row ID
     let result = try await db.query("SELECT name FROM test WHERE rowid = \(rowID!)") { stmt, _ in
       try String.column(of: stmt, at: 0)
     }
@@ -194,7 +189,6 @@ struct DatabaseLastInsertedRowIDTests {
 
     #expect(lastRowID != nil)
 
-    // Verify all rows were inserted
     let count = try await db.query("SELECT COUNT(*) FROM test") { stmt, _ in
       try Int.column(of: stmt, at: 0)
     }

@@ -207,7 +207,7 @@ struct DatabaseTransactionTests {
     do {
       try await db.transaction { db in
         try await db.exec("INSERT INTO test (id, value) VALUES (2, 200)")
-        // This should violate primary key constraint
+        // Duplicate primary key.
         try await db.exec("INSERT INTO test (id, value) VALUES (1, 300)")
       }
     } catch {
@@ -218,7 +218,6 @@ struct DatabaseTransactionTests {
       try Int.column(of: stmt, at: 0)
     }
 
-    // Should only have the original row
     #expect(result.first == 1)
   }
 

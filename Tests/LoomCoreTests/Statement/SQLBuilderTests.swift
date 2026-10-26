@@ -66,7 +66,6 @@ struct SQLBuilderTests {
   func testBuilderWithCapacityHints() {
     let builder = SQLBuilder(literalCapacity: 10, interpolationCount: 5)
 
-    // Should pre-allocate space
     #expect(builder.sql.capacity >= 5)
     #expect(builder.binders.capacity >= 5)
   }

@@ -9,18 +9,14 @@ struct FunctionTrimTests {
   func testTrim() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
-    // Insert test data with whitespace
     try await db.exec(raw: "INSERT INTO users (name) VALUES ('  John  ')")
     try await db.exec(raw: "INSERT INTO users (name) VALUES (' Jane ')")
     try await db.exec(raw: "INSERT INTO users (name) VALUES ('Bob')")
 
-    // Test expression
     let expr = ColumnExpression<String>("name").trim()
 
-    // Query using TRIM function
     let result = try await db.query(
       "SELECT \(expr) FROM users ORDER BY id",
       stepper: { stmt, _ in
@@ -38,13 +34,10 @@ struct FunctionTrimTests {
   func testTrimNoRows() async throws {
     let db = try Database.openInMemory()
 
-    // Create a table with text data
     try await db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
-    // Test expression
     let expr = ColumnExpression<String>("name").trim()
 
-    // Query using TRIM function
     let result = try await db.query(
       "SELECT \(expr) FROM users",
       stepper: { stmt, _ in

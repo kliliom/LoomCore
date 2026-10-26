@@ -15,11 +15,9 @@ struct InExpressionTests {
   }
 
   func prepareDatabase() async throws {
-    // Insert categories
     try await db.exec(raw: "INSERT INTO categories (id, name) VALUES (2, 'Electronics')")
     try await db.exec(raw: "INSERT INTO categories (id, name) VALUES (4, 'Books')")
 
-    // Insert products
     try await db.exec(raw: "INSERT INTO products (category_id) VALUES (1)")
     try await db.exec(raw: "INSERT INTO products (category_id) VALUES (2)")
     try await db.exec(raw: "INSERT INTO products (category_id) VALUES (3)")
@@ -29,10 +27,8 @@ struct InExpressionTests {
 
   @Test("IN expression from array")
   func testInExpressionFromArray() async throws {
-    // Test expression - check if category_id is in [2, 4]
     let expr = ColumnExpression<Int>("category_id").in(array: [2, 4])
 
-    // Query using IN expression
     let result = try await db.query(
       "SELECT category_id FROM products WHERE \(expr) ORDER BY category_id",
       stepper: { stmt, _ in
@@ -47,10 +43,8 @@ struct InExpressionTests {
 
   @Test("NOT IN expression from array")
   func testNotInExpressionFromArray() async throws {
-    // Test expression - check if category_id is NOT in [1, 3, 5]
     let expr = ColumnExpression<Int>("category_id").notIn(array: [1, 3, 5])
 
-    // Query using NOT IN expression
     let result = try await db.query(
       "SELECT category_id FROM products WHERE \(expr) ORDER BY category_id",
       stepper: { stmt, _ in
@@ -65,10 +59,8 @@ struct InExpressionTests {
 
   @Test("IN expression from variadic parameters")
   func testInExpressionFromVariadic() async throws {
-    // Test expression - check if category_id is in 2, 4
     let expr = ColumnExpression<Int>("category_id").in(values: 2, 4)
 
-    // Query using IN expression
     let result = try await db.query(
       "SELECT category_id FROM products WHERE \(expr) ORDER BY category_id",
       stepper: { stmt, _ in
@@ -83,10 +75,8 @@ struct InExpressionTests {
 
   @Test("NOT IN expression from variadic parameters")
   func testNotInExpressionFromVariadic() async throws {
-    // Test expression - check if category_id is NOT in 1, 3, 5
     let expr = ColumnExpression<Int>("category_id").notIn(values: 1, 3, 5)
 
-    // Query using NOT IN expression
     let result = try await db.query(
       "SELECT category_id FROM products WHERE \(expr) ORDER BY category_id",
       stepper: { stmt, _ in
