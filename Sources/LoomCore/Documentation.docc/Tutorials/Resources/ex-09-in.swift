@@ -65,7 +65,7 @@ extension TaskStore {
 extension TaskStore {
     @DatabaseActor
     func tasks(inAnyOf categoryIDs: [UUID]) async throws -> [TaskRow] {
-        // An empty array renders as `( category_id IN (NULL) AND 0 )`,
+        // An empty array renders as `( "tasks"."category_id" IN (NULL) AND 0 )`,
         // which is an always-false predicate — no special-casing needed.
         let predicate = TaskColumns.categoryID.in(array: categoryIDs)
 

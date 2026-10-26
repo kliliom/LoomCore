@@ -379,7 +379,6 @@ func buildHarness(fence: Fence, repoRoot: String) -> Harness? {
       continue
     }
 
-    // depth 0 before this line
     if trimmed.hasPrefix("import ") {
       imports.append(trimmed)
       continue
@@ -459,7 +458,6 @@ func checkFences(typecheck: Typecheck, config: Config, repoRoot: String) -> Int 
     }
   }
 
-  // Markdown files.
   var markdownFiles = ["README.md", "llms.txt", "Sources/LoomCore/Documentation.docc/LoomCore.md"]
   let articlesDir = "Sources/LoomCore/Documentation.docc/Articles"
   if let articles = try? fm.contentsOfDirectory(atPath: articlesDir) {
@@ -474,7 +472,6 @@ func checkFences(typecheck: Typecheck, config: Config, repoRoot: String) -> Int 
     return 0
   }
 
-  // Generate harnesses.
   var jobs: [(index: Int, fence: Fence, harnessPath: String)] = []
   for (index, fence) in fences.enumerated() {
     guard let harness = buildHarness(fence: fence, repoRoot: repoRoot) else { continue }
@@ -487,7 +484,6 @@ func checkFences(typecheck: Typecheck, config: Config, repoRoot: String) -> Int 
     jobs.append((index, fence, harnessPath))
   }
 
-  // Typecheck each harness in parallel.
   DispatchQueue.concurrentPerform(iterations: jobs.count) { jobIndex in
     let job = jobs[jobIndex]
     let logName = String(format: "snippet-%03d", job.index)
